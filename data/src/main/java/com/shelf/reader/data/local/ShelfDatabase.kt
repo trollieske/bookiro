@@ -24,6 +24,7 @@ import com.shelf.reader.data.local.entity.*
         SmbServerEntity::class,
         WebdavServerEntity::class,
         TorrentDownloadEntity::class,
+        CalibreServerEntity::class,
         WorkEntity::class,
         WorkEditionEntity::class,
         HandoffLinkEntity::class,
@@ -35,7 +36,7 @@ import com.shelf.reader.data.local.entity.*
         PodcastPlaybackEntity::class,
         PodcastDownloadEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -53,6 +54,7 @@ abstract class ShelfDatabase : RoomDatabase() {
     abstract fun smbServerDao(): SmbServerDao
     abstract fun webdavServerDao(): WebdavServerDao
     abstract fun torrentDownloadDao(): TorrentDownloadDao
+    abstract fun calibreServerDao(): CalibreServerDao
     abstract fun workDao(): com.shelf.reader.data.local.dao.WorkDao
     abstract fun workEditionDao(): com.shelf.reader.data.local.dao.WorkEditionDao
     abstract fun handoffLinkDao(): com.shelf.reader.data.local.dao.HandoffLinkDao
@@ -159,6 +161,47 @@ abstract class ShelfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8 -> v9: one shared transfer queue for all remote sources plus the
+         * Calibre Content Server table.
+         *
+         * Purely additive. Existing FTP rows are tagged `FTP:<serverId>`; rows
+         * that already used the queue with a NULL `server_id` are tagged
+         * `LEGACY:<id>` so the new unique index cannot collide. No book row is
+         * touched and no credential is moved.
+         */
+        val MIGRATION_8_9: androidx.room.migration.Migration = object : androidx.room.migration.Migration(8, 9) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `source_kind` TEXT")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `source_ref` TEXT")
+                db.execSQL("UPDATE `download_tasks` SET `source_kind` = 'FTP', `source_ref` = 'FTP:' || `server_id` WHERE `server_id` IS NOT NULL")
+                db.execSQL("UPDATE `download_tasks` SET `source_kind` = 'LEGACY', `source_ref` = 'LEGACY:' || `id` WHERE `server_id` IS NULL")
+                // Collapse any duplicates the old NULL-tolerant index allowed.
+                db.execSQL(
+                    "DELETE FROM `download_tasks` WHERE `id` NOT IN " +
+                        "(SELECT MIN(`id`) FROM `download_tasks` GROUP BY `source_kind`, `source_ref`, `remote_path`)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_download_tasks_source_ref_path` " +
+                        "ON `download_tasks` (`source_kind`, `source_ref`, `remote_path`)"
+                )
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `calibre_servers` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`display_name` TEXT NOT NULL, `base_url` TEXT NOT NULL, " +
+                        "`username` TEXT NOT NULL, `password_encrypted` TEXT, " +
+                        "`timeout_seconds` INTEGER NOT NULL, `state` TEXT NOT NULL, " +
+                        "`last_error` TEXT, `sync_enabled` INTEGER NOT NULL, " +
+                        "`sync_interval` TEXT NOT NULL, `sync_wifi_only` INTEGER NOT NULL, " +
+                        "`charging_only` INTEGER NOT NULL, `sync_last_check_at` INTEGER, " +
+                        "`last_connected_at` INTEGER, `last_sync_at` INTEGER, " +
+                        "`is_active` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, " +
+                        "`updated_at` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: ShelfDatabase? = null
 
@@ -174,7 +217,7 @@ abstract class ShelfDatabase : RoomDatabase() {
                 ShelfDatabase::class.java,
                 DB_NAME
             )
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .fallbackToDestructiveMigration()
             val db = runCatching {
                 base

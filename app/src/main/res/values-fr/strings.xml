@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Connectez votre bibliothèque à</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Serveur de contenu / OPDS</string>
-    <string name="sources_calibre_toast">Analysez votre réseau, ou saisissez une URL Calibre manuellement ci-dessous</string>
-    <string name="sources_opds_title">Catalogue OPDS</string>
-    <string name="sources_opds_sub">Catalogues de livres standard</string>
-    <string name="sources_opds_toast">Choisissez un catalogue connu ci-dessous, ou collez votre propre URL OPDS</string>
     <string name="sources_import_files_sub">Depuis des fichiers / dossiers</string>
     <string name="sources_downloads_status">Statut et erreurs</string>
     <string name="sources_tips_title">Astuces</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Bibliothèque Calibre</string>
     <string name="lan_type_http">Catalogue HTTP</string>
     <string name="lan_confidence_toast">Confiance heuristique : %1$d%% de probabilité qu\'il s\'agisse d\'un(e) %2$s. Touchez la ligne pour voir l\'aperçu de l\'URL.</string>
-    <string name="wkc_title">Catalogues OPDS connus</string>
-    <string name="wkc_sub">Touchez pour parcourir des catalogues publics et librement accessibles – importez directement dans votre bibliothèque.</string>
-    <string name="wkc_standard_ebooks_sub">Haute qualité, licence libre</string>
-    <string name="wkc_feedbooks_sub">Littérature moderne et classique</string>
-    <string name="wkc_gutenberg_sub">Domaine public, 70 000+ livres</string>
-    <string name="wkc_librivox_sub">Livres audio gratuits, bénévoles</string>
-    <string name="wkc_toast">OPDS : %1$s – %2$s\n(La navigation dans les catalogues sera implémentée une fois les fonctionnalités principales confirmées)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Les résultats s\'affichent ici lorsque l\'auto-synchronisation s\'exécute.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d s</string>
     <string name="app_chapter_n">Chapitre %1$d</string>
     <string name="lan_on_host">%1$s sur %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (livres audio)</string>
 </resources>

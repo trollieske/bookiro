@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calibre_title">Calibre</string>
+    <string name="calibre_subtitle">Сервер контента</string>
+    <string name="calibu_back">Назад</string>
+    <string name="calibu_transfers">Передачи</string>
+    <string name="calibu_add_source">Добавить сервер Calibre</string>
+    <string name="calibu_no_sources">Сервер Calibre ещё не добавлен</string>
+    <string name="calibu_no_sources_hint">Добавьте URL Calibre Content Server, чтобы просматривать и скачивать книги.</string>
+    <string name="calibu_delete_title">Удалить источник?</string>
+    <string name="calibu_delete_message">Удалить %1$s и загрузки в очереди?</string>
+    <string name="calibu_delete">Удалить</string>
+    <string name="calibu_cancel">Отмена</string>
+    <string name="calibu_sync_now">Синхронизировать</string>
+    <string name="calibu_name">Отображаемое имя (необязательно)</string>
+    <string name="calibu_url">URL сервера</string>
+    <string name="calibu_url_hint">например http://192.168.1.10:8080</string>
+    <string name="calibu_username">Имя пользователя (необязательно)</string>
+    <string name="calibu_password">Пароль (необязательно)</string>
+    <string name="calibu_password_keep">Оставьте пустым, чтобы сохранить пароль</string>
+    <string name="calibu_test">Проверить соединение</string>
+    <string name="calibu_test_ok">Соединение установлено</string>
+    <string name="calibu_test_fail">Не удалось подключиться</string>
+    <string name="calibu_save">Сохранить</string>
+    <string name="calibu_err_url">Введите URL сервера</string>
+    <string name="calibu_err_auth">Ошибка входа. Проверьте имя пользователя и пароль.</string>
+    <string name="calibu_err_connection">Не удалось связаться с сервером</string>
+    <string name="calibu_err_unknown">Что-то пошло не так</string>
+    <string name="calibu_err_parse">Сервер не вернул каталог Calibre</string>
+    <string name="calibu_refresh">Обновить</string>
+    <string name="calibu_search_hint">Поиск в библиотеке</string>
+    <string name="calibu_queued">%1$d в очереди</string>
+    <string name="calibu_retry">Повторить</string>
+    <string name="calibu_empty_folder">Здесь нечего показывать</string>
+    <string name="calibu_queue">Скачать (%1$d)</string>
+    <string name="calibu_queue_folder">Скачать всё</string>
+    <string name="calibu_notif_title">Загрузка Calibre</string>
+    <string name="calibu_notif_channel_desc">Прогресс загрузок Calibre</string>
+    <string name="calibu_notif_text">Загрузка из Calibre…</string>
+    <string name="calibu_notif_detail">Загрузка %1$s</string>
+</resources>

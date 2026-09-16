@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Anslut ditt bibliotek till</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Innehållsserver / OPDS</string>
-    <string name="sources_calibre_toast">Skanna ditt nätverk, eller ange en Calibre-URL manuellt nedan</string>
-    <string name="sources_opds_title">OPDS-katalog</string>
-    <string name="sources_opds_sub">Standardbokkataloger</string>
-    <string name="sources_opds_toast">Välj en känd katalog nedan, eller klistra in din egen OPDS-URL</string>
     <string name="sources_import_files_sub">Från filer / mappar</string>
     <string name="sources_downloads_status">Status och fel</string>
     <string name="sources_tips_title">Tips</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Calibre-bibliotek</string>
     <string name="lan_type_http">HTTP-katalog</string>
     <string name="lan_confidence_toast">Heuristisk tillit: %1$d%% sannolikhet att detta är en %2$s. Tryck på raden för att förhandsvisa URL:en.</string>
-    <string name="wkc_title">Kända OPDS-kataloger</string>
-    <string name="wkc_sub">Tryck för att bläddra i offentliga och fritt tillgängliga kataloger – importera direkt till ditt bibliotek.</string>
-    <string name="wkc_standard_ebooks_sub">Hög kvalitet, fritt licensierade</string>
-    <string name="wkc_feedbooks_sub">Ny och klassisk litteratur</string>
-    <string name="wkc_gutenberg_sub">Public domain, 70 000+ böcker</string>
-    <string name="wkc_librivox_sub">Gratis ljudböcker, frivilliga</string>
-    <string name="wkc_toast">OPDS: %1$s – %2$s\n(Funktionalitet för katalogbläddring implementeras när kärnfunktionerna bekräftats fungera)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Resultat visas här när auto-synk körs.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d sek</string>
     <string name="app_chapter_n">Kapitel %1$d</string>
     <string name="lan_on_host">%1$s på %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (ljudböcker)</string>
 </resources>

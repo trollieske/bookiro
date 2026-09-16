@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Verbinde deine Bibliothek mit</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Content-Server / OPDS</string>
-    <string name="sources_calibre_toast">Scanne dein Netzwerk, oder gib unten manuell eine Calibre-URL ein</string>
-    <string name="sources_opds_title">OPDS-Katalog</string>
-    <string name="sources_opds_sub">Standard-Buchkataloge</string>
-    <string name="sources_opds_toast">Wähle unten einen bekannten Katalog, oder füge deine eigene OPDS-URL ein</string>
     <string name="sources_import_files_sub">Aus Dateien / Ordnern</string>
     <string name="sources_downloads_status">Status und Fehler</string>
     <string name="sources_tips_title">Tipps</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Calibre-Bibliothek</string>
     <string name="lan_type_http">HTTP-Katalog</string>
     <string name="lan_confidence_toast">Heuristische Konfidenz: %1$d%% Wahrscheinlichkeit, dass dies ein(e) %2$s ist. Tippe auf die Zeile, um die URL anzusehen.</string>
-    <string name="wkc_title">Bekannte OPDS-Kataloge</string>
-    <string name="wkc_sub">Tippen, um öffentliche und frei zugängliche Kataloge zu durchsuchen – direkt in deine Bibliothek importieren.</string>
-    <string name="wkc_standard_ebooks_sub">Hohe Qualität, frei lizenziert</string>
-    <string name="wkc_feedbooks_sub">Neue und klassische Literatur</string>
-    <string name="wkc_gutenberg_sub">Gemeinfrei, 70 000+ Bücher</string>
-    <string name="wkc_librivox_sub">Kostenlose Hörbücher, Ehrenamtliche</string>
-    <string name="wkc_toast">OPDS: %1$s – %2$s\n(Katalog-Durchsuchung wird implementiert, sobald die Kernfunktionen bestätigt sind)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Ergebnisse erscheinen hier, wenn die Auto-Synchronisierung läuft.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d Sek.</string>
     <string name="app_chapter_n">Kapitel %1$d</string>
     <string name="lan_on_host">%1$s auf %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (Hörbücher)</string>
 </resources>

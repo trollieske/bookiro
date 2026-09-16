@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calibre_title">Calibre</string>
+    <string name="calibre_subtitle">Content-Server</string>
+    <string name="calibu_back">Zurück</string>
+    <string name="calibu_transfers">Übertragungen</string>
+    <string name="calibu_add_source">Calibre-Server hinzufügen</string>
+    <string name="calibu_no_sources">Noch kein Calibre-Server</string>
+    <string name="calibu_no_sources_hint">Füge die URL deines Calibre Content Servers hinzu, um Bücher zu durchsuchen und herunterzuladen.</string>
+    <string name="calibu_delete_title">Quelle löschen?</string>
+    <string name="calibu_delete_message">%1$s und die vorgemerkten Downloads entfernen?</string>
+    <string name="calibu_delete">Löschen</string>
+    <string name="calibu_cancel">Abbrechen</string>
+    <string name="calibu_sync_now">Jetzt synchronisieren</string>
+    <string name="calibu_name">Anzeigename (optional)</string>
+    <string name="calibu_url">Server-URL</string>
+    <string name="calibu_url_hint">z. B. http://192.168.1.10:8080</string>
+    <string name="calibu_username">Benutzername (optional)</string>
+    <string name="calibu_password">Passwort (optional)</string>
+    <string name="calibu_password_keep">Leer lassen, um das gespeicherte Passwort zu behalten</string>
+    <string name="calibu_test">Verbindung testen</string>
+    <string name="calibu_test_ok">Verbindung OK</string>
+    <string name="calibu_test_fail">Verbindung fehlgeschlagen</string>
+    <string name="calibu_save">Speichern</string>
+    <string name="calibu_err_url">Server-URL eingeben</string>
+    <string name="calibu_err_auth">Anmeldung fehlgeschlagen. Benutzername und Passwort prüfen.</string>
+    <string name="calibu_err_connection">Server nicht erreichbar</string>
+    <string name="calibu_err_unknown">Etwas ist schiefgelaufen</string>
+    <string name="calibu_err_parse">Der Server hat keinen Calibre-Katalog zurückgegeben</string>
+    <string name="calibu_refresh">Aktualisieren</string>
+    <string name="calibu_search_hint">Bibliothek durchsuchen</string>
+    <string name="calibu_queued">%1$d in der Warteschlange</string>
+    <string name="calibu_retry">Erneut versuchen</string>
+    <string name="calibu_empty_folder">Hier gibt es nichts anzuzeigen</string>
+    <string name="calibu_queue">Herunterladen (%1$d)</string>
+    <string name="calibu_queue_folder">Alle herunterladen</string>
+    <string name="calibu_notif_title">Calibre-Download</string>
+    <string name="calibu_notif_channel_desc">Fortschritt für Calibre-Downloads</string>
+    <string name="calibu_notif_text">Wird von Calibre heruntergeladen…</string>
+    <string name="calibu_notif_detail">%1$s wird heruntergeladen</string>
+</resources>

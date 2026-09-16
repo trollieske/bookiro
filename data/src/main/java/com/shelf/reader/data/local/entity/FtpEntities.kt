@@ -98,7 +98,8 @@ data class FtpServerEntity(
     indices = [
         Index("server_id"),
         Index("status"),
-        Index(value = ["server_id", "remote_path"], unique = true)
+        Index(value = ["server_id", "remote_path"], unique = true),
+        Index(value = ["source_kind", "source_ref", "remote_path"], unique = true, name = "index_download_tasks_source_ref_path")
     ]
 )
 data class DownloadTaskEntity(
@@ -136,7 +137,19 @@ data class DownloadTaskEntity(
     /** Per-file observed speed, bytes/s, flushed with progress. */
     @ColumnInfo(name = "bytes_per_sec") val bytesPerSec: Long = 0L,
     /** Earliest time a RETRYING task may run again (exponential backoff). */
-    @ColumnInfo(name = "next_attempt_at") val nextAttemptAt: Long? = null
+    @ColumnInfo(name = "next_attempt_at") val nextAttemptAt: Long? = null,
+
+    /**
+     * Which kind of remote source owns this task. `FTP` for the legacy FTP rows
+     * (kept for backwards compatibility), `SMB`, `WEBDAV`, `CALIBRE` for the
+     * unified queue. Nullable so the v8 -> v9 migration needs no SQL default.
+     */
+    @ColumnInfo(name = "source_kind") val sourceKind: String? = null,
+    /**
+     * Stable owner key used for de-duplication when `server_id` is null
+     * (SQLite unique indices treat NULLs as distinct). Format: `<KIND>:<id>`.
+     */
+    @ColumnInfo(name = "source_ref") val sourceRef: String? = null
 )
 
 @Entity(

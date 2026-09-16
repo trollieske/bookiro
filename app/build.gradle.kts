@@ -101,6 +101,7 @@ dependencies {
     implementation(project(":ftp"))
     implementation(project(":smb"))
     implementation(project(":webdav"))
+    implementation(project(":calibre"))
     implementation(project(":torrent"))
     implementation(project(":podcast"))
 

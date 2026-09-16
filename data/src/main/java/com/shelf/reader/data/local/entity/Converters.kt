@@ -132,6 +132,13 @@ class Converters {
     fun stringToSessionSource(value: String?): SessionSource? = value?.let { SessionSource.valueOf(it) }
 
     @TypeConverter
+    fun calibreSourceStateToString(value: CalibreSourceStateEntity?): String? = value?.name
+
+    @TypeConverter
+    fun stringToCalibreSourceState(value: String?): CalibreSourceStateEntity? =
+        value?.let { CalibreSourceStateEntity.valueOf(it) }
+
+    @TypeConverter
     fun podcastDownloadStatusToString(value: PodcastDownloadStatus?): String? = value?.name
 
     @TypeConverter

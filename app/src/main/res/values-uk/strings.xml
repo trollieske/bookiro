@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Підключіть свою бібліотеку до</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Сервер контенту / OPDS</string>
-    <string name="sources_calibre_toast">Проскануйте мережу або введіть URL Calibre вручну нижче</string>
-    <string name="sources_opds_title">Каталог OPDS</string>
-    <string name="sources_opds_sub">Стандартні каталоги книг</string>
-    <string name="sources_opds_toast">Виберіть відомий каталог нижче або вставте власний URL OPDS</string>
     <string name="sources_import_files_sub">З файлів / папок</string>
     <string name="sources_downloads_status">Статус та помилки</string>
     <string name="sources_tips_title">Поради</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Бібліотека Calibre</string>
     <string name="lan_type_http">HTTP-каталог</string>
     <string name="lan_confidence_toast">Евристична оцінка: ймовірність %1$d%%, що це %2$s. Натисніть на рядок, щоб переглянути URL.</string>
-    <string name="wkc_title">Відомі OPDS-каталоги</string>
-    <string name="wkc_sub">Натисніть, щоб гортати публічні та вільно доступні каталоги – імпортуйте прямо у свою бібліотеку.</string>
-    <string name="wkc_standard_ebooks_sub">Висока якість, вільна ліцензія</string>
-    <string name="wkc_feedbooks_sub">Нова та класична література</string>
-    <string name="wkc_gutenberg_sub">Суспільне надбання, понад 70 000 книг</string>
-    <string name="wkc_librivox_sub">Безкоштовні аудіокниги, волонтери</string>
-    <string name="wkc_toast">OPDS: %1$s – %2$s\n(Перегляд каталогів буде реалізовано після підтвердження роботи основних функцій)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Тут з\'являться результати, коли запуститься автосинхронізація.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d с</string>
     <string name="app_chapter_n">Розділ %1$d</string>
     <string name="lan_on_host">%1$s на %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (аудіокниги)</string>
 </resources>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calibre_title">Calibre</string>
+    <string name="calibre_subtitle">Indholdsserver</string>
+    <string name="calibu_back">Tilbage</string>
+    <string name="calibu_transfers">Overførsler</string>
+    <string name="calibu_add_source">Tilføj Calibre-server</string>
+    <string name="calibu_no_sources">Ingen Calibre-server endnu</string>
+    <string name="calibu_no_sources_hint">Tilføj URL-adressen til din Calibre Content Server for at browse og downloade bøger.</string>
+    <string name="calibu_delete_title">Slet kilde?</string>
+    <string name="calibu_delete_message">Fjern %1$s og dens downloads i køen?</string>
+    <string name="calibu_delete">Slet</string>
+    <string name="calibu_cancel">Annuller</string>
+    <string name="calibu_sync_now">Synk nu</string>
+    <string name="calibu_name">Vist navn (valgfrit)</string>
+    <string name="calibu_url">Server-URL</string>
+    <string name="calibu_url_hint">f.eks. http://192.168.1.10:8080</string>
+    <string name="calibu_username">Brugernavn (valgfrit)</string>
+    <string name="calibu_password">Adgangskode (valgfrit)</string>
+    <string name="calibu_password_keep">Lad stå tomt for at beholde den gemte adgangskode</string>
+    <string name="calibu_test">Test forbindelse</string>
+    <string name="calibu_test_ok">Forbindelse OK</string>
+    <string name="calibu_test_fail">Forbindelse mislykkedes</string>
+    <string name="calibu_save">Gem</string>
+    <string name="calibu_err_url">Indtast server-URL</string>
+    <string name="calibu_err_auth">Login mislykkedes. Tjek brugernavn og adgangskode.</string>
+    <string name="calibu_err_connection">Kunne ikke nå serveren</string>
+    <string name="calibu_err_unknown">Noget gik galt</string>
+    <string name="calibu_err_parse">Serveren returnerede ikke et Calibre-katalog</string>
+    <string name="calibu_refresh">Opdater</string>
+    <string name="calibu_search_hint">Søg i biblioteket</string>
+    <string name="calibu_queued">%1$d i køen</string>
+    <string name="calibu_retry">Prøv igen</string>
+    <string name="calibu_empty_folder">Intet at vise her</string>
+    <string name="calibu_queue">Download (%1$d)</string>
+    <string name="calibu_queue_folder">Download alle</string>
+    <string name="calibu_notif_title">Calibre-download</string>
+    <string name="calibu_notif_channel_desc">Fremdrift for Calibre-downloads</string>
+    <string name="calibu_notif_text">Downloader fra Calibre…</string>
+    <string name="calibu_notif_detail">Downloader %1$s</string>
+</resources>

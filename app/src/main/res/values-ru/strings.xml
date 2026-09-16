@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Подключите свою библиотеку к</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Сервер контента / OPDS</string>
-    <string name="sources_calibre_toast">Просканируйте сеть или введите URL Calibre вручную ниже</string>
-    <string name="sources_opds_title">Каталог OPDS</string>
-    <string name="sources_opds_sub">Стандартные каталоги книг</string>
-    <string name="sources_opds_toast">Выберите известный каталог ниже или вставьте свой URL OPDS</string>
     <string name="sources_import_files_sub">Из файлов / папок</string>
     <string name="sources_downloads_status">Статус и ошибки</string>
     <string name="sources_tips_title">Советы</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Библиотека Calibre</string>
     <string name="lan_type_http">HTTP-каталог</string>
     <string name="lan_confidence_toast">Эвристическая оценка: вероятность %1$d%%, что это %2$s. Нажмите на строку, чтобы просмотреть URL.</string>
-    <string name="wkc_title">Известные OPDS-каталоги</string>
-    <string name="wkc_sub">Нажмите, чтобы листать публичные и свободно доступные каталоги – импортируйте прямо в свою библиотеку.</string>
-    <string name="wkc_standard_ebooks_sub">Высокое качество, свободная лицензия</string>
-    <string name="wkc_feedbooks_sub">Новая и классическая литература</string>
-    <string name="wkc_gutenberg_sub">Общественное достояние, более 70 000 книг</string>
-    <string name="wkc_librivox_sub">Бесплатные аудиокниги, волонтёры</string>
-    <string name="wkc_toast">OPDS: %1$s – %2$s\n(Просмотр каталогов будет реализован после подтверждения работы основных функций)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Здесь появятся результаты, когда запустится автосинхронизация.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d с</string>
     <string name="app_chapter_n">Глава %1$d</string>
     <string name="lan_on_host">%1$s на %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (аудиокниги)</string>
 </resources>

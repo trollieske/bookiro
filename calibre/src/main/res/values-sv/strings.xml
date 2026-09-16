@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calibre_title">Calibre</string>
+    <string name="calibre_subtitle">Innehållsserver</string>
+    <string name="calibu_back">Tillbaka</string>
+    <string name="calibu_transfers">Överföringar</string>
+    <string name="calibu_add_source">Lägg till Calibre-server</string>
+    <string name="calibu_no_sources">Ingen Calibre-server ännu</string>
+    <string name="calibu_no_sources_hint">Lägg till URL:en till din Calibre Content Server för att bläddra och ladda ner böcker.</string>
+    <string name="calibu_delete_title">Ta bort källa?</string>
+    <string name="calibu_delete_message">Ta bort %1$s och dess köade nedladdningar?</string>
+    <string name="calibu_delete">Ta bort</string>
+    <string name="calibu_cancel">Avbryt</string>
+    <string name="calibu_sync_now">Synka nu</string>
+    <string name="calibu_name">Visningsnamn (valfritt)</string>
+    <string name="calibu_url">Server-URL</string>
+    <string name="calibu_url_hint">t.ex. http://192.168.1.10:8080</string>
+    <string name="calibu_username">Användarnamn (valfritt)</string>
+    <string name="calibu_password">Lösenord (valfritt)</string>
+    <string name="calibu_password_keep">Lämna tomt för att behålla sparat lösenord</string>
+    <string name="calibu_test">Testa anslutning</string>
+    <string name="calibu_test_ok">Anslutning OK</string>
+    <string name="calibu_test_fail">Anslutning misslyckades</string>
+    <string name="calibu_save">Spara</string>
+    <string name="calibu_err_url">Ange server-URL</string>
+    <string name="calibu_err_auth">Inloggning misslyckades. Kontrollera användarnamn och lösenord.</string>
+    <string name="calibu_err_connection">Kunde inte nå servern</string>
+    <string name="calibu_err_unknown">Något gick fel</string>
+    <string name="calibu_err_parse">Servern returnerade ingen Calibre-katalog</string>
+    <string name="calibu_refresh">Uppdatera</string>
+    <string name="calibu_search_hint">Sök i biblioteket</string>
+    <string name="calibu_queued">%1$d i kön</string>
+    <string name="calibu_retry">Försök igen</string>
+    <string name="calibu_empty_folder">Inget att visa här</string>
+    <string name="calibu_queue">Ladda ner (%1$d)</string>
+    <string name="calibu_queue_folder">Ladda ner alla</string>
+    <string name="calibu_notif_title">Calibre-nedladdning</string>
+    <string name="calibu_notif_channel_desc">Förlopp för Calibre-nedladdningar</string>
+    <string name="calibu_notif_text">Laddar ner från Calibre…</string>
+    <string name="calibu_notif_detail">Laddar ner %1$s</string>
+</resources>

@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Connect your library to</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Content server / OPDS</string>
-    <string name="sources_calibre_toast">Scan your network, or enter a Calibre URL manually below</string>
-    <string name="sources_opds_title">OPDS catalog</string>
-    <string name="sources_opds_sub">Standard book catalogs</string>
-    <string name="sources_opds_toast">Choose a known catalog below, or paste your own OPDS URL</string>
     <string name="sources_import_files_sub">From files / folders</string>
     <string name="sources_downloads_status">Status and errors</string>
     <string name="sources_tips_title">Tips</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Calibre library</string>
     <string name="lan_type_http">HTTP catalog</string>
     <string name="lan_confidence_toast">Heuristic confidence: %1$d%% probability this is a %2$s. Tap the row to preview the URL.</string>
-    <string name="wkc_title">Known OPDS catalogs</string>
-    <string name="wkc_sub">Tap to browse public, freely accessible catalogs – import directly to your library.</string>
-    <string name="wkc_standard_ebooks_sub">High quality, freely licensed</string>
-    <string name="wkc_feedbooks_sub">New and classic literature</string>
-    <string name="wkc_gutenberg_sub">Public domain, 70 000+ books</string>
-    <string name="wkc_librivox_sub">Free audiobooks, volunteers</string>
-    <string name="wkc_toast">OPDS: %1$s – %2$s\n(Catalog browsing will be implemented once the core features are confirmed working)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Results are shown here when auto-sync runs.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d s</string>
     <string name="app_chapter_n">Chapter %1$d</string>
     <string name="lan_on_host">%1$s on %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (audiobooks)</string>
 </resources>

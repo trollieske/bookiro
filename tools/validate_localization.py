@@ -24,7 +24,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODULES = ["app", "library", "reader", "player", "ftp", "smb", "webdav", "torrent", "podcast"]
+MODULES = ["app", "library", "reader", "player", "ftp", "smb", "webdav", "calibre", "torrent", "podcast"]
 LOCALES = ["en", "nb", "da", "sv", "fr", "de", "es", "ru", "uk"]
 SUPPORTED_TAGS = ["en", "nb", "da", "sv", "fr", "de", "es", "ru", "uk"]
 

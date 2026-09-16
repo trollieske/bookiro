@@ -46,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.shelf.reader.designsystem.theme.OmarchyColors
 import com.shelf.reader.designsystem.theme.ShelfColors
 import com.shelf.reader.app.ShelfDestinations
-import com.shelf.reader.core.net.CalibreContentServerClient
 import com.shelf.reader.core.net.DiscoveredSourceCandidate
 import com.shelf.reader.core.net.LanSourceDiscovery
 import com.shelf.reader.data.prefs.UserPreferencesRepository
@@ -71,6 +70,9 @@ import com.shelf.reader.ftp.ui.FtpSourcesScreen
 import com.shelf.reader.ftp.ui.FtpTransfersScreen
 import com.shelf.reader.smb.ui.SmbScreen
 import com.shelf.reader.webdav.ui.WebdavScreen
+import com.shelf.reader.calibre.ui.CalibreBrowserScreen
+import com.shelf.reader.calibre.ui.CalibreConnectionScreen
+import com.shelf.reader.calibre.ui.CalibreSourcesScreen
 import com.shelf.reader.torrent.ui.TorrentScreen
 import com.shelf.reader.app.BookDetailsScreen
 import com.shelf.reader.app.ImportScreen
@@ -402,6 +404,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onSmbClick = { navController.navigate(ShelfDestinations.Smb.route) },
                     onWebdavClick = { navController.navigate(ShelfDestinations.Webdav.route) },
                     onTorrentClick = { navController.navigate(ShelfDestinations.Torrent.route) },
+                    onCalibreClick = { navController.navigate(ShelfDestinations.Calibre.route) },
                     onImportClick = { navController.navigate(ShelfDestinations.Import.route) },
                     onImportProgressClick = { navController.navigate(ShelfDestinations.ImportProgress.route) },
                     onTransfersClick = { navController.navigate(ShelfDestinations.Transfers.route) }
@@ -468,6 +471,36 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
             composable(ShelfDestinations.Torrent.route) {
                 TorrentScreen(
                     onBack = { navController.popBackStack() }
+                )
+            }
+            composable(ShelfDestinations.Calibre.route) {
+                CalibreSourcesScreen(
+                    onBack = { navController.popBackStack() },
+                    onAddSource = { navController.navigate(ShelfDestinations.CalibreAdd.route) },
+                    onOpenSource = { sourceId -> navController.navigate(ShelfDestinations.CalibreBrowse.routeFor(sourceId)) },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
+                )
+            }
+            composable(ShelfDestinations.CalibreAdd.route) {
+                CalibreConnectionScreen(
+                    editingId = 0L,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { sourceId ->
+                        navController.popBackStack()
+                        navController.navigate(ShelfDestinations.CalibreBrowse.routeFor(sourceId))
+                    }
+                )
+            }
+            composable(
+                route = ShelfDestinations.CalibreBrowse.route,
+                arguments = listOf(androidx.navigation.navArgument("sourceId") { type = androidx.navigation.NavType.LongType })
+            ) { backStack ->
+                val sourceId = backStack.arguments?.getLong("sourceId") ?: -1L
+                RequestNotificationPermissionIfNeeded()
+                CalibreBrowserScreen(
+                    sourceId = sourceId,
+                    onBack = { navController.popBackStack() },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
             }
             composable(ShelfDestinations.Settings.route) {
@@ -609,6 +642,7 @@ private fun SourcesOverviewScreen(
     onSmbClick: () -> Unit,
     onWebdavClick: () -> Unit,
     onTorrentClick: () -> Unit,
+    onCalibreClick: () -> Unit,
     onImportClick: () -> Unit,
     onImportProgressClick: () -> Unit,
     onTransfersClick: () -> Unit = {}
@@ -670,22 +704,11 @@ private fun SourcesOverviewScreen(
                     onClick = onTorrentClick
                 )
                 SourceCard(
-                    title = stringResource(R.string.sources_calibre_title),
-                    subtitle = stringResource(R.string.sources_calibre_sub),
+                    title = stringResource(com.shelf.reader.calibre.R.string.calibre_title),
+                    subtitle = stringResource(com.shelf.reader.calibre.R.string.calibre_subtitle),
                     icon = Icons.Default.LocalLibrary,
                     tint = OmarchyColors.Fg,
-                    onClick = {
-                        android.widget.Toast.makeText(ctx, ctx.getString(R.string.sources_calibre_toast), android.widget.Toast.LENGTH_LONG).show()
-                    }
-                )
-                SourceCard(
-                    title = stringResource(R.string.sources_opds_title),
-                    subtitle = stringResource(R.string.sources_opds_sub),
-                    icon = Icons.Default.MenuBook,
-                    tint = OmarchyColors.Fg,
-                    onClick = {
-                        android.widget.Toast.makeText(ctx, ctx.getString(R.string.sources_opds_toast), android.widget.Toast.LENGTH_LONG).show()
-                    }
+                    onClick = onCalibreClick
                 )
             }
 
@@ -728,9 +751,6 @@ private fun SourcesOverviewScreen(
                     onClick = onTransfersClick
                 )
             }
-
-            Spacer(Modifier.height(20.dp))
-            WellKnownCatalogsSection()
 
             Spacer(Modifier.height(20.dp))
             Row(
@@ -921,99 +941,6 @@ private fun LanDiscoverySection() {
                                 }
                             )
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private data class CatalogSuggestion(
-    val title: String,
-    val url: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val tint: androidx.compose.ui.graphics.Color
-)
-
-@Composable
-private fun WellKnownCatalogsSection() {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    val catalogs = remember {
-        listOf(
-            CatalogSuggestion("Standard Ebooks", "https://standardebooks.org/opds", ctx.getString(R.string.wkc_standard_ebooks_sub), Icons.Default.AutoStories, com.shelf.reader.designsystem.theme.OmarchyColors.Dim),
-            CatalogSuggestion("Feedbooks", "https://www.feedbooks.com/catalog.atom", ctx.getString(R.string.wkc_feedbooks_sub), Icons.Default.MenuBook, com.shelf.reader.designsystem.theme.OmarchyColors.Dim),
-            CatalogSuggestion("Project Gutenberg", "https://www.gutenberg.org/ebooks/opds", ctx.getString(R.string.wkc_gutenberg_sub), Icons.Default.LibraryBooks, com.shelf.reader.designsystem.theme.OmarchyColors.Dim),
-            CatalogSuggestion(ctx.getString(R.string.wkc_librivox_title), "https://librivox.org/api/feed/audiobooks/?format=opds", ctx.getString(R.string.wkc_librivox_sub), Icons.Default.Audiotrack, com.shelf.reader.designsystem.theme.OmarchyColors.Dim)
-        )
-    }
-
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.wkc_title),
-                    style = ShelfTypography.TitleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    stringResource(R.string.wkc_sub),
-                    style = ShelfTypography.BodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            catalogs.forEach { c ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        android.widget.Toast.makeText(
-                            ctx,
-                            ctx.getString(R.string.wkc_toast, c.title, c.url),
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                    },
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                ) {
-                    Row(
-                        Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = c.tint.copy(alpha = 0.12f)
-                        ) {
-                            Icon(
-                                c.icon,
-                                null,
-                                Modifier.padding(8.dp).size(28.dp),
-                                tint = c.tint
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(c.title, style = ShelfTypography.BodyLarge, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                c.subtitle,
-                                style = ShelfTypography.BodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                c.url,
-                                style = androidx.compose.ui.text.TextStyle(
-                                    fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                )
-                            )
-                        }
-                        Icon(Icons.Default.ChevronRight, null)
                     }
                 }
             }

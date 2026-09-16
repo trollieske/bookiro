@@ -277,6 +277,42 @@ interface DownloadTaskDao {
             "('QUEUED','PENDING','RETRYING','WAITING_FOR_NETWORK','RUNNING','VERIFYING','IMPORTING')"
     )
     suspend fun runnableServerIds(): List<Long>
+
+    // ---- Generic, kind/ref-keyed queries for the shared queue (SMB/WebDAV/Calibre) ----
+
+    @Query("SELECT * FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref ORDER BY priority DESC, created_at DESC")
+    fun observeForSource(kind: String, ref: String): Flow<List<DownloadTaskEntity>>
+
+    @Query("SELECT * FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref AND remote_path = :remotePath LIMIT 1")
+    suspend fun getBySourceRemote(kind: String, ref: String, remotePath: String): DownloadTaskEntity?
+
+    @Query(
+        "SELECT * FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref AND (" +
+            "status IN ('QUEUED','PENDING') OR (status = 'RETRYING' AND (next_attempt_at IS NULL OR next_attempt_at <= :now))" +
+            ") ORDER BY priority DESC, created_at ASC LIMIT 1"
+    )
+    suspend fun nextRunnableForSource(kind: String, ref: String, now: Long = System.currentTimeMillis()): DownloadTaskEntity?
+
+    @Query("SELECT * FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref AND status = 'IMPORTING' ORDER BY created_at ASC")
+    suspend fun importingForSource(kind: String, ref: String): List<DownloadTaskEntity>
+
+    @Query(
+        "SELECT COUNT(*) FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref AND status IN " +
+            "('QUEUED','PENDING','RETRYING','WAITING_FOR_NETWORK','RUNNING','VERIFYING','IMPORTING')"
+    )
+    suspend fun runnableCountForSource(kind: String, ref: String): Int
+
+    @Query("SELECT DISTINCT source_ref FROM download_tasks WHERE source_kind = :kind AND status IN ('QUEUED','PENDING','RETRYING','WAITING_FOR_NETWORK','RUNNING','VERIFYING','IMPORTING')")
+    suspend fun runnableRefsForKind(kind: String): List<String>
+
+    @Query("UPDATE download_tasks SET source_kind = :kind, source_ref = :ref, updated_at = :now WHERE id = :id")
+    suspend fun setSource(id: Long, kind: String, ref: String, now: Long = System.currentTimeMillis())
+
+    @Query("UPDATE download_tasks SET status = 'CANCELLED', updated_at = :now WHERE source_kind = :kind AND source_ref = :ref AND status NOT IN ('COMPLETED','CANCELLED','FAILED')")
+    suspend fun cancelForSource(kind: String, ref: String, now: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref")
+    suspend fun deleteForSource(kind: String, ref: String)
 }
 
 @Dao

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calibre_title">Calibre</string>
+    <string name="calibre_subtitle">Content server</string>
+    <string name="calibu_back">Back</string>
+    <string name="calibu_transfers">Transfers</string>
+    <string name="calibu_add_source">Add Calibre server</string>
+    <string name="calibu_no_sources">No Calibre server yet</string>
+    <string name="calibu_no_sources_hint">Add your Calibre Content Server URL to browse and download books.</string>
+    <string name="calibu_delete_title">Delete source?</string>
+    <string name="calibu_delete_message">Remove %1$s and its queued downloads?</string>
+    <string name="calibu_delete">Delete</string>
+    <string name="calibu_cancel">Cancel</string>
+    <string name="calibu_sync_now">Sync now</string>
+    <string name="calibu_name">Display name (optional)</string>
+    <string name="calibu_url">Server URL</string>
+    <string name="calibu_url_hint">e.g. http://192.168.1.10:8080</string>
+    <string name="calibu_username">Username (optional)</string>
+    <string name="calibu_password">Password (optional)</string>
+    <string name="calibu_password_keep">Leave blank to keep the stored password</string>
+    <string name="calibu_test">Test connection</string>
+    <string name="calibu_test_ok">Connection OK</string>
+    <string name="calibu_test_fail">Connection failed</string>
+    <string name="calibu_save">Save</string>
+    <string name="calibu_err_url">Enter the server URL</string>
+    <string name="calibu_err_auth">Sign-in failed. Check the username and password.</string>
+    <string name="calibu_err_connection">Could not reach the server</string>
+    <string name="calibu_err_unknown">Something went wrong</string>
+    <string name="calibu_err_parse">The server did not return a Calibre catalog</string>
+    <string name="calibu_refresh">Refresh</string>
+    <string name="calibu_search_hint">Search the library</string>
+    <string name="calibu_queued">%1$d in queue</string>
+    <string name="calibu_retry">Retry</string>
+    <string name="calibu_empty_folder">Nothing to show here</string>
+    <string name="calibu_queue">Download (%1$d)</string>
+    <string name="calibu_queue_folder">Download all</string>
+    <string name="calibu_notif_title">Calibre download</string>
+    <string name="calibu_notif_channel_desc">Progress for Calibre downloads</string>
+    <string name="calibu_notif_text">Downloading from Calibre…</string>
+    <string name="calibu_notif_detail">Downloading %1$s</string>
+</resources>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calibre_title">Calibre</string>
+    <string name="calibre_subtitle">Innholdstjener</string>
+    <string name="calibu_back">Tilbake</string>
+    <string name="calibu_transfers">Overføringer</string>
+    <string name="calibu_add_source">Legg til Calibre-tjener</string>
+    <string name="calibu_no_sources">Ingen Calibre-tjener ennå</string>
+    <string name="calibu_no_sources_hint">Legg inn URL-en til Calibre Content Server for å bla og laste ned bøker.</string>
+    <string name="calibu_delete_title">Slette kilden?</string>
+    <string name="calibu_delete_message">Fjerne %1$s og nedlastingene i køen?</string>
+    <string name="calibu_delete">Slett</string>
+    <string name="calibu_cancel">Avbryt</string>
+    <string name="calibu_sync_now">Synk nå</string>
+    <string name="calibu_name">Visningsnavn (valgfritt)</string>
+    <string name="calibu_url">Tjener-URL</string>
+    <string name="calibu_url_hint">f.eks. http://192.168.1.10:8080</string>
+    <string name="calibu_username">Brukernavn (valgfritt)</string>
+    <string name="calibu_password">Passord (valgfritt)</string>
+    <string name="calibu_password_keep">La stå tomt for å beholde lagret passord</string>
+    <string name="calibu_test">Test tilkobling</string>
+    <string name="calibu_test_ok">Tilkobling OK</string>
+    <string name="calibu_test_fail">Tilkobling feilet</string>
+    <string name="calibu_save">Lagre</string>
+    <string name="calibu_err_url">Skriv inn tjener-URL-en</string>
+    <string name="calibu_err_auth">Innlogging feilet. Sjekk brukernavn og passord.</string>
+    <string name="calibu_err_connection">Fikk ikke kontakt med tjeneren</string>
+    <string name="calibu_err_unknown">Noe gikk galt</string>
+    <string name="calibu_err_parse">Tjeneren returnerte ikke en Calibre-katalog</string>
+    <string name="calibu_refresh">Oppdater</string>
+    <string name="calibu_search_hint">Søk i biblioteket</string>
+    <string name="calibu_queued">%1$d i køen</string>
+    <string name="calibu_retry">Prøv igjen</string>
+    <string name="calibu_empty_folder">Ingenting å vise her</string>
+    <string name="calibu_queue">Last ned (%1$d)</string>
+    <string name="calibu_queue_folder">Last ned alle</string>
+    <string name="calibu_notif_title">Calibre-nedlasting</string>
+    <string name="calibu_notif_channel_desc">Fremdrift for Calibre-nedlastinger</string>
+    <string name="calibu_notif_text">Laster ned fra Calibre…</string>
+    <string name="calibu_notif_detail">Laster ned %1$s</string>
+</resources>

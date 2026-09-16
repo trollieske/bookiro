@@ -143,12 +143,6 @@
 
     <!-- Sources overview (MainActivity) -->
     <string name="sources_connect_prompt">Koble biblioteket ditt til</string>
-    <string name="sources_calibre_title">Calibre</string>
-    <string name="sources_calibre_sub">Innholdstjener / OPDS</string>
-    <string name="sources_calibre_toast">Skann nettverket ditt, eller legg inn en Calibre-URL manuelt nedenfor</string>
-    <string name="sources_opds_title">OPDS-katalog</string>
-    <string name="sources_opds_sub">Standard bokkataloger</string>
-    <string name="sources_opds_toast">Velg en kjent katalog nedenfor, eller lim inn din egen OPDS-URL</string>
     <string name="sources_import_files_sub">Fra filer / mapper</string>
     <string name="sources_downloads_status">Status og feil</string>
     <string name="sources_tips_title">Tips</string>
@@ -168,13 +162,6 @@
     <string name="lan_type_calibre">Calibre bibliotek</string>
     <string name="lan_type_http">HTTP-katalog</string>
     <string name="lan_confidence_toast">Heuristisk tillit: %1$d%% sannsynlighet for at dette er en %2$s. Trykk på linjen for å forhåndsvise URL.</string>
-    <string name="wkc_title">Kjente OPDS-kataloger</string>
-    <string name="wkc_sub">Klikk for å bla i offentlige og fritt tilgjengelige kataloger – importer direkte til biblioteket ditt.</string>
-    <string name="wkc_standard_ebooks_sub">Høykvalitet, fritt og offentlig</string>
-    <string name="wkc_feedbooks_sub">Ny og klassisk litteratur</string>
-    <string name="wkc_gutenberg_sub">Offentlig eiendom, 70 000+ bøker</string>
-    <string name="wkc_librivox_sub">Frie lydbøker, frivillige</string>
-    <string name="wkc_toast">OPDS: %1$s – %2$s\n(Funksjonalitet for blaing i katalog implementeres når kjernefunksjonene bekreftet fungerer)</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Når auto-synk kjører vises resultatet her.</string>
@@ -265,5 +252,4 @@
     <string name="app_dur_s">%1$d sek</string>
     <string name="app_chapter_n">Kapittel %1$d</string>
     <string name="lan_on_host">%1$s på %2$s:%3$d</string>
-    <string name="wkc_librivox_title">LibriVox (lydbøker)</string>
 </resources>

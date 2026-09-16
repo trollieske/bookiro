@@ -65,6 +65,50 @@ interface WebdavServerDao {
 }
 
 @Dao
+interface CalibreServerDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(server: CalibreServerEntity): Long
+
+    @Update
+    suspend fun update(server: CalibreServerEntity)
+
+    @Delete
+    suspend fun delete(server: CalibreServerEntity)
+
+    @Query("SELECT * FROM calibre_servers WHERE is_active = 1 ORDER BY display_name")
+    fun observeAll(): Flow<List<CalibreServerEntity>>
+
+    @Query("SELECT * FROM calibre_servers WHERE is_active = 1 ORDER BY display_name")
+    suspend fun getAll(): List<CalibreServerEntity>
+
+    @Query("SELECT * FROM calibre_servers WHERE id = :id")
+    fun observeById(id: Long): Flow<CalibreServerEntity?>
+
+    @Query("SELECT * FROM calibre_servers WHERE id = :id")
+    suspend fun getById(id: Long): CalibreServerEntity?
+
+    @Query("SELECT * FROM calibre_servers WHERE base_url = :baseUrl LIMIT 1")
+    suspend fun findByBaseUrl(baseUrl: String): CalibreServerEntity?
+
+    @Query("SELECT * FROM calibre_servers WHERE sync_enabled = 1 AND is_active = 1")
+    suspend fun getSyncEnabledServers(): List<CalibreServerEntity>
+
+    @Query("UPDATE calibre_servers SET state = :state, last_error = :error, updated_at = :now WHERE id = :id")
+    suspend fun updateState(
+        id: Long,
+        state: CalibreSourceStateEntity,
+        error: String?,
+        now: Long = System.currentTimeMillis()
+    )
+
+    @Query("UPDATE calibre_servers SET last_sync_at = :now, sync_last_check_at = :now, updated_at = :now WHERE id = :id")
+    suspend fun markLastSync(id: Long, now: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM calibre_servers WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
 interface TorrentDownloadDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(download: TorrentDownloadEntity): Long
