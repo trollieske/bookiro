@@ -110,19 +110,40 @@ class SmbClientEngine {
         }
     }
 
-    private fun classify(e: Throwable): SmbErrorKind = when (e) {
-        is SmbAuthException -> SmbErrorKind.AUTH
-        is SocketTimeoutException -> SmbErrorKind.TIMEOUT
-        is UnknownHostException, is ConnectException -> SmbErrorKind.NETWORK
-        is SmbException -> when (e.ntStatus) {
-            NtStatus.NT_STATUS_ACCESS_DENIED,
-            NtStatus.NT_STATUS_LOGON_FAILURE -> SmbErrorKind.AUTH
-            NtStatus.NT_STATUS_BAD_NETWORK_NAME,
-            NtStatus.NT_STATUS_OBJECT_NAME_NOT_FOUND,
-            NtStatus.NT_STATUS_OBJECT_PATH_NOT_FOUND -> SmbErrorKind.NOT_FOUND
-            else -> SmbErrorKind.UNKNOWN
+    private fun classify(e: Throwable): SmbErrorKind {
+        var current: Throwable? = e
+        var depth = 0
+        while (current != null && depth < 8) {
+            when (current) {
+                is SmbAuthException -> return SmbErrorKind.AUTH
+                is SocketTimeoutException -> return SmbErrorKind.TIMEOUT
+                is UnknownHostException, is ConnectException -> return SmbErrorKind.NETWORK
+                is SmbException -> {
+                    when (current.ntStatus) {
+                        NtStatus.NT_STATUS_ACCESS_DENIED,
+                        NtStatus.NT_STATUS_LOGON_FAILURE -> return SmbErrorKind.AUTH
+                        NtStatus.NT_STATUS_BAD_NETWORK_NAME,
+                        NtStatus.NT_STATUS_OBJECT_NAME_NOT_FOUND,
+                        NtStatus.NT_STATUS_OBJECT_PATH_NOT_FOUND -> return SmbErrorKind.NOT_FOUND
+                        else -> {
+                            val message = current.message?.lowercase().orEmpty()
+                            if (message.contains("resolve") || message.contains("unknown host") ||
+                                message.contains("no route")
+                            ) return SmbErrorKind.NETWORK
+                            if (message.contains("timed out") || message.contains("timeout")) {
+                                return SmbErrorKind.TIMEOUT
+                            }
+                        }
+                    }
+                }
+                else -> {}
+            }
+            val cause = current.cause
+            if (cause == null || cause === current) break
+            current = cause
+            depth++
         }
-        else -> SmbErrorKind.UNKNOWN
+        return SmbErrorKind.UNKNOWN
     }
 
     suspend fun disconnect() = withContext(Dispatchers.IO) { closeNow() }

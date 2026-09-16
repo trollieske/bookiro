@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">SMB/Windows-Freigaben-Sync</string>
     <string name="smbu_notif_text">Suche nach neuen Büchern auf Netzlaufwerken…</string>
     <string name="smbu_notif_detail">%1$s wird heruntergeladen</string>
+    <string name="smbu_err_auth">Anmeldung fehlgeschlagen. Benutzername und Passwort prüfen.</string>
+    <string name="smbu_err_not_found">Host oder Freigabe nicht gefunden</string>
+    <string name="smbu_err_network">Server nicht erreichbar</string>
+    <string name="smbu_err_timeout">Zeitüberschreitung der Verbindung</string>
+    <string name="smbu_err_unknown">Etwas ist schiefgelaufen</string>
 </resources>

@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">SMB/Windows-fildeling synkronisering</string>
     <string name="smbu_notif_text">Ser etter nye bøker på nettverksdisker…</string>
     <string name="smbu_notif_detail">Laster ned %1$s</string>
+    <string name="smbu_err_auth">Innlogging feilet. Sjekk brukernavn og passord.</string>
+    <string name="smbu_err_not_found">Fant ikke vert eller deling</string>
+    <string name="smbu_err_network">Fikk ikke kontakt med tjeneren</string>
+    <string name="smbu_err_timeout">Tilkoblingen ga tidsavbrudd</string>
+    <string name="smbu_err_unknown">Noe gikk galt</string>
 </resources>

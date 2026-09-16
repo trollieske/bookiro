@@ -27,4 +27,11 @@
     <string name="wdav_notif_channel_desc">Synk av Nextcloud/Owncloud/WebDAV</string>
     <string name="wdav_notif_text">Letar efter nya böcker på molntjänster…</string>
     <string name="wdav_notif_detail">Laddar ner %1$s</string>
+    <string name="wdav_err_auth">Inloggning misslyckades. Kontrollera användarnamn och lösenord.</string>
+    <string name="wdav_err_forbidden">Åtkomst nekad av servern</string>
+    <string name="wdav_err_not_found">URL eller sökväg hittades inte</string>
+    <string name="wdav_err_server">Servern returnerade ett fel</string>
+    <string name="wdav_err_network">Kunde inte nå servern</string>
+    <string name="wdav_err_timeout">Anslutningen tog timeout</string>
+    <string name="wdav_err_unknown">Något gick fel</string>
 </resources>

@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">Synchronisation du partage SMB/Windows</string>
     <string name="smbu_notif_text">Recherche de nouveaux livres sur les lecteurs réseau…</string>
     <string name="smbu_notif_detail">Téléchargement de %1$s</string>
+    <string name="smbu_err_auth">Échec de la connexion. Vérifiez le nom d’utilisateur et le mot de passe.</string>
+    <string name="smbu_err_not_found">Hôte ou partage introuvable</string>
+    <string name="smbu_err_network">Impossible de joindre le serveur</string>
+    <string name="smbu_err_timeout">Délai de connexion dépassé</string>
+    <string name="smbu_err_unknown">Une erreur est survenue</string>
 </resources>

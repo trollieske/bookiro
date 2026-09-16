@@ -204,7 +204,7 @@
     <string name="import_formats_list">EPUB, PDF, MOBI, AZW/AZW3, FB2, CBZ/CBR, TXT, HTML, RTF, DOCX, Markdown, M4B, M4A, MP3, AAC, FLAC, OGG, OPUS, WAV.</string>
 
     <!-- Settings screen -->
-    <string name="settings_sources_row_sub">FTP, SMB, WebDAV, Torrent, Calibre, OPDS</string>
+    <string name="settings_sources_row_sub">FTP, SMB, WebDAV, Torrent, Calibre</string>
     <string name="settings_sync_strategy_desc">Wähle, welche Quellen automatisch synchronisiert werden. Alle Sync-Jobs nutzen die für Android optimierte WorkManager-Hintergrundausführung.</string>
     <string name="settings_sync_interval">Intervall</string>
     <string name="settings_audio_section">Hörbuch-Wiedergabe</string>

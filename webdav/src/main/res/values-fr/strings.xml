@@ -27,4 +27,11 @@
     <string name="wdav_notif_channel_desc">Synchronisation Nextcloud/Owncloud/WebDAV</string>
     <string name="wdav_notif_text">Recherche de nouveaux livres sur les services cloud…</string>
     <string name="wdav_notif_detail">Téléchargement de %1$s</string>
+    <string name="wdav_err_auth">Échec de la connexion. Vérifiez le nom d’utilisateur et le mot de passe.</string>
+    <string name="wdav_err_forbidden">Accès refusé par le serveur</string>
+    <string name="wdav_err_not_found">URL ou chemin introuvable</string>
+    <string name="wdav_err_server">Le serveur a renvoyé une erreur</string>
+    <string name="wdav_err_network">Impossible de joindre le serveur</string>
+    <string name="wdav_err_timeout">Délai de connexion dépassé</string>
+    <string name="wdav_err_unknown">Une erreur est survenue</string>
 </resources>

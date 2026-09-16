@@ -4,6 +4,8 @@ import com.shelf.reader.webdav.R
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -86,7 +88,14 @@ fun WebdavScreen(
             }
         }
     ) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize().padding(16.dp)) {
+        val scrollState = rememberScrollState()
+        Column(
+            Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .padding(16.dp)
+                .then(if (!state.isConnected) Modifier.verticalScroll(scrollState) else Modifier)
+        ) {
             if (state.sources.isNotEmpty() && !state.isConnected) {
                 SavedWebdavServersPanel(
                     saved = state.sources,
@@ -374,7 +383,7 @@ private fun WebdavServerCard(
             }
             if (state.error != null) {
                 Spacer(Modifier.height(8.dp))
-                Text(state.error!!, color = MaterialTheme.colorScheme.error, style = ShelfTypography.BodySmall)
+                Text(webdavErrorText(state.error), color = MaterialTheme.colorScheme.error, style = ShelfTypography.BodySmall)
             }
         }
     }
@@ -461,6 +470,19 @@ private fun SaveServerDialog(initialName: String, onDismiss: () -> Unit, onSave:
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.wdav_cancel)) } }
     )
 }
+
+@Composable
+private fun webdavErrorText(error: String?): String = stringResource(
+    when (error) {
+        "AUTH" -> R.string.wdav_err_auth
+        "FORBIDDEN" -> R.string.wdav_err_forbidden
+        "NOT_FOUND" -> R.string.wdav_err_not_found
+        "SERVER" -> R.string.wdav_err_server
+        "NETWORK" -> R.string.wdav_err_network
+        "TIMEOUT" -> R.string.wdav_err_timeout
+        else -> R.string.wdav_err_unknown
+    }
+)
 
 private fun formatSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"

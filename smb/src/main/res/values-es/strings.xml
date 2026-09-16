@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">Sincronización de recursos SMB/Windows</string>
     <string name="smbu_notif_text">Buscando libros nuevos en unidades de red…</string>
     <string name="smbu_notif_detail">Descargando %1$s</string>
+    <string name="smbu_err_auth">Error de inicio de sesión. Revisa el usuario y la contraseña.</string>
+    <string name="smbu_err_not_found">Host o recurso compartido no encontrado</string>
+    <string name="smbu_err_network">No se pudo contactar con el servidor</string>
+    <string name="smbu_err_timeout">Tiempo de conexión agotado</string>
+    <string name="smbu_err_unknown">Algo salió mal</string>
 </resources>

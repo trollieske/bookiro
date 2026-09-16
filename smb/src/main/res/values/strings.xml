@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">SMB/Windows file share sync</string>
     <string name="smbu_notif_text">Looking for new books on network drives…</string>
     <string name="smbu_notif_detail">Downloading %1$s</string>
+    <string name="smbu_err_auth">Sign-in failed. Check the username and password.</string>
+    <string name="smbu_err_not_found">Host or share not found</string>
+    <string name="smbu_err_network">Could not reach the server</string>
+    <string name="smbu_err_timeout">Connection timed out</string>
+    <string name="smbu_err_unknown">Something went wrong</string>
 </resources>

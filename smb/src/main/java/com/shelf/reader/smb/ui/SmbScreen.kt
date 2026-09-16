@@ -4,6 +4,8 @@ import com.shelf.reader.smb.R
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -87,7 +89,14 @@ fun SmbScreen(
             }
         }
     ) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize().padding(16.dp)) {
+        val scrollState = rememberScrollState()
+        Column(
+            Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .padding(16.dp)
+                .then(if (!state.isConnected) Modifier.verticalScroll(scrollState) else Modifier)
+        ) {
             if (state.sources.isNotEmpty() && !state.isConnected) {
                 SavedSmbServersPanel(
                     saved = state.sources,
@@ -380,7 +389,7 @@ private fun SmbServerCard(
             }
             if (state.error != null) {
                 Spacer(Modifier.height(8.dp))
-                Text(state.error!!, color = MaterialTheme.colorScheme.error, style = ShelfTypography.BodySmall)
+                Text(smbErrorText(state.error), color = MaterialTheme.colorScheme.error, style = ShelfTypography.BodySmall)
             }
         }
     }
@@ -481,6 +490,17 @@ private fun SaveServerDialog(initialName: String, onDismiss: () -> Unit, onSave:
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.smbu_cancel)) } }
     )
 }
+
+@Composable
+private fun smbErrorText(error: String?): String = stringResource(
+    when (error) {
+        "AUTH" -> R.string.smbu_err_auth
+        "NOT_FOUND" -> R.string.smbu_err_not_found
+        "NETWORK" -> R.string.smbu_err_network
+        "TIMEOUT" -> R.string.smbu_err_timeout
+        else -> R.string.smbu_err_unknown
+    }
+)
 
 private fun formatSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"

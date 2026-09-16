@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">Синхронизация общих папок SMB/Windows</string>
     <string name="smbu_notif_text">Ищем новые книги на сетевых дисках…</string>
     <string name="smbu_notif_detail">Загрузка %1$s</string>
+    <string name="smbu_err_auth">Ошибка входа. Проверьте имя пользователя и пароль.</string>
+    <string name="smbu_err_not_found">Хост или общий ресурс не найден</string>
+    <string name="smbu_err_network">Не удалось связаться с сервером</string>
+    <string name="smbu_err_timeout">Время ожидания соединения истекло</string>
+    <string name="smbu_err_unknown">Что-то пошло не так</string>
 </resources>

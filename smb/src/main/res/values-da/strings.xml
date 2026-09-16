@@ -28,4 +28,9 @@
     <string name="smbu_notif_channel_desc">SMB/Windows-fildeling synkronisering</string>
     <string name="smbu_notif_text">Leder efter nye bøger på netværksdrev…</string>
     <string name="smbu_notif_detail">Downloader %1$s</string>
+    <string name="smbu_err_auth">Login mislykkedes. Tjek brugernavn og adgangskode.</string>
+    <string name="smbu_err_not_found">Vært eller deling ikke fundet</string>
+    <string name="smbu_err_network">Kunne ikke nå serveren</string>
+    <string name="smbu_err_timeout">Forbindelsen fik timeout</string>
+    <string name="smbu_err_unknown">Noget gik galt</string>
 </resources>

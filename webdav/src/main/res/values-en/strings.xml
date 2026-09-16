@@ -27,4 +27,11 @@
     <string name="wdav_notif_channel_desc">Nextcloud/Owncloud/WebDAV sync</string>
     <string name="wdav_notif_text">Looking for new books on cloud services…</string>
     <string name="wdav_notif_detail">Downloading %1$s</string>
+    <string name="wdav_err_auth">Sign-in failed. Check the username and password.</string>
+    <string name="wdav_err_forbidden">Access denied by the server</string>
+    <string name="wdav_err_not_found">URL or path not found</string>
+    <string name="wdav_err_server">The server returned an error</string>
+    <string name="wdav_err_network">Could not reach the server</string>
+    <string name="wdav_err_timeout">Connection timed out</string>
+    <string name="wdav_err_unknown">Something went wrong</string>
 </resources>

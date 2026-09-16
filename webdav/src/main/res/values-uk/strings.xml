@@ -27,4 +27,11 @@
     <string name="wdav_notif_channel_desc">Синхронізація Nextcloud/Owncloud/WebDAV</string>
     <string name="wdav_notif_text">Шукаємо нові книги в хмарних сервісах…</string>
     <string name="wdav_notif_detail">Завантаження %1$s</string>
+    <string name="wdav_err_auth">Помилка входу. Перевірте ім’я користувача та пароль.</string>
+    <string name="wdav_err_forbidden">Доступ заборонено сервером</string>
+    <string name="wdav_err_not_found">URL або шлях не знайдено</string>
+    <string name="wdav_err_server">Сервер повернув помилку</string>
+    <string name="wdav_err_network">Не вдалося зв’язатися із сервером</string>
+    <string name="wdav_err_timeout">Час очікування з’єднання вичерпано</string>
+    <string name="wdav_err_unknown">Щось пішло не так</string>
 </resources>
