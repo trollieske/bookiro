@@ -154,14 +154,7 @@
     <string name="lan_found_progress">Found %1$d possible source(s)… still scanning.</string>
     <string name="lan_none_found">No sources found. Check that you are on the same Wi-Fi as your servers, or add them manually via the cards above.</string>
     <string name="lan_done_found">Scan complete. %1$d possible source(s) found – tap to open / add.</string>
-    <string name="lan_preview_toast">%1$s – preview: %2$s</string>
     <string name="lan_confidence">%1$d%% likely</string>
-    <string name="lan_type_ftp">FTP server</string>
-    <string name="lan_type_smb">SMB / Windows share</string>
-    <string name="lan_type_webdav">WebDAV</string>
-    <string name="lan_type_calibre">Calibre library</string>
-    <string name="lan_type_http">HTTP catalog</string>
-    <string name="lan_confidence_toast">Heuristic confidence: %1$d%% probability this is a %2$s. Tap the row to preview the URL.</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Results are shown here when auto-sync runs.</string>
@@ -251,5 +244,4 @@
     <string name="app_dur_ms">%1$d min %2$d s</string>
     <string name="app_dur_s">%1$d s</string>
     <string name="app_chapter_n">Chapter %1$d</string>
-    <string name="lan_on_host">%1$s on %2$s:%3$d</string>
 </resources>

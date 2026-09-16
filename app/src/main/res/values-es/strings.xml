@@ -154,14 +154,7 @@
     <string name="lan_found_progress">Se encontraron %1$d posible(s) fuente(s)… el escaneo continúa.</string>
     <string name="lan_none_found">No se encontraron fuentes. Comprueba que estás en el mismo Wi-Fi que tus servidores, o añádelos manualmente con las tarjetas de arriba.</string>
     <string name="lan_done_found">Escaneo completado. Se encontraron %1$d posible(s) fuente(s): toca para abrir/añadir.</string>
-    <string name="lan_preview_toast">%1$s – vista previa: %2$s</string>
     <string name="lan_confidence">%1$d%% probable</string>
-    <string name="lan_type_ftp">Servidor FTP</string>
-    <string name="lan_type_smb">Recurso compartido SMB/Windows</string>
-    <string name="lan_type_webdav">WebDAV</string>
-    <string name="lan_type_calibre">Biblioteca de Calibre</string>
-    <string name="lan_type_http">Catálogo HTTP</string>
-    <string name="lan_confidence_toast">Confianza heurística: %1$d%% de probabilidad de que sea un(a) %2$s. Toca la fila para previsualizar la URL.</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Los resultados aparecen aquí cuando se ejecuta la auto-sincronización.</string>
@@ -251,5 +244,4 @@
     <string name="app_dur_ms">%1$d min %2$d s</string>
     <string name="app_dur_s">%1$d s</string>
     <string name="app_chapter_n">Capítulo %1$d</string>
-    <string name="lan_on_host">%1$s en %2$s:%3$d</string>
 </resources>

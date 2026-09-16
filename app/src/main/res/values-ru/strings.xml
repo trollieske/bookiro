@@ -154,14 +154,7 @@
     <string name="lan_found_progress">Найдено возможных источников: %1$d… сканирование продолжается.</string>
     <string name="lan_none_found">Источники не найдены. Проверьте, что вы в той же Wi-Fi-сети, что и ваши серверы, или добавьте их вручную через карточки выше.</string>
     <string name="lan_done_found">Сканирование завершено. Найдено возможных источников: %1$d – нажмите, чтобы открыть/добавить.</string>
-    <string name="lan_preview_toast">%1$s – предпросмотр: %2$s</string>
     <string name="lan_confidence">Вероятность %1$d%%</string>
-    <string name="lan_type_ftp">FTP-сервер</string>
-    <string name="lan_type_smb">Общая папка SMB/Windows</string>
-    <string name="lan_type_webdav">WebDAV</string>
-    <string name="lan_type_calibre">Библиотека Calibre</string>
-    <string name="lan_type_http">HTTP-каталог</string>
-    <string name="lan_confidence_toast">Эвристическая оценка: вероятность %1$d%%, что это %2$s. Нажмите на строку, чтобы просмотреть URL.</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Здесь появятся результаты, когда запустится автосинхронизация.</string>
@@ -251,5 +244,4 @@
     <string name="app_dur_ms">%1$d мин %2$d с</string>
     <string name="app_dur_s">%1$d с</string>
     <string name="app_chapter_n">Глава %1$d</string>
-    <string name="lan_on_host">%1$s на %2$s:%3$d</string>
 </resources>

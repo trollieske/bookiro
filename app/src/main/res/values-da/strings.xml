@@ -154,14 +154,7 @@
     <string name="lan_found_progress">Fandt %1$d mulige kilde(r)… fortsætter scanning.</string>
     <string name="lan_none_found">Ingen kilder fundet. Kontrollér, at du er på samme Wi-Fi som dine servere, eller tilføj dem manuelt via kortene ovenfor.</string>
     <string name="lan_done_found">Scanning færdig. %1$d mulige kilde(r) fundet – tryk for at åbne/tilføje.</string>
-    <string name="lan_preview_toast">%1$s – forhåndsvisning: %2$s</string>
     <string name="lan_confidence">%1$d%% sandsynlig</string>
-    <string name="lan_type_ftp">FTP-server</string>
-    <string name="lan_type_smb">SMB/Windows-del</string>
-    <string name="lan_type_webdav">WebDAV</string>
-    <string name="lan_type_calibre">Calibre-bibliotek</string>
-    <string name="lan_type_http">HTTP-katalog</string>
-    <string name="lan_confidence_toast">Heuristisk tillid: %1$d%% sandsynlighed for, at dette er en %2$s. Tryk på linjen for at forhåndsvise URL\'en.</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Resultater vises her, når auto-synkronisering kører.</string>
@@ -251,5 +244,4 @@
     <string name="app_dur_ms">%1$d min %2$d sek</string>
     <string name="app_dur_s">%1$d sek</string>
     <string name="app_chapter_n">Kapitel %1$d</string>
-    <string name="lan_on_host">%1$s på %2$s:%3$d</string>
 </resources>

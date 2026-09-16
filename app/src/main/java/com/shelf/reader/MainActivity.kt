@@ -716,7 +716,12 @@ private fun SourcesOverviewScreen(
             HorizontalDivider(color = OmarchyColors.Hairline)
             Spacer(Modifier.height(16.dp))
 
-            LanDiscoverySection()
+            LanDiscoverySection(
+                onOpenFtp = onFtpClick,
+                onOpenSmb = onSmbClick,
+                onOpenWebdav = onWebdavClick,
+                onOpenCalibre = onCalibreClick
+            )
 
             Spacer(Modifier.height(24.dp))
             HorizontalDivider(color = OmarchyColors.Hairline)
@@ -806,7 +811,12 @@ private fun SourceCard(
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun LanDiscoverySection() {
+private fun LanDiscoverySection(
+    onOpenFtp: () -> Unit,
+    onOpenSmb: () -> Unit,
+    onOpenWebdav: () -> Unit,
+    onOpenCalibre: () -> Unit
+) {
     val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     var scanning by remember { mutableStateOf(false) }
@@ -883,33 +893,23 @@ private fun LanDiscoverySection() {
                                     .fillMaxWidth()
                                     .clip(MaterialTheme.shapes.medium)
                                     .clickable {
-                                        val label = ctx.getString(R.string.lan_on_host, cand.label, cand.host, cand.port)
-                                        android.widget.Toast.makeText(ctx, ctx.getString(R.string.lan_preview_toast, label, cand.url), android.widget.Toast.LENGTH_LONG).show()
+                                        when (cand.type) {
+                                            com.shelf.reader.core.net.DiscoveredSourceType.FTP -> onOpenFtp()
+                                            com.shelf.reader.core.net.DiscoveredSourceType.SMB -> onOpenSmb()
+                                            com.shelf.reader.core.net.DiscoveredSourceType.WEBDAV -> onOpenWebdav()
+                                            com.shelf.reader.core.net.DiscoveredSourceType.CALIBRE -> onOpenCalibre()
+                                            com.shelf.reader.core.net.DiscoveredSourceType.HTTP_CANDIDATE -> onOpenCalibre()
+                                        }
                                     }
                                     .padding(horizontal = 4.dp, vertical = 8.dp),
                                 headline = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(cand.label, fontWeight = FontWeight.SemiBold)
                                         Spacer(Modifier.width(8.dp))
-                                        AssistChip(
-                                            onClick = {
-                                                val typeLabel = when (cand.type) {
-                                                    com.shelf.reader.core.net.DiscoveredSourceType.FTP -> ctx.getString(R.string.lan_type_ftp)
-                                                    com.shelf.reader.core.net.DiscoveredSourceType.SMB -> ctx.getString(R.string.lan_type_smb)
-                                                    com.shelf.reader.core.net.DiscoveredSourceType.WEBDAV -> ctx.getString(R.string.lan_type_webdav)
-                                                    com.shelf.reader.core.net.DiscoveredSourceType.CALIBRE -> ctx.getString(R.string.lan_type_calibre)
-                                                    com.shelf.reader.core.net.DiscoveredSourceType.HTTP_CANDIDATE -> ctx.getString(R.string.lan_type_http)
-                                                }
-                                                android.widget.Toast.makeText(
-                                                    ctx,
-                                                    ctx.getString(R.string.lan_confidence_toast, cand.confidencePct, typeLabel),
-                                                    android.widget.Toast.LENGTH_LONG
-                                                ).show()
-                                            },
-                                            label = { Text(stringResource(R.string.lan_confidence, cand.confidencePct)) },
-                                            colors = AssistChipDefaults.assistChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                            )
+                                        Text(
+                                            stringResource(R.string.lan_confidence, cand.confidencePct),
+                                            style = ShelfTypography.BodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 },

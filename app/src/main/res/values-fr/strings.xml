@@ -154,14 +154,7 @@
     <string name="lan_found_progress">%1$d source(s) possible(s) trouvée(s)… l\'analyse continue.</string>
     <string name="lan_none_found">Aucune source trouvée. Vérifiez que vous êtes sur le même Wi-Fi que vos serveurs, ou ajoutez-les manuellement via les cartes ci-dessus.</string>
     <string name="lan_done_found">Analyse terminée. %1$d source(s) possible(s) trouvée(s) – touchez pour ouvrir / ajouter.</string>
-    <string name="lan_preview_toast">%1$s – aperçu : %2$s</string>
     <string name="lan_confidence">%1$d%% probable</string>
-    <string name="lan_type_ftp">Serveur FTP</string>
-    <string name="lan_type_smb">Partage SMB/Windows</string>
-    <string name="lan_type_webdav">WebDAV</string>
-    <string name="lan_type_calibre">Bibliothèque Calibre</string>
-    <string name="lan_type_http">Catalogue HTTP</string>
-    <string name="lan_confidence_toast">Confiance heuristique : %1$d%% de probabilité qu\'il s\'agisse d\'un(e) %2$s. Touchez la ligne pour voir l\'aperçu de l\'URL.</string>
 
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Les résultats s\'affichent ici lorsque l\'auto-synchronisation s\'exécute.</string>
@@ -251,5 +244,4 @@
     <string name="app_dur_ms">%1$d min %2$d s</string>
     <string name="app_dur_s">%1$d s</string>
     <string name="app_chapter_n">Chapitre %1$d</string>
-    <string name="lan_on_host">%1$s sur %2$s:%3$d</string>
 </resources>
