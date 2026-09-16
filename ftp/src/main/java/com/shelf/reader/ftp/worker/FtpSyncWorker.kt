@@ -114,16 +114,21 @@ class FtpSyncWorker(
 
         fun uniqueName(serverId: Long): String = FtpWorkNaming.uniqueName(serverId)
 
-        /** Enqueue-or-keep. Never replaces a running queue. */
-        fun enqueue(context: Context, source: FtpSource) {
+        /** Enqueue-or-keep. Never replaces a running queue unless asked. */
+        fun enqueue(
+            context: Context,
+            source: FtpSource,
+            policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP
+        ) {
             val request = OneTimeWorkRequestBuilder<FtpSyncWorker>()
                 .setInputData(workDataOf(KEY_SERVER_ID to source.id))
                 .setConstraints(constraintsFor(source))
+                .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS)
                 .addTag(TAG)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 uniqueName(source.id),
-                ExistingWorkPolicy.KEEP,
+                policy,
                 request
             )
         }
@@ -137,6 +142,14 @@ class FtpSyncWorker(
                 .getWorkInfosForUniqueWork(uniqueName(serverId))
                 .await()
             return info.any { !it.state.isFinished }
+        }
+
+        /** True only while the worker is actually executing (not ENQUEUED/backoff). */
+        suspend fun isExecuting(context: Context, serverId: Long): Boolean {
+            val info = WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork(uniqueName(serverId))
+                .await()
+            return info.any { it.state == androidx.work.WorkInfo.State.RUNNING }
         }
 
         private fun constraintsFor(source: FtpSource): Constraints {

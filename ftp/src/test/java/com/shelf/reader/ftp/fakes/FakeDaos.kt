@@ -329,4 +329,16 @@ class FakeDownloadTaskDao : DownloadTaskDao {
 
     override suspend fun activeServerIds(): List<Long> =
         rows.values.filter { it.status.isActive }.mapNotNull { it.serverId }.distinct()
+
+    override suspend fun runnableServerIds(): List<Long> =
+        rows.values
+            .filter {
+                it.serverId != null && (
+                    it.status.isRunnable || it.status.isActive ||
+                        it.status == DownloadStatusEntity.RETRYING ||
+                        it.status == DownloadStatusEntity.WAITING_FOR_NETWORK
+                    )
+            }
+            .mapNotNull { it.serverId }
+            .distinct()
 }

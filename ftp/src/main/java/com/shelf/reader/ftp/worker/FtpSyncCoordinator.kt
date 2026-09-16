@@ -30,14 +30,34 @@ object FtpSyncCoordinator {
         val graph = FtpGraph.get(context)
         // Bring any pre-Room servers into Room exactly once.
         runCatching { FtpLegacyMigration.runIfNeeded(context) }
-        val activeServers = graph.transferRepository.activeServerIds()
-        val recovered = graph.transferRepository.rehydrateAllActive()
-        if (recovered <= 0) return 0
 
-        for (serverId in activeServers) {
+        // Drop the pre-upgrade periodic worker name (it had no server id).
+        runCatching {
+            androidx.work.WorkManager.getInstance(context).cancelUniqueWork("shelf_ftp_periodic_sync")
+        }
+
+        // Stale RUNNING/VERIFYING/IMPORTING rows from a process death go back to the queue.
+        val recovered = graph.transferRepository.rehydrateAllActive()
+
+        // Resume any incomplete queue, not only those with a mid-flight row: a process
+        // killed between files has only QUEUED rows and must still continue. Paused,
+        // cancelled and failed rows are deliberately not resumed.
+        //
+        // REPLACE (not KEEP) is important here: if the previous worker was left in
+        // WorkManager timing backoff after repeated retries, KEEP would keep waiting
+        // for minutes. A user-visible app start is a deliberate resume signal.
+        val serverIds = graph.transferRepository.runnableServerIds()
+        android.util.Log.i(
+            "FtpSyncCoordinator",
+            "recover: rehydrated=$recovered runnableServers=${serverIds.size}"
+        )
+        for (serverId in serverIds) {
             val source = graph.sourceRepository.getSource(serverId) ?: continue
-            if (FtpSyncWorker.isRunning(context, serverId)) continue
-            FtpSyncWorker.enqueue(context, source)
+            if (source.state == com.shelf.reader.data.local.entity.FtpSourceStateEntity.DISABLED) continue
+            // Skip only a worker that is actually executing; an ENQUEUED work left in
+            // backoff is not executing and is replaced to clear the delay.
+            if (FtpSyncWorker.isExecuting(context, serverId)) continue
+            FtpSyncWorker.enqueue(context, source, androidx.work.ExistingWorkPolicy.REPLACE)
         }
         return recovered
     }

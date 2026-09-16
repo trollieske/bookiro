@@ -267,6 +267,13 @@ interface DownloadTaskDao {
     suspend fun countsForServer(serverId: Long): TransferCounts
     @Query("SELECT DISTINCT server_id FROM download_tasks WHERE server_id IS NOT NULL AND status IN ('RUNNING','VERIFYING','IMPORTING')")
     suspend fun activeServerIds(): List<Long>
+
+    /** Servers with work that should be running (queued, retrying or mid-flight). */
+    @Query(
+        "SELECT DISTINCT server_id FROM download_tasks WHERE server_id IS NOT NULL AND status IN " +
+            "('QUEUED','PENDING','RETRYING','WAITING_FOR_NETWORK','RUNNING','VERIFYING','IMPORTING')"
+    )
+    suspend fun runnableServerIds(): List<Long>
 }
 
 @Dao

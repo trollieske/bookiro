@@ -117,6 +117,16 @@ class FtpRepositoryTest {
     }
 
     @Test
+    fun `queued-only work is reported as runnable but paused work is not`() = runTest {
+        val id = sourceRepository.upsert(input())
+        transferRepository.enqueue(id, "/books", listOf(FakeRemoteFileClient.fileEntry("a.m4b", "/books/a.m4b", 1024)))
+        assertEquals(listOf(id), transferRepository.runnableServerIds())
+
+        transferRepository.pause(id)
+        assertTrue(transferRepository.runnableServerIds().isEmpty())
+    }
+
+    @Test
     fun `deleting a source removes or cancels its tasks`() = runTest {
         val id = sourceRepository.upsert(input())
         transferRepository.enqueue(id, "/books", listOf(FakeRemoteFileClient.fileEntry("a.m4b", "/books/a.m4b", 10)))

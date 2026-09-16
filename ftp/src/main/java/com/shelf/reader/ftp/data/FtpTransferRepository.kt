@@ -238,6 +238,10 @@ class FtpTransferRepository(
         taskDao.activeServerIds()
     }
 
+    suspend fun runnableServerIds(): List<Long> = withContext(Dispatchers.IO) {
+        taskDao.runnableServerIds()
+    }
+
     suspend fun clearCompleted() = withContext(Dispatchers.IO) {
         taskDao.clearCompleted()
     }
