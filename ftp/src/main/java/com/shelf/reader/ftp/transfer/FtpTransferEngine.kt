@@ -15,10 +15,12 @@ import com.shelf.reader.ftp.domain.TransferPolicy
 import com.shelf.reader.ftp.domain.TransferPolicyResolver
 import com.shelf.reader.ftp.domain.TransportType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -270,12 +272,15 @@ class FtpTransferEngine(
             }
             return finishAndImport(task, finalFile)
         } catch (e: kotlinx.coroutines.CancellationException) {
+            flushProgress(task.id, latestBytes)
             runtime.remove(task.id)
             throw e
         } catch (e: FtpException) {
+            flushProgress(task.id, latestBytes)
             runtime.remove(task.id)
             return handleFailure(task, e)
         } catch (e: Throwable) {
+            flushProgress(task.id, latestBytes)
             runtime.remove(task.id)
             if (isStorageFull(e)) {
                 transferRepository.fail(task.id, "Storage is full", "storage")
@@ -285,6 +290,13 @@ class FtpTransferEngine(
                 task,
                 FtpException(FtpErrorKind.UNKNOWN, e.message ?: "Transfer failed", e)
             )
+        }
+    }
+
+    /** Persist the exact last byte count even when the scope is being cancelled. */
+    private suspend fun flushProgress(taskId: Long, bytes: Long) {
+        withContext(NonCancellable) {
+            runCatching { transferRepository.updateProgress(taskId, bytes, 0L) }
         }
     }
 
