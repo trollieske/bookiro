@@ -1,159 +1,150 @@
 package com.shelf.reader.ftp.worker
 
-import com.shelf.reader.ftp.R
-
 import android.content.Context
 import android.content.pm.ServiceInfo
-import android.net.Uri
 import android.os.Build
-import androidx.core.app.NotificationChannelCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.shelf.reader.core.dispatchers.DefaultDispatcherProvider
-import com.shelf.reader.data.local.ShelfDatabase
-import com.shelf.reader.data.local.entity.ImportSourceEntity
-import com.shelf.reader.data.prefs.UserPreferencesRepository
-import com.shelf.reader.ftp.client.FtpClientEngine
-import com.shelf.reader.ftp.client.FtpEntryType
-import com.shelf.reader.ftp.data.FtpServerStore
-import com.shelf.reader.library.data.BookImportRepository
-import kotlinx.coroutines.flow.first
-import java.io.File
+import androidx.work.await
+import androidx.work.workDataOf
+import com.shelf.reader.ftp.data.FtpGraph
+import com.shelf.reader.ftp.data.FtpSource
+import com.shelf.reader.ftp.transfer.FtpQueuePlanner
+import com.shelf.reader.ftp.transfer.FtpTransferEngine
+import com.shelf.reader.ftp.transfer.FtpWorkNaming
+import com.shelf.reader.ftp.transfer.NetworkTransport
+import com.shelf.reader.ftp.transfer.StopReason
 
+/**
+ * Single owner of a server's active transfer work.
+ *
+ * Exactly one unique work exists per server (`ftp-sync-server-<id>`), so pressing
+ * Sync repeatedly can never create competing workers or delete an active queue.
+ */
 class FtpSyncWorker(
-    private val appContext: Context,
+    appContext: Context,
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
 
-    companion object {
-        const val CHANNEL_ID = "ftp_sync_channel"
-        const val NOTIF_ID = 3001
-        private const val WORK_NAME = "shelf_ftp_periodic_sync"
+    override suspend fun doWork(): Result {
+        val serverId = inputData.getLong(KEY_SERVER_ID, -1L)
+        if (serverId <= 0L) return Result.success()
 
-        fun schedule(context: Context) {
-            val wifiOnly = kotlinx.coroutines.runBlocking { 
-                com.shelf.reader.data.prefs.UserPreferencesRepository(context).ftpWifiOnly.first() 
+        val graph = FtpGraph.get(applicationContext)
+        val source = graph.sourceRepository.getSource(serverId) ?: return Result.success()
+
+        FtpNotifications.ensureChannel(applicationContext)
+        updateForeground(source)
+
+        // "Sync now" discovery: only when there is no runnable or paused work and
+        // nothing failed that the user has not explicitly retried.
+        val before = graph.transferRepository.counts(serverId)
+        if (before.queued == 0 && before.running == 0 && before.paused == 0 && before.failed == 0) {
+            runCatching {
+                FtpQueuePlanner(graph.sourceRepository, graph.transferRepository).plan(source)
             }
+        }
 
-            val workManager = androidx.work.WorkManager.getInstance(context)
-            val constraints = androidx.work.Constraints.Builder()
-                .setRequiredNetworkType(if (wifiOnly) androidx.work.NetworkType.UNMETERED else androidx.work.NetworkType.CONNECTED)
-                .setRequiresStorageNotLow(true)
+        val engine = FtpTransferEngine(
+            sourceRepository = graph.sourceRepository,
+            transferRepository = graph.transferRepository,
+            importer = graph.importer,
+            runtime = FtpGraph.runtime,
+            transportProvider = { NetworkTransport.detect(applicationContext) },
+            onUpdate = { updateForeground(graph.sourceRepository.getSource(serverId) ?: source) }
+        )
+
+        val result = try {
+            engine.run(serverId) { isStopped }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            graph.transferRepository.rehydrateActive(serverId)
+            throw cancelled
+        } catch (_: Throwable) {
+            // A crash must never leave rows stuck in RUNNING.
+            graph.transferRepository.rehydrateActive(serverId)
+            return Result.retry()
+        }
+
+        graph.transferRepository.rehydrateActive(serverId)
+        graph.sourceRepository.markLastSync(serverId)
+
+        return when (result.reason) {
+            StopReason.AUTH_FAILURE -> {
+                // Do not retry bad credentials forever; the UI asks for a fix.
+                Result.success()
+            }
+            StopReason.STORAGE_FULL -> Result.success()
+            StopReason.CONNECTION_LOST -> Result.retry()
+            StopReason.USER_CANCELLED -> Result.success()
+            StopReason.QUEUE_EMPTY -> Result.success()
+        }
+    }
+
+    private suspend fun updateForeground(source: FtpSource) {
+        runCatching {
+            val counts = FtpGraph.get(applicationContext).transferRepository.counts(source.id)
+            val active = FtpGraph.runtime.snapshot().filter { it.serverId == source.id }
+            val notification = FtpNotifications.build(
+                context = applicationContext,
+                serverId = source.id,
+                sourceName = source.displayName,
+                active = active,
+                queued = counts.queued,
+                running = counts.running,
+                total = counts.total,
+                completed = counts.completed,
+                failed = counts.failed
+            )
+            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            } else 0
+            setForeground(ForegroundInfo(FtpNotifications.NOTIF_ID, notification, type))
+        }
+    }
+
+    companion object {
+        const val KEY_SERVER_ID = FtpWorkNaming.INPUT_KEY_SERVER_ID
+        private const val TAG = "ftp-sync"
+
+        fun uniqueName(serverId: Long): String = FtpWorkNaming.uniqueName(serverId)
+
+        /** Enqueue-or-keep. Never replaces a running queue. */
+        fun enqueue(context: Context, source: FtpSource) {
+            val request = OneTimeWorkRequestBuilder<FtpSyncWorker>()
+                .setInputData(workDataOf(KEY_SERVER_ID to source.id))
+                .setConstraints(constraintsFor(source))
+                .addTag(TAG)
                 .build()
-
-            val req = androidx.work.PeriodicWorkRequestBuilder<FtpSyncWorker>(4, java.util.concurrent.TimeUnit.HOURS)
-                .setConstraints(constraints)
-                .build()
-
-            workManager.enqueueUniquePeriodicWork(
-                WORK_NAME,
-                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
-                req
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                uniqueName(source.id),
+                ExistingWorkPolicy.KEEP,
+                request
             )
         }
-    }
 
-    override suspend fun doWork(): Result {
-        val prefs = UserPreferencesRepository(appContext)
-        val isEnabled = prefs.ftpSyncEnabled.first()
-        if (!isEnabled) return Result.success()
-
-        ensureChannel()
-        runCatching { setForeground(getForegroundInfo()) }
-
-        val store = FtpServerStore(appContext)
-        val servers = store.servers.first()
-        if (servers.isEmpty()) return Result.success()
-
-        val engine = FtpClientEngine()
-        val db = ShelfDatabase.getInstance(appContext)
-        val repo = BookImportRepository(appContext, db, DefaultDispatcherProvider)
-        var totalImported = 0
-
-        for (server in servers) {
-            val ok = engine.connect(server.server, server.port, server.username, server.password, server.protocol)
-            if (!ok) continue
-
-            try {
-                val remoteSyncPath = if (server.defaultRemotePath.isNotBlank()) server.defaultRemotePath else "/"
-                val fileEntries = engine.listDirectoryRecursive(remoteSyncPath, maxDepth = 4)
-                if (fileEntries.isEmpty()) continue
-
-                val serverDir = server.server.replace("[:/\\\\]".toRegex(), "_")
-                val downloadDir = File(appContext.filesDir, "ftp/$serverDir").apply { mkdirs() }
-
-                val syncBase = if (remoteSyncPath.isBlank() || remoteSyncPath == "/") "/" else remoteSyncPath.trimEnd('/')
-                for (entry in fileEntries) {
-                    val basename = entry.path.substringAfterLast('/').ifEmpty { entry.name }
-                    val ext = basename.substringAfterLast('.', "").lowercase()
-                    if (ext !in listOf("epub", "pdf", "cbz", "cbr", "fb2", "m4b", "mp3", "m4a", "flac", "ogg")) continue
-
-                    val relativePath = if (syncBase != "/" && entry.path.startsWith(syncBase)) {
-                        entry.path.removePrefix(syncBase).removePrefix("/")
-                    } else {
-                        entry.path.removePrefix("/")
-                    }
-                    val localFile = File(downloadDir, relativePath.ifBlank { entry.name })
-                    localFile.parentFile?.mkdirs()
-
-                    if (localFile.exists() && localFile.length() == entry.sizeBytes) {
-                        continue
-                    }
-
-                    val bytes = engine.downloadFile(entry.path, localFile)
-                    if (bytes > 0 && localFile.exists()) {
-                        repo.importUris(
-                            uris = listOf(Uri.fromFile(localFile)),
-                            source = ImportSourceEntity.FTP_DOWNLOAD,
-                            serverId = server.id,
-                            remotePath = entry.path,
-                            filePathOverride = localFile.absolutePath
-                        )
-                        totalImported++
-                    }
-                }
-            } catch (_: Exception) {
-            } finally {
-                engine.disconnect()
-            }
+        fun cancel(context: Context, serverId: Long) {
+            WorkManager.getInstance(context).cancelUniqueWork(uniqueName(serverId))
         }
 
-        if (totalImported > 0) {
-            repo.consolidateFragmentedAudiobooks()
+        suspend fun isRunning(context: Context, serverId: Long): Boolean {
+            val info = WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork(uniqueName(serverId))
+                .await()
+            return info.any { !it.state.isFinished }
         }
 
-        return Result.success()
-    }
-
-    private fun ensureChannel() {
-        runCatching {
-            val nm = NotificationManagerCompat.from(appContext)
-            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-                val chan = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-                    .setName(appContext.getString(R.string.ftpu_notif_title))
-                    .setDescription(appContext.getString(R.string.ftpu_notif_channel_desc))
-                    .build()
-                nm.createNotificationChannel(chan)
-            }
+        private fun constraintsFor(source: FtpSource): Constraints {
+            val builder = Constraints.Builder()
+                .setRequiredNetworkType(if (source.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                .setRequiresStorageNotLow(true)
+            if (source.chargingOnly) builder.setRequiresCharging(true)
+            return builder.build()
         }
-    }
-
-    override suspend fun getForegroundInfo(): ForegroundInfo {
-        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(appContext.getString(R.string.ftpu_notif_title))
-            .setContentText(appContext.getString(R.string.ftpu_notif_text))
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build()
-
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        } else 0
-
-        return ForegroundInfo(NOTIF_ID, notification, type)
     }
 }

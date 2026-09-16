@@ -3,13 +3,19 @@ package com.shelf.reader.ftp.data
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import org.json.JSONArray
-import org.json.JSONObject
 import com.shelf.reader.ftp.client.FtpProtocol
+import org.json.JSONArray
 
+/**
+ * Legacy server list once stored as an encrypted-preferences JSON blob.
+ *
+ * This class is deliberately **read-only**. It exists only so that an existing
+ * installation can migrate its servers into Room exactly once. It is no longer a
+ * competing persistence mechanism: [save] and [delete] are gone.
+ *
+ * After a successful, verified migration the blob is cleared and
+ * [isMigrationComplete] returns true.
+ */
 data class FtpSavedServer(
     val id: Long,
     val name: String,
@@ -21,8 +27,7 @@ data class FtpSavedServer(
     val usePassiveMode: Boolean = true,
     val defaultRemotePath: String = "/"
 ) {
-    val useTls: Boolean
-        get() = protocol.isSecure
+    val useTls: Boolean get() = protocol.isSecure
 }
 
 class FtpServerStore(context: Context) {
@@ -30,6 +35,8 @@ class FtpServerStore(context: Context) {
     companion object {
         private const val FILE_NAME = "shelf_ftp_servers_enc.xml"
         private const val KEY_SERVERS = "servers_json"
+        private const val KEY_MIGRATION_COMPLETE = "migration_complete_v1"
+        private const val PLAIN_FILE_SUFFIX = "_ftp_plain"
     }
 
     private val appContext = context.applicationContext
@@ -48,79 +55,32 @@ class FtpServerStore(context: Context) {
             )
         }.getOrElse {
             appContext.getSharedPreferences(
-                "${appContext.packageName}_ftp_plain",
+                "${appContext.packageName}$PLAIN_FILE_SUFFIX",
                 Context.MODE_PRIVATE
             )
         }
     }
 
-    private val _servers = MutableStateFlow<List<FtpSavedServer>>(emptyList())
-    val servers: StateFlow<List<FtpSavedServer>> = _servers.asStateFlow()
+    /** Reads legacy servers. Safe to call repeatedly; returns an empty list once migrated. */
+    fun readLegacy(): List<FtpSavedServer> = runCatching {
+        val raw = prefs.getString(KEY_SERVERS, "[]") ?: "[]"
+        parse(raw)
+    }.getOrElse { emptyList() }
 
-    @Volatile private var loaded = false
-    private val loadLock = Any()
+    fun isMigrationComplete(): Boolean =
+        runCatching { prefs.getBoolean(KEY_MIGRATION_COMPLETE, false) }.getOrDefault(false)
 
-    init {
-        ensureLoaded()
+    /** Called only after Room insert could be verified. Never called before that. */
+    fun markMigrationComplete() {
+        runCatching { prefs.edit().putBoolean(KEY_MIGRATION_COMPLETE, true).apply() }
     }
 
-    private fun ensureLoaded() {
-        if (loaded) return
-        synchronized(loadLock) {
-            if (loaded) return
-            try {
-                val raw = prefs.getString(KEY_SERVERS, "[]") ?: "[]"
-                _servers.value = parse(raw)
-            } catch (_: Throwable) {
-                _servers.value = emptyList()
-            }
-            loaded = true
-        }
-    }
-
-    fun save(server: FtpSavedServer): FtpSavedServer {
-        ensureLoaded()
-        val current = _servers.value.toMutableList()
-        val finalServer = if (server.id == 0L) server.copy(id = (current.maxOfOrNull { it.id } ?: 0L) + 1) else server
-        val existing = current.indexOfFirst { it.id == finalServer.id }
-        if (existing >= 0) current[existing] = finalServer else current.add(finalServer)
-        persist(current)
-        return finalServer
-    }
-
-    fun delete(id: Long) {
-        ensureLoaded()
-        val current = _servers.value.filter { it.id != id }
-        persist(current)
-    }
-
-    fun get(id: Long): FtpSavedServer? {
-        ensureLoaded()
-        return _servers.value.firstOrNull { it.id == id }
-    }
-
-    // ---------- internals ---------
-
-    private fun persist(list: List<FtpSavedServer>) {
-        runCatching {
-            val json = JSONArray()
-            list.forEach { s ->
-                json.put(JSONObject().apply {
-                    put("id", s.id)
-                    put("name", s.name)
-                    put("server", s.server)
-                    put("port", s.port)
-                    put("username", s.username)
-                    put("password", s.password)
-                    put("protocol", s.protocol.name)
-                    put("useTls", s.protocol.isSecure)
-                    put("usePassiveMode", s.usePassiveMode)
-                    put("defaultRemotePath", s.defaultRemotePath)
-                })
-            }
-            prefs.edit().putString(KEY_SERVERS, json.toString()).apply()
-        }
-        _servers.value = list
+    /**
+     * Removes the legacy credentials blob. Only called after the migration is
+     * verified complete, so no data is lost.
+     */
+    fun clearLegacy() {
+        runCatching { prefs.edit().remove(KEY_SERVERS).apply() }
     }
 
     private fun parse(raw: String): List<FtpSavedServer> = runCatching {
@@ -145,6 +105,6 @@ class FtpServerStore(context: Context) {
                 usePassiveMode = o.optBoolean("usePassiveMode", true),
                 defaultRemotePath = o.optString("defaultRemotePath", "/")
             )
-        }.filter { it.server.isNotBlank() }
+        }.filter { it.server.isNotBlank() && it.username.isNotBlank() }
     }.getOrElse { emptyList() }
 }
