@@ -21,12 +21,17 @@ sealed class ShelfDestinations(val route: String) {
     }
     object Sources : ShelfDestinations("sources")
     object Ftp : ShelfDestinations("ftp")
+    object FtpAdd : ShelfDestinations("ftp/add")
+    object FtpEdit : ShelfDestinations("ftp/edit/{serverId}") {
+        fun routeFor(serverId: Long) = "ftp/edit/$serverId"
+    }
     object FtpServer : ShelfDestinations("ftp/server/{serverId}") {
         fun routeFor(serverId: Long) = "ftp/server/$serverId"
     }
-    object FtpBrowse : ShelfDestinations("ftp/browse/{serverId}/{path}") {
-        fun routeFor(serverId: Long, path: String) = "ftp/browse/$serverId/${path}"
+    object FtpBrowse : ShelfDestinations("ftp/browser/{serverId}") {
+        fun routeFor(serverId: Long) = "ftp/browser/$serverId"
     }
+    object Transfers : ShelfDestinations("transfers")
     object Smb : ShelfDestinations("smb")
     object SmbServer : ShelfDestinations("smb/server/{serverId}") {
         fun routeFor(serverId: Long) = "smb/server/$serverId"

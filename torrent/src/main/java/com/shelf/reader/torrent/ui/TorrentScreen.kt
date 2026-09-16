@@ -523,6 +523,7 @@ private fun statusLabel(status: DownloadStatusEntity): String = when (status) {
     DownloadStatusEntity.COMPLETED -> "Ferdig"
     DownloadStatusEntity.FAILED -> "Feilet"
     DownloadStatusEntity.CANCELLED -> "Avbrutt"
+    else -> "Venter"
 }
 
 private fun formatBps(bps: Long): String {

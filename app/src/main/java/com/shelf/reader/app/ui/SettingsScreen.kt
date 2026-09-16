@@ -998,17 +998,17 @@ fun SettingsScreen(
                         enabled = state.ftpSyncEnabled,
                         onToggleEnabled = {
                             vm.setFtpSyncEnabled(it)
-                            runCatching { com.shelf.reader.ftp.worker.FtpSyncWorker.schedule(ctx) }
+                            runCatching { com.shelf.reader.ftp.worker.FtpPeriodicSyncWorker.schedule(ctx) }
                         },
                         intervalMinutes = state.ftpIntervalMinutes,
                         onIntervalChange = {
                             vm.setFtpIntervalMinutes(it)
-                            runCatching { com.shelf.reader.ftp.worker.FtpSyncWorker.schedule(ctx) }
+                            runCatching { com.shelf.reader.ftp.worker.FtpPeriodicSyncWorker.schedule(ctx) }
                         },
                         wifiOnly = state.ftpWifiOnly,
                         onWifiOnlyChange = {
                             vm.setFtpWifiOnly(it)
-                            runCatching { com.shelf.reader.ftp.worker.FtpSyncWorker.schedule(ctx) }
+                            runCatching { com.shelf.reader.ftp.worker.FtpPeriodicSyncWorker.schedule(ctx) }
                         },
                         chargingOnly = state.ftpChargingOnly,
                         onChargingOnlyChange = { vm.setFtpChargingOnly(it) }

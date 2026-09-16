@@ -62,7 +62,11 @@ import com.shelf.reader.podcast.ui.podcastDetailVmFactory
 import com.shelf.reader.podcast.ui.podcastDiscoverVmFactory
 import com.shelf.reader.podcast.ui.podcastPlayerVmFactory
 import com.shelf.reader.podcast.ui.podcastRootVmFactory
-import com.shelf.reader.ftp.ui.FtpScreen
+import com.shelf.reader.ftp.ui.FtpBrowserScreen
+import com.shelf.reader.ftp.ui.FtpConnectionScreen
+import com.shelf.reader.ftp.ui.FtpSourceDetailsScreen
+import com.shelf.reader.ftp.ui.FtpSourcesScreen
+import com.shelf.reader.ftp.ui.FtpTransfersScreen
 import com.shelf.reader.smb.ui.SmbScreen
 import com.shelf.reader.webdav.ui.WebdavScreen
 import com.shelf.reader.torrent.ui.TorrentScreen
@@ -397,14 +401,53 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onWebdavClick = { navController.navigate(ShelfDestinations.Webdav.route) },
                     onTorrentClick = { navController.navigate(ShelfDestinations.Torrent.route) },
                     onImportClick = { navController.navigate(ShelfDestinations.Import.route) },
-                    onImportProgressClick = { navController.navigate(ShelfDestinations.ImportProgress.route) }
+                    onImportProgressClick = { navController.navigate(ShelfDestinations.ImportProgress.route) },
+                    onTransfersClick = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
             }
             composable(ShelfDestinations.Ftp.route) {
-                FtpScreen(
+                FtpSourcesScreen(
                     onBack = { navController.popBackStack() },
-                    onImport = { navController.navigate(ShelfDestinations.Import.route) }
+                    onAddSource = { navController.navigate(ShelfDestinations.FtpAdd.route) },
+                    onOpenSource = { id -> navController.navigate(ShelfDestinations.FtpServer.routeFor(id)) },
+                    onBrowse = { id -> navController.navigate(ShelfDestinations.FtpBrowse.routeFor(id)) },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
+            }
+            composable(ShelfDestinations.FtpAdd.route) {
+                FtpConnectionScreen(
+                    editingId = 0L,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { id ->
+                        navController.popBackStack()
+                        navController.navigate(ShelfDestinations.FtpServer.routeFor(id))
+                    }
+                )
+            }
+            composable(
+                route = ShelfDestinations.FtpEdit.route,
+                arguments = listOf(androidx.navigation.navArgument("serverId") { type = androidx.navigation.NavType.LongType })
+            ) { backStack ->
+                val serverId = backStack.arguments?.getLong("serverId") ?: -1L
+                FtpConnectionScreen(
+                    editingId = serverId,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = ShelfDestinations.FtpBrowse.route,
+                arguments = listOf(androidx.navigation.navArgument("serverId") { type = androidx.navigation.NavType.LongType })
+            ) { backStack ->
+                val serverId = backStack.arguments?.getLong("serverId") ?: -1L
+                FtpBrowserScreen(
+                    serverId = serverId,
+                    onBack = { navController.popBackStack() },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
+                )
+            }
+            composable(ShelfDestinations.Transfers.route) {
+                FtpTransfersScreen(onBack = { navController.popBackStack() })
             }
             composable(ShelfDestinations.Smb.route) {
                 SmbScreen(
@@ -493,10 +536,12 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 arguments = listOf(androidx.navigation.navArgument("serverId") { type = androidx.navigation.NavType.LongType })
             ) { backStack ->
                 val serverId = backStack.arguments?.getLong("serverId") ?: -1L
-                FtpScreen(
+                FtpSourceDetailsScreen(
                     serverId = serverId,
                     onBack = { navController.popBackStack() },
-                    onImport = { navController.navigate(ShelfDestinations.Import.route) }
+                    onBrowse = { navController.navigate(ShelfDestinations.FtpBrowse.routeFor(serverId)) },
+                    onEdit = { navController.navigate(ShelfDestinations.FtpEdit.routeFor(serverId)) },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
             }
             composable(
@@ -534,7 +579,8 @@ private fun SourcesOverviewScreen(
     onWebdavClick: () -> Unit,
     onTorrentClick: () -> Unit,
     onImportClick: () -> Unit,
-    onImportProgressClick: () -> Unit
+    onImportProgressClick: () -> Unit,
+    onTransfersClick: () -> Unit = {}
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     Scaffold(
@@ -642,6 +688,13 @@ private fun SourcesOverviewScreen(
                     icon = Icons.Default.DownloadDone,
                     tint = OmarchyColors.Fg,
                     onClick = onImportProgressClick
+                )
+                SourceCard(
+                    title = stringResource(com.shelf.reader.ftp.R.string.ftpu_transfers_title),
+                    subtitle = stringResource(R.string.sources_downloads_status),
+                    icon = Icons.Default.SwapVert,
+                    tint = OmarchyColors.Fg,
+                    onClick = onTransfersClick
                 )
             }
 

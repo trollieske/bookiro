@@ -18,7 +18,8 @@ import com.shelf.reader.core.gamification.ReadingTrackerFacade
 import com.shelf.reader.data.gamification.engine.ReadingTrackerEngine
 import com.shelf.reader.data.local.ShelfDatabase
 import com.shelf.reader.app.workers.MediaScannerWorker
-import com.shelf.reader.ftp.worker.FtpSyncWorker
+import com.shelf.reader.ftp.worker.FtpPeriodicSyncWorker
+import com.shelf.reader.ftp.worker.FtpSyncCoordinator
 import kotlinx.coroutines.DelicateCoroutinesApi
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -74,7 +75,8 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
         warmUpThread.start()
 
         MediaScannerWorker.schedule(this)
-        FtpSyncWorker.schedule(this)
+        FtpPeriodicSyncWorker.schedule(this)
+        runCatching { FtpSyncCoordinator.start(this) }
         runCatching { com.shelf.reader.torrent.worker.TorrentDownloadWorker.schedule(this) }
         runCatching { com.shelf.reader.torrent.worker.TorrentDownloadWorker.runNow(this) }
         runCatching { com.shelf.reader.podcast.worker.PodcastFeedSyncWorker.schedulePeriodic(this) }

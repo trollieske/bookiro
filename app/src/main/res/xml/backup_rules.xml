@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Credentials are excluded from cloud backup and device-to-device transfer.
+    The Room database itself is backed up, but its FTP password columns contain
+    Keystore-encrypted ciphertext whose key never leaves the device.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
+    <exclude domain="sharedpref" path="com.shelf.reader_ftp_plain.xml" />
+</full-backup-content>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- See backup_rules.xml. API 31+ uses these extraction rules. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
+        <exclude domain="sharedpref" path="com.shelf.reader_ftp_plain.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
+        <exclude domain="sharedpref" path="com.shelf.reader_ftp_plain.xml" />
+    </device-transfer>
+</data-extraction-rules>
