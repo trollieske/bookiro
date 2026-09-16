@@ -67,6 +67,21 @@ class FtpDomainTest {
     }
 
     @Test
+    fun `auto concurrency is higher while charging`() {
+        assertEquals(2, TransferPolicyResolver.autoConcurrency(TransportType.WIFI, powered = false))
+        assertEquals(4, TransferPolicyResolver.autoConcurrency(TransportType.WIFI, powered = true))
+        assertEquals(1, TransferPolicyResolver.autoConcurrency(TransportType.MOBILE, powered = false))
+        assertEquals(2, TransferPolicyResolver.autoConcurrency(TransportType.MOBILE, powered = true))
+    }
+
+    @Test
+    fun `powered maximum allows up to six wifi lanes`() {
+        assertEquals(6, TransferPolicyResolver.maxConcurrency(TransportType.WIFI, powered = true))
+        assertEquals(6, TransferPolicyResolver.resolve(TransportType.WIFI, userOverride = 6, powered = true).concurrency)
+        assertEquals(4, TransferPolicyResolver.resolve(TransportType.WIFI, userOverride = 6, powered = false).concurrency)
+    }
+
+    @Test
     fun `degraded policy never raises concurrency`() {
         val normal = TransferPolicyResolver.resolve(TransportType.WIFI, userOverride = 4)
         val degraded = TransferPolicyResolver.resolve(TransportType.WIFI, userOverride = 4, degraded = true)
