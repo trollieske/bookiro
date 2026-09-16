@@ -36,7 +36,7 @@ import com.shelf.reader.data.local.entity.*
         PodcastPlaybackEntity::class,
         PodcastDownloadEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -202,6 +202,15 @@ abstract class ShelfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v9 -> v10: user-chosen torrent seeding policy. Purely additive.
+         */
+        val MIGRATION_9_10: androidx.room.migration.Migration = object : androidx.room.migration.Migration(9, 10) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `torrent_downloads` ADD COLUMN `seed_policy` TEXT")
+            }
+        }
+
         @Volatile
         private var INSTANCE: ShelfDatabase? = null
 
@@ -217,7 +226,7 @@ abstract class ShelfDatabase : RoomDatabase() {
                 ShelfDatabase::class.java,
                 DB_NAME
             )
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .fallbackToDestructiveMigration()
             val db = runCatching {
                 base

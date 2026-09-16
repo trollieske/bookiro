@@ -31,7 +31,12 @@ data class TorrentRuntimeStats(
     val seedsConnected: Int = 0,
     val etaSeconds: Long? = null,
     val status: DownloadStatusEntity = DownloadStatusEntity.RUNNING,
-    val trackerStatus: String = "Søker...",
+    val trackerStatus: String = "…",
+    val trackers: List<TrackerDiagnostic> = emptyList(),
+    val isPrivate: Boolean = false,
+    val dhtEnabled: Boolean = true,
+    val pexEnabled: Boolean = true,
+    val lsdEnabled: Boolean = true,
     val errorMessage: String? = null,
     val completedFiles: List<String> = emptyList()
 )
@@ -44,6 +49,14 @@ class TorrentEngine(
 
     companion object {
         private const val TAG = "TorrentEngine"
+
+        /** Honest, stable client identity. Never spoof another torrent client. */
+        const val APP_USER_AGENT = "Vierel/1.0"
+        const val APP_HANDSHAKE_VERSION = "Vierel 1.0"
+        const val PEER_FINGERPRINT = "-VR1000-"
+        const val LIBTORRENT_VERSION = "2.1.0"
+
+        private const val REANNOUNCE_MIN_INTERVAL_MS = 60_000L
 
         @Volatile
         private var INSTANCE: TorrentEngine? = null
@@ -78,17 +91,28 @@ class TorrentEngine(
     private var sessionManager: SessionManager? = null
 
     // Map from torrent infoHash string -> DB download ID
-    private val hashToId = mutableMapOf<String, Long>()
+    private val hashToId = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    // Thread-safe map of torrent infoHash -> real-time tracker status message
-    private val trackerStatusMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    // Thread-safe map of "<infohash>|<masked tracker url>" -> sanitized diagnostic
+    private val trackerDiagnostics =
+        java.util.concurrent.ConcurrentHashMap<String, TrackerDiagnostic>()
+
+    /** Rate-limits manual reannounce per download so the tracker is not spammed. */
+    private val lastReannounceAt = java.util.concurrent.ConcurrentHashMap<Long, Long>()
 
     // Hold strong reference to TorrentInfo objects to prevent GC from freeing C++ pointers
     private val torrentInfoMap = java.util.concurrent.ConcurrentHashMap<String, TorrentInfo>()
 
-    private fun maskPasskey(url: String?): String {
-        if (url.isNullOrBlank()) return ""
-        return url.replace(Regex("passkey=[a-zA-Z0-9]+"), "passkey=***")
+    private fun maskPasskey(url: String?): String = TrackerDiagnostics.maskUrl(url)
+
+    private fun diagKey(hash: String?, url: String?): String? {
+        if (hash.isNullOrBlank()) return null
+        return "$hash|${TrackerDiagnostics.maskUrl(url)}"
+    }
+
+    private fun updateTrackerDiagnostic(hash: String?, url: String?, diagnostic: TrackerDiagnostic) {
+        val key = diagKey(hash, url) ?: return
+        trackerDiagnostics[key] = diagnostic
     }
 
     fun start() {
@@ -101,6 +125,15 @@ class TorrentEngine(
 
     fun stop() {
         running = false
+        // Stop seeding when the process is going away; Android cannot guarantee
+        // background seeding without a foreground service.
+        runCatching {
+            sessionManager?.let { sm ->
+                hashToId.keys.forEach { hash ->
+                    runCatching { sm.find(Sha1Hash.parseHex(hash))?.pause() }
+                }
+            }
+        }
         try {
             sessionManager?.stop()
         } catch (_: Exception) {}
@@ -115,72 +148,81 @@ class TorrentEngine(
                 override fun alert(alert: Alert<*>) {
                     when (alert) {
                         is TrackerAnnounceAlert -> {
-                            val url = maskPasskey(alert.trackerUrl())
                             val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
-                            Log.i(TAG, "ALERT [TRACKER_ANNOUNCE]: hash=$hash msg=${alert.message()} url=$url")
-                            if (hash != null) trackerStatusMap[hash] = "Announcerer..."
+                            val url = alert.trackerUrl()
+                            updateTrackerDiagnostic(
+                                hash, url,
+                                TrackerDiagnostic(
+                                    url = maskPasskey(url),
+                                    state = TrackerState.ANNOUNCING,
+                                    lastAttemptAt = System.currentTimeMillis()
+                                )
+                            )
                         }
                         is TrackerReplyAlert -> {
-                            val url = maskPasskey(alert.trackerUrl())
                             val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
-                            val numPeers = alert.numPeers()
-                            Log.i(TAG, "ALERT [TRACKER_REPLY]: hash=$hash peersCount=$numPeers url=$url")
-                            if (hash != null) trackerStatusMap[hash] = "Tracker OK ($numPeers peers)"
+                            val url = alert.trackerUrl()
+                            updateTrackerDiagnostic(
+                                hash, url,
+                                TrackerDiagnostic(
+                                    url = maskPasskey(url),
+                                    state = TrackerState.OK,
+                                    peers = alert.numPeers(),
+                                    lastAttemptAt = System.currentTimeMillis()
+                                )
+                            )
                         }
                         is TrackerErrorAlert -> {
-                            val url = maskPasskey(alert.trackerUrl())
                             val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
-                            val err = alert.errorMessage() ?: alert.message() ?: "Ukjent feil"
-                            Log.e(TAG, "ALERT [TRACKER_ERROR]: hash=$hash error='$err' url=$url")
-                            if (hash != null) trackerStatusMap[hash] = "Tracker feil: $err ($url)"
+                            val url = alert.trackerUrl()
+                            val raw = alert.errorMessage() ?: alert.message()
+                            updateTrackerDiagnostic(
+                                hash, url,
+                                TrackerDiagnostic(
+                                    url = maskPasskey(url),
+                                    state = TrackerDiagnostics.classify(raw),
+                                    reason = TrackerDiagnostics.sanitizeReason(raw),
+                                    lastAttemptAt = System.currentTimeMillis()
+                                )
+                            )
                         }
                         is TrackerWarningAlert -> {
-                            val url = maskPasskey(alert.trackerUrl())
                             val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
-                            val warn = alert.message()
-                            Log.w(TAG, "ALERT [TRACKER_WARNING]: hash=$hash warning='$warn' url=$url")
-                            if (hash != null) trackerStatusMap[hash] = "Tracker advarsel: $warn"
+                            val url = alert.trackerUrl()
+                            val raw = alert.message()
+                            updateTrackerDiagnostic(
+                                hash, url,
+                                TrackerDiagnostic(
+                                    url = maskPasskey(url),
+                                    state = TrackerState.WARNING,
+                                    reason = TrackerDiagnostics.sanitizeReason(raw),
+                                    lastAttemptAt = System.currentTimeMillis()
+                                )
+                            )
                         }
                         is AddTorrentAlert -> {
-                            val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
                             val handle = alert.handle()
-                            val isPriv = runCatching { handle?.torrentFile()?.isPrivate() }.getOrNull() ?: false
-                            Log.i(TAG, "ALERT [ADD_TORRENT]: hash=$hash isPrivate=$isPriv msg=${alert.message()}")
                             if (handle != null && handle.isValid) {
-                                try {
+                                val isPriv = runCatching { handle.torrentFile()?.isPrivate() }.getOrNull() ?: false
+                                runCatching {
                                     applyPrivateTorrentFlags(handle, isPriv)
                                     applySequentialPriorityFlags(handle)
-                                } catch (_: Throwable) {}
-                                try { handle.resume() } catch (_: Throwable) {}
-                                try { handle.forceReannounce() } catch (_: Throwable) {}
+                                }
+                                runCatching { handle.resume() }
+                                runCatching { handle.forceReannounce() }
                             }
                         }
                         is MetadataReceivedAlert -> {
                             val handle = alert.handle()
-                            val hash = handle?.infoHash()?.toHex()?.uppercase()
-                            val isPriv = runCatching { handle?.torrentFile()?.isPrivate() }.getOrNull() ?: false
-                            Log.i(TAG, "ALERT [METADATA_RECEIVED]: hash=$hash isPrivate=$isPriv")
                             if (handle != null && handle.isValid) {
-                                try {
+                                val isPriv = runCatching { handle.torrentFile()?.isPrivate() }.getOrNull() ?: false
+                                runCatching {
                                     applyPrivateTorrentFlags(handle, isPriv)
                                     applySequentialPriorityFlags(handle)
-                                } catch (_: Throwable) {}
+                                }
                             }
                         }
-                        is StateChangedAlert -> {
-                            val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
-                            Log.i(TAG, "ALERT [STATE_CHANGED]: hash=$hash msg=${alert.message()}")
-                        }
-                        is ListenSucceededAlert -> {
-                            Log.i(TAG, "ALERT [LISTEN_SUCCEEDED]: msg=${alert.message()}")
-                        }
-                        is ListenFailedAlert -> {
-                            Log.e(TAG, "ALERT [LISTEN_FAILED]: msg=${alert.message()}")
-                        }
-                        is TorrentFinishedAlert -> {
-                            val hash = alert.handle()?.infoHash()?.toHex()?.uppercase()
-                            Log.i(TAG, "ALERT [TORRENT_FINISHED]: hash=$hash msg=${alert.message()}")
-                        }
+                        else -> {}
                     }
                 }
             })
@@ -196,15 +238,21 @@ class TorrentEngine(
                 0x1f or 0x40 or 0x80 or 0x400
             )
 
-            // 2. Disable anonymous mode & HTTPS cert validation (required by private HTTPS trackers on Android)
+            // 2. Honest client identity. Never spoof another torrent client: a
+            //    false fingerprint is a tracker-policy violation and makes
+            //    tracker diagnostics impossible to trust.
             sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.anonymous_mode.swigValue(), false)
-            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.validate_https_trackers.swigValue(), false)
-            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.announce_to_all_trackers.swigValue(), true)
-            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.announce_to_all_tiers.swigValue(), true)
-            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.prefer_udp_trackers.swigValue(), false)
+            // HTTPS tracker certificate validation MUST stay enabled in release.
+            // A tracker with an untrusted certificate is shown as a sanitized
+            // diagnosis instead of being silently accepted.
+            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.validate_https_trackers.swigValue(), true)
+            // Do not force announce fan-out; let libtorrent follow the torrent's
+            // own tracker tiers so a private infohash is not announced widely.
+            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.announce_to_all_trackers.swigValue(), false)
+            sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.announce_to_all_tiers.swigValue(), false)
 
-            // 2b. Encryption: require RC4/SSL handshake peers (strict compatibility with private trackers
-            //     that ban plaintext/unencrypted peer wire connections).
+            // 2b. Peer-wire encryption stays enabled for compatibility; this is
+            //     not a security bypass.
             sp.setInteger(
                 org.libtorrent4j.swig.settings_pack.int_types.in_enc_policy.swigValue(),
                 1  // pe_settings::enc_policy::enabled - accept both encrypted and plaintext
@@ -219,15 +267,24 @@ class TorrentEngine(
             )
             sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.prefer_rc4.swigValue(), true)
 
-            // 3. User-Agent & Peer Fingerprint (qBittorrent 4.6.3) - matches a widely whitelisted client
-            sp.setString(org.libtorrent4j.swig.settings_pack.string_types.user_agent.swigValue(), "qBittorrent/4.6.3")
-            sp.setString(org.libtorrent4j.swig.settings_pack.string_types.peer_fingerprint.swigValue(), "-qB4630-")
-            sp.setString(org.libtorrent4j.swig.settings_pack.string_types.handshake_client_version.swigValue(), "qBittorrent/4.6.3")
+            // 3. Honest, stable, versioned identity (see the overhaul brief).
+            sp.setString(
+                org.libtorrent4j.swig.settings_pack.string_types.user_agent.swigValue(),
+                "$APP_USER_AGENT libtorrent/$LIBTORRENT_VERSION"
+            )
+            sp.setString(
+                org.libtorrent4j.swig.settings_pack.string_types.peer_fingerprint.swigValue(),
+                PEER_FINGERPRINT
+            )
+            sp.setString(
+                org.libtorrent4j.swig.settings_pack.string_types.handshake_client_version.swigValue(),
+                APP_HANDSHAKE_VERSION
+            )
 
-            // 4. High random listening port (62473) to avoid ISP/router default port blocks
+            // 4. Listening port (avoid ISP/router default port blocks)
             sp.setString(org.libtorrent4j.swig.settings_pack.string_types.listen_interfaces.swigValue(), "0.0.0.0:62473,[::]:62473")
 
-            // 5. Session-wide DHT, LSD, UPnP, NAT-PMP settings (torrent-level disable for private torrents below)
+            // 5. Session-wide DHT, LSD, UPnP, NAT-PMP (per-torrent disable for private torrents below)
             sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.enable_dht.swigValue(), true)
             sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.enable_lsd.swigValue(), true)
             sp.setBoolean(org.libtorrent4j.swig.settings_pack.bool_types.enable_upnp.swigValue(), true)
@@ -240,14 +297,6 @@ class TorrentEngine(
 
             sm.applySettings(sp)
             sessionManager = sm
-
-            Log.i(TAG, "=== SETTINGS PACK CONFIRMATION DUMP ===")
-            Log.i(TAG, "  User-Agent: qBittorrent/4.6.3")
-            Log.i(TAG, "  Peer Fingerprint: -qB4630-")
-            Log.i(TAG, "  Anonymous Mode: FALSE")
-            Log.i(TAG, "  Listen Interfaces: 0.0.0.0:62473,[::]:62473")
-            Log.i(TAG, "  DHT Enabled: TRUE, LSD Enabled: TRUE, UPnP Enabled: TRUE")
-            Log.i(TAG, "========================================")
 
             // Re-add any pending/running downloads from DB
             val pending = db.torrentDownloadDao().getAllOnce()
@@ -298,11 +347,11 @@ class TorrentEngine(
 
             when (dl.sourceType) {
                 TorrentSourceTypeEntity.MAGNET -> {
-                    val magnetWithTrackers = appendFallbackTrackersIfNeeded(dl.sourceData)
-                    sm.download(magnetWithTrackers, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+                    // Never inject public fallback trackers: for a private magnet
+                    // that would leak the infohash before the private flag is known.
+                    sm.download(dl.sourceData, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
                     val hash = dl.infoHash ?: extractInfoHashFromMagnet(dl.sourceData)
                     if (hash != null) hashToId[hash.uppercase()] = dl.id
-                    Log.i(TAG, "Added magnet to session: ${dl.displayName} (hash=$hash)")
                 }
                 TorrentSourceTypeEntity.TORRENT_FILE -> {
                     val torrentBytes = dl.sourceData.fromBase64()
@@ -310,7 +359,6 @@ class TorrentEngine(
                     val hash = ti.infoHash().toHex().uppercase()
                     torrentInfoMap[hash] = ti
                     val isPriv = runCatching { ti.isPrivate() }.getOrNull() ?: false
-                    Log.i(TAG, "Adding .torrent file: name='${ti.name()}', hash=$hash, size=${ti.totalSize()}, isPrivate=$isPriv")
 
                     try { sm.download(ti, saveDir) } catch (_: Throwable) {}
                     hashToId[hash] = dl.id
@@ -347,7 +395,7 @@ class TorrentEngine(
         autoImport: Boolean = true,
         priority: TorrentPriorityEntity = TorrentPriorityEntity.NORMAL
     ): Long = withContext(dispatchers.io) {
-        val clean = appendFallbackTrackersIfNeeded(magnetUri)
+        val clean = magnetUri.trim()
         val infoHash = extractInfoHashFromMagnet(clean)
         val existing = infoHash?.let { db.torrentDownloadDao().getByInfoHash(it) }
         if (existing != null) {
@@ -529,6 +577,31 @@ class TorrentEngine(
     suspend fun pauseAll() = withContext(dispatchers.io) { db.torrentDownloadDao().pauseAll() }
     suspend fun resumeAll() = withContext(dispatchers.io) { db.torrentDownloadDao().resumeAll() }
 
+    /**
+     * Safe manual reannounce with a minimum interval. Returns false when the
+     * request was rate-limited or the torrent is not in the session.
+     */
+    suspend fun reannounce(id: Long): Boolean = withContext(dispatchers.io) {
+        val now = System.currentTimeMillis()
+        val last = lastReannounceAt[id] ?: 0L
+        if (now - last < REANNOUNCE_MIN_INTERVAL_MS) return@withContext false
+        val dl = db.torrentDownloadDao().getById(id) ?: return@withContext false
+        val hash = dl.infoHash ?: return@withContext false
+        val handle = runCatching { sessionManager?.find(Sha1Hash.parseHex(hash)) }.getOrNull()
+            ?: return@withContext false
+        if (!handle.isValid) return@withContext false
+        runCatching { handle.forceReannounce() }
+        lastReannounceAt[id] = now
+        true
+    }
+
+    /** Persists the user's seeding policy for one torrent. */
+    suspend fun setSeedPolicy(id: Long, policy: com.shelf.reader.data.local.entity.TorrentSeedPolicyEntity) =
+        withContext(dispatchers.io) {
+            val dl = db.torrentDownloadDao().getById(id) ?: return@withContext
+            db.torrentDownloadDao().update(dl.copy(seedPolicy = policy))
+        }
+
     // -------- internals --------
 
     private suspend fun mainLoop() {
@@ -592,12 +665,22 @@ class TorrentEngine(
             val eta = if (dlSpeed > 0) (totalBytes - downloaded) / dlSpeed else null
 
             val trackers = runCatching { handle.trackers() }.getOrNull() ?: emptyList()
-            val trackerDiagnostic = trackers.joinToString(" | ") { tr ->
-                val url = maskPasskey(tr.url())
-                "[$url tier=${tr.tier()} verified=${tr.isVerified()}]"
+            val diagnostics = trackers.map { tr ->
+                val masked = maskPasskey(tr.url())
+                val stored = trackerDiagnostics[diagKey(hash, tr.url())]
+                (stored ?: TrackerDiagnostic(url = masked, state = TrackerState.ANNOUNCING))
+                    .copy(url = masked, tier = tr.tier(), verified = tr.isVerified())
             }
             val isPriv = runCatching { handle.torrentFile()?.isPrivate() }.getOrNull() ?: false
-            Log.i(TAG, "DIAGNOSTIC [$hash] '${dl.displayName}': state=${status.state()} progress=$progress peers=$peers seeds=$seeds conn=${status.numConnections()} isPrivate=$isPriv trackers=$trackerDiagnostic")
+            val primaryState = diagnostics.firstOrNull {
+                it.state in setOf(
+                    TrackerState.AUTH_REJECTED, TrackerState.POLICY_REJECTED,
+                    TrackerState.TLS_ERROR, TrackerState.ERROR, TrackerState.DNS_ERROR,
+                    TrackerState.TIMEOUT
+                )
+            } ?: diagnostics.firstOrNull { it.state == TrackerState.WARNING }
+                ?: diagnostics.firstOrNull { it.state == TrackerState.OK }
+                ?: diagnostics.firstOrNull()
 
             val stat = TorrentRuntimeStats(
                 downloadId = dl.id,
@@ -610,7 +693,12 @@ class TorrentEngine(
                 peersConnected = peers,
                 etaSeconds = eta,
                 status = DownloadStatusEntity.RUNNING,
-                trackerStatus = trackerStatusMap[hash] ?: "Søker..."
+                trackerStatus = primaryState?.state?.name ?: "NONE",
+                trackers = diagnostics,
+                isPrivate = isPriv,
+                dhtEnabled = !isPriv,
+                pexEnabled = !isPriv,
+                lsdEnabled = !isPriv
             )
             newStats[dl.id] = stat
 
@@ -641,17 +729,26 @@ class TorrentEngine(
     }
 
     private suspend fun onTorrentCompleted(dl: TorrentDownloadEntity, handle: TorrentHandle) {
-        Log.i(TAG, "Torrent completed: ${dl.displayName}")
+        val now = System.currentTimeMillis()
+        val policy = TorrentSeedPolicy.fromEntityName(dl.seedPolicy?.name)
+            ?: TorrentSeedPolicy.SEED_UNTIL_STOPPED
         val final = dl.copy(
             status = DownloadStatusEntity.COMPLETED,
             progressPercent = 1f,
-            completedAt = System.currentTimeMillis(),
-            lastUpdatedAt = System.currentTimeMillis(),
-            downloadSpeedBps = 0L
+            completedAt = now,
+            lastUpdatedAt = now,
+            downloadSpeedBps = 0L,
+            isPaused = policy == TorrentSeedPolicy.STOP_WHEN_DOWNLOADED,
+            seedingFinishedAt = if (policy == TorrentSeedPolicy.STOP_WHEN_DOWNLOADED) now else null
         )
         db.torrentDownloadDao().update(final)
 
-        // Keep seeding â€” do NOT remove the handle
+        // Seeding follows the user's explicit policy. No handle is removed here:
+        // for STOP_WHEN_DOWNLOADED it is paused, otherwise it keeps seeding until
+        // the user stops it or the process ends.
+        if (policy == TorrentSeedPolicy.STOP_WHEN_DOWNLOADED) {
+            runCatching { handle.pause() }
+        }
         if (dl.autoImport) {
             importCompleted(final)
         }
@@ -678,21 +775,6 @@ class TorrentEngine(
 
     fun defaultSaveDir(): File {
         return File(context.filesDir, "shelf_torrents").apply { mkdirs() }
-    }
-
-    private fun appendFallbackTrackersIfNeeded(magnet: String): String {
-        if (magnet.contains("&tr=")) return magnet
-        val fallbackTrackers = listOf(
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://open.stealth.si:80/announce",
-            "udp://tracker.torrent.eu.org:451/announce",
-            "udp://explodie.org:6969/announce"
-        )
-        val sb = StringBuilder(magnet)
-        for (tr in fallbackTrackers) {
-            sb.append("&tr=").append(java.net.URLEncoder.encode(tr, "UTF-8"))
-        }
-        return sb.toString()
     }
 
     private fun extractInfoHashFromMagnet(magnet: String): String? {
@@ -751,79 +833,29 @@ class TorrentEngine(
     /**
      * Applies per-torrent privacy flags.
      *
-     * PRIVATE TORRENTS: a torrent with info_dict private=1 MUST NOT leak peer info via
-     * DHT / Local Service Discovery / Peer EXchange, otherwise many private trackers will
-     * silently return zero peers or ban the user's passkey/client. We also strip any
-     * fallback public trackers that were appended pre-metadata to avoid announcing to them.
+     * PRIVATE TORRENTS (info_dict private=1) must not leak peer information via
+     * DHT / Local Service Discovery / Peer Exchange, otherwise many private
+     * trackers return zero peers or ban the client. We never inject fallback
+     * trackers, so only authorized trackers are ever announced to.
      *
-     * PUBLIC TORRENTS: keep DHT/LSD enabled for decentralized peer discovery.
+     * PUBLIC TORRENTS keep DHT/LSD/PEX for decentralized peer discovery.
      */
     private fun applyPrivateTorrentFlags(handle: TorrentHandle, isPrivate: Boolean) {
         runCatching {
-            val flagsClass = Class.forName("org.libtorrent4j.swig.torrent_flags")
-            fun swigFlag(name: String): Any? = runCatching {
-                flagsClass.getField(name).get(null)
-            }.getOrNull()
-
-            val disableDht = swigFlag("disable_dht")
-            val disableLsd = swigFlag("disable_lsd")
-            val disablePex = swigFlag("disable_pex")
-
             if (isPrivate) {
-                disableDht?.let { setSwigFlag(handle, it) }
-                disableLsd?.let { setSwigFlag(handle, it) }
-                disablePex?.let { setSwigFlag(handle, it) }
-                runCatching {
-                    val currentTrackers = handle.trackers()
-                    if (currentTrackers != null) {
-                        val fallbacks = setOf(
-                            "tracker.opentrackr.org", "open.stealth.si",
-                            "tracker.torrent.eu.org", "explodie.org",
-                            "tracker.openbittorrent.com", "tracker.openwebtorrent.com"
-                        )
-                        val filtered = currentTrackers.filterNot { tr ->
-                            fallbacks.any { host -> tr.url().contains(host) }
-                        }
-                        if (filtered.size < currentTrackers.size && filtered.isNotEmpty()) {
-                            handle.replaceTrackers(filtered)
-                        }
-                    }
-                }
-                Log.i(TAG, "[PRIVATE_FLAGS] Disabled DHT/LSD/PEX + stripped public fallbacks for private torrent")
+                handle.setFlags(TorrentFlags.DISABLE_DHT)
+                handle.setFlags(TorrentFlags.DISABLE_LSD)
+                handle.setFlags(TorrentFlags.DISABLE_PEX)
             } else {
-                disableDht?.let { unsetSwigFlag(handle, it) }
-                disableLsd?.let { unsetSwigFlag(handle, it) }
-                disablePex?.let { unsetSwigFlag(handle, it) }
+                handle.unsetFlags(TorrentFlags.DISABLE_DHT)
+                handle.unsetFlags(TorrentFlags.DISABLE_LSD)
+                handle.unsetFlags(TorrentFlags.DISABLE_PEX)
             }
         }
     }
 
     private fun applySequentialPriorityFlags(handle: TorrentHandle) {
-        runCatching {
-            val flagsClass = Class.forName("org.libtorrent4j.swig.torrent_flags")
-            fun swigFlag(name: String): Any? = runCatching {
-                flagsClass.getField(name).get(null)
-            }.getOrNull()
-
-            val seq = swigFlag("sequential_download")
-            val flp = swigFlag("first_last_piece_priority")
-            seq?.let { setSwigFlag(handle, it) }
-            flp?.let { setSwigFlag(handle, it) }
-        }
-    }
-
-    private fun setSwigFlag(handle: TorrentHandle, flag: Any) {
-        runCatching {
-            val method = handle.javaClass.methods.firstOrNull { it.name == "setFlags" && it.parameterTypes.size == 1 }
-            method?.invoke(handle, flag)
-        }
-    }
-
-    private fun unsetSwigFlag(handle: TorrentHandle, flag: Any) {
-        runCatching {
-            val method = handle.javaClass.methods.firstOrNull { it.name == "unsetFlags" && it.parameterTypes.size == 1 }
-            method?.invoke(handle, flag)
-        }
+        runCatching { handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD) }
     }
 }
 

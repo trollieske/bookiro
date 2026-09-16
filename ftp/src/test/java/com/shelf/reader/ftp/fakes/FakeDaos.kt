@@ -344,4 +344,64 @@ class FakeDownloadTaskDao : DownloadTaskDao {
             }
             .mapNotNull { it.serverId }
             .distinct()
+
+    override fun observeForSource(kind: String, ref: String): Flow<List<DownloadTaskEntity>> =
+        flow.map { list -> list.filter { it.sourceKind == kind && it.sourceRef == ref } }
+
+    override suspend fun getBySourceRemote(kind: String, ref: String, remotePath: String): DownloadTaskEntity? =
+        rows.values.firstOrNull { it.sourceKind == kind && it.sourceRef == ref && it.remotePath == remotePath }
+
+    override suspend fun nextRunnableForSource(kind: String, ref: String, now: Long): DownloadTaskEntity? =
+        rows.values
+            .filter { it.sourceKind == kind && it.sourceRef == ref }
+            .filter {
+                it.status == DownloadStatusEntity.QUEUED || it.status == DownloadStatusEntity.PENDING ||
+                    (it.status == DownloadStatusEntity.RETRYING && (it.nextAttemptAt == null || it.nextAttemptAt!! <= now))
+            }
+            .minWithOrNull(compareByDescending<DownloadTaskEntity> { it.priority }.thenBy { it.createdAt })
+
+    override suspend fun importingForSource(kind: String, ref: String): List<DownloadTaskEntity> =
+        rows.values.filter { it.sourceKind == kind && it.sourceRef == ref && it.status == DownloadStatusEntity.IMPORTING }
+
+    override suspend fun runnableCountForSource(kind: String, ref: String): Int =
+        rows.values.count {
+            it.sourceKind == kind && it.sourceRef == ref && (
+                it.status.isRunnable || it.status.isActive ||
+                    it.status == DownloadStatusEntity.RETRYING ||
+                    it.status == DownloadStatusEntity.WAITING_FOR_NETWORK
+                )
+        }
+
+    override suspend fun runnableRefsForKind(kind: String): List<String> =
+        rows.values
+            .filter { it.sourceKind == kind }
+            .filter {
+                it.status.isRunnable || it.status.isActive ||
+                    it.status == DownloadStatusEntity.RETRYING ||
+                    it.status == DownloadStatusEntity.WAITING_FOR_NETWORK
+            }
+            .mapNotNull { it.sourceRef }
+            .distinct()
+
+    override suspend fun setSource(id: Long, kind: String, ref: String, now: Long) {
+        rows[id]?.let { rows[id] = it.copy(sourceKind = kind, sourceRef = ref) }
+        publish()
+    }
+
+    override suspend fun cancelForSource(kind: String, ref: String, now: Long) {
+        rows.values.filter { it.sourceKind == kind && it.sourceRef == ref }.forEach { task ->
+            if (task.status != DownloadStatusEntity.COMPLETED &&
+                task.status != DownloadStatusEntity.CANCELLED &&
+                task.status != DownloadStatusEntity.FAILED
+            ) {
+                rows[task.id] = task.copy(status = DownloadStatusEntity.CANCELLED)
+            }
+        }
+        publish()
+    }
+
+    override suspend fun deleteForSource(kind: String, ref: String) {
+        rows.entries.removeIf { it.value.sourceKind == kind && it.value.sourceRef == ref }
+        publish()
+    }
 }

@@ -125,7 +125,9 @@ class TorrentViewModel(
         }
         val id = engine.addFromInfoHash(
             infoHash = clean,
-            trackers = defaultTrackers(),
+            // Never inject public trackers here: a private infohash would leak.
+            // A magnet/.torrent with tracker info is the correct input instead.
+            trackers = emptyList(),
             displayName = displayName,
             saveDir = engine.defaultSaveDir(),
             autoImport = formState.value.defaultAutoImport
@@ -249,16 +251,22 @@ class TorrentViewModel(
     fun pauseAll() = viewModelScope.launch(dispatchers.io) { engine.pauseAll() }
     fun resumeAll() = viewModelScope.launch(dispatchers.io) { engine.resumeAll() }
 
+    fun reannounce(id: Long) = viewModelScope.launch(dispatchers.io) {
+        val allowed = engine.reannounce(id)
+        toastFlow.tryEmit(
+            if (allowed) getApplication<Application>().getString(R.string.toru_reannounce_sent)
+            else getApplication<Application>().getString(R.string.toru_reannounce_limited)
+        )
+    }
+
+    fun setSeedPolicy(id: Long, policy: com.shelf.reader.data.local.entity.TorrentSeedPolicyEntity) =
+        viewModelScope.launch(dispatchers.io) { engine.setSeedPolicy(id, policy) }
+
     fun updateDefaultWifiOnly(v: Boolean) { formState.value = formState.value.copy(defaultWifiOnly = v) }
     fun updateDefaultAutoImport(v: Boolean) { formState.value = formState.value.copy(defaultAutoImport = v) }
     fun updateDefaultSequential(v: Boolean) { formState.value = formState.value.copy(defaultSequential = v) }
 
-    private fun defaultTrackers(): List<String> = listOf(
-        "udp://tracker.opentrackr.org:1337/announce",
-        "udp://tracker.openbittorrent.com:80/announce",
-        "udp://tracker.torrent.eu.org:451/announce",
-        "wss://tracker.openwebtorrent.com"
-    )
+    private fun defaultTrackers(): List<String> = emptyList()
 
     override fun onCleared() {
         runCatching { engine.stop() }

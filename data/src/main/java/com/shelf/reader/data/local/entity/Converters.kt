@@ -108,6 +108,13 @@ class Converters {
         value?.let { TorrentPriorityEntity.valueOf(it) }
 
     @TypeConverter
+    fun torrentSeedPolicyToString(value: TorrentSeedPolicyEntity?): String? = value?.name
+
+    @TypeConverter
+    fun stringToTorrentSeedPolicy(value: String?): TorrentSeedPolicyEntity? =
+        value?.let { runCatching { TorrentSeedPolicyEntity.valueOf(it) }.getOrNull() }
+
+    @TypeConverter
     fun editionTypeToString(value: EditionTypeEntity?): String? = value?.name
 
     @TypeConverter

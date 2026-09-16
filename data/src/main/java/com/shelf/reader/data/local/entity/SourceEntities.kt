@@ -86,6 +86,7 @@ data class WebdavServerEntity(
 
 enum class TorrentSourceTypeEntity { MAGNET, TORRENT_FILE, INFO_HASH, HTTP_URL }
 enum class TorrentPriorityEntity { LOW, NORMAL, HIGH, TOP }
+enum class TorrentSeedPolicyEntity { STOP_WHEN_DOWNLOADED, SEED_UNTIL_STOPPED, SEED_WHILE_ACTIVE }
 
 @Entity(tableName = "torrent_downloads")
 data class TorrentDownloadEntity(
@@ -136,6 +137,8 @@ data class TorrentDownloadEntity(
     @ColumnInfo(name = "seed_until_ratio") val seedUntilRatio: Float? = null,
     @ColumnInfo(name = "seed_until_minutes") val seedUntilMinutes: Int? = null,
     @ColumnInfo(name = "seeding_finished_at") val seedingFinishedAt: Long? = null,
+    /** User-chosen seeding policy after completion. Null is treated as SEED_UNTIL_STOPPED. */
+    @ColumnInfo(name = "seed_policy") val seedPolicy: TorrentSeedPolicyEntity? = null,
 
     @ColumnInfo(name = "wifi_only") val wifiOnly: Boolean = true,
     @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,

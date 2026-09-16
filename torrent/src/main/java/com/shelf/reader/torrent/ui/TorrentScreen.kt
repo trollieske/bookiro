@@ -5,11 +5,13 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -28,7 +30,10 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.shelf.reader.data.local.entity.DownloadStatusEntity
 import com.shelf.reader.data.local.entity.TorrentDownloadEntity
+import com.shelf.reader.data.local.entity.TorrentSeedPolicyEntity
 import com.shelf.reader.designsystem.theme.ShelfTypography
+import com.shelf.reader.torrent.engine.TrackerDiagnostic
+import com.shelf.reader.torrent.engine.TrackerState
 import com.shelf.reader.torrent.engine.TorrentRuntimeStats
 import com.shelf.reader.torrent.viewmodel.TorrentUiState
 import com.shelf.reader.torrent.viewmodel.TorrentViewModel
@@ -263,6 +268,8 @@ fun TorrentScreen(
                                 scope.launch { snackbarHostState.showSnackbar(ctx.getString(R.string.toru_removed)) }
                             },
                             onReimport = { id -> vm.reimportTorrent(id) },
+                            onReannounce = { id -> vm.reannounce(id) },
+                            onSetSeedPolicy = { id, policy -> vm.setSeedPolicy(id, policy) },
                             onPickFolder = { id ->
                                 activeFolderPickerTorrentId = id
                                 folderPicker.launch(null)
@@ -340,6 +347,8 @@ private fun TorrentCard(
     onCancel: () -> Unit,
     onDelete: () -> Unit,
     onReimport: (Long) -> Unit,
+    onReannounce: (Long) -> Unit,
+    onSetSeedPolicy: (Long, TorrentSeedPolicyEntity) -> Unit,
     onPickFolder: (Long) -> Unit
 ) {
     val progress = stats?.progressPercent ?: dl.progressPercent
@@ -417,6 +426,14 @@ private fun TorrentCard(
                 )
                 Spacer(Modifier.height(12.dp))
 
+                TrackerDetailsSection(
+                    dl = dl,
+                    stats = stats,
+                    onReannounce = { onReannounce(dl.id) },
+                    onSetSeedPolicy = { policy -> onSetSeedPolicy(dl.id, policy) }
+                )
+                Spacer(Modifier.height(12.dp))
+
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -476,6 +493,158 @@ private fun TorrentCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrackerDetailsSection(
+    dl: TorrentDownloadEntity,
+    stats: TorrentRuntimeStats?,
+    onReannounce: () -> Unit,
+    onSetSeedPolicy: (TorrentSeedPolicyEntity) -> Unit
+) {
+    val isPrivate = stats?.isPrivate ?: false
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            stringResource(R.string.toru_connection_details),
+            style = ShelfTypography.TitleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            stringResource(R.string.toru_privacy) + ": " +
+                stringResource(if (isPrivate) R.string.toru_private else R.string.toru_public),
+            style = ShelfTypography.BodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        val dht = stats?.dhtEnabled ?: !isPrivate
+        val pex = stats?.pexEnabled ?: !isPrivate
+        val lsd = stats?.lsdEnabled ?: !isPrivate
+        val onLabel = stringResource(R.string.toru_on)
+        val offLabel = stringResource(R.string.toru_off)
+        Text(
+            listOf(
+                stringResource(R.string.toru_dht) to dht,
+                stringResource(R.string.toru_pex) to pex,
+                stringResource(R.string.toru_lsd) to lsd
+            ).joinToString(" · ") { (name, on) -> "$name: " + if (on) onLabel else offLabel },
+            style = ShelfTypography.BodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        val trackers = stats?.trackers.orEmpty()
+        if (trackers.isEmpty()) {
+            Text(
+                stringResource(R.string.toru_no_trackers),
+                style = ShelfTypography.BodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            trackers.forEach { tracker -> TrackerRow(tracker) }
+        }
+
+        OutlinedButton(onClick = onReannounce) {
+            Text(stringResource(R.string.toru_reannounce))
+        }
+
+        Spacer(Modifier.height(2.dp))
+        Text(
+            stringResource(R.string.toru_seed_policy),
+            style = ShelfTypography.TitleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        val current = dl.seedPolicy ?: TorrentSeedPolicyEntity.SEED_UNTIL_STOPPED
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            SeedPolicyChip(current, TorrentSeedPolicyEntity.STOP_WHEN_DOWNLOADED, R.string.toru_seed_stop, onSetSeedPolicy)
+            SeedPolicyChip(current, TorrentSeedPolicyEntity.SEED_UNTIL_STOPPED, R.string.toru_seed_until_stopped, onSetSeedPolicy)
+            SeedPolicyChip(current, TorrentSeedPolicyEntity.SEED_WHILE_ACTIVE, R.string.toru_seed_while_active, onSetSeedPolicy)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SeedPolicyChip(
+    current: TorrentSeedPolicyEntity,
+    value: TorrentSeedPolicyEntity,
+    labelRes: Int,
+    onSet: (TorrentSeedPolicyEntity) -> Unit
+) {
+    FilterChip(
+        selected = current == value,
+        onClick = { onSet(value) },
+        label = { Text(stringResource(labelRes)) }
+    )
+}
+
+@Composable
+private fun TrackerRow(tracker: TrackerDiagnostic) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .background(trackerStateColor(tracker.state), RoundedCornerShape(4.dp))
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                tracker.url,
+                style = ShelfTypography.BodySmall,
+                maxLines = 1,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Text(
+            stringResource(trackerStateLabel(tracker.state)) +
+                (tracker.reason?.let { " – $it" } ?: ""),
+            style = ShelfTypography.BodySmall,
+            color = trackerStateColor(tracker.state)
+        )
+        tracker.peers?.let {
+            Text(
+                stringResource(R.string.toru_peers_from_tracker, it),
+                style = ShelfTypography.BodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        tracker.lastAttemptAt?.let {
+            Text(
+                stringResource(R.string.toru_last_attempt, formatAgo(it)),
+                style = ShelfTypography.BodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun trackerStateLabel(state: TrackerState): Int = when (state) {
+    TrackerState.OK -> R.string.toru_tr_ok
+    TrackerState.ANNOUNCING -> R.string.toru_tr_announcing
+    TrackerState.AUTH_REJECTED -> R.string.toru_tr_auth
+    TrackerState.POLICY_REJECTED -> R.string.toru_tr_policy
+    TrackerState.TLS_ERROR -> R.string.toru_tr_tls
+    TrackerState.TIMEOUT -> R.string.toru_tr_timeout
+    TrackerState.DNS_ERROR -> R.string.toru_tr_dns
+    TrackerState.WARNING -> R.string.toru_tr_warning
+    TrackerState.ERROR -> R.string.toru_tr_error
+}
+
+@Composable
+private fun trackerStateColor(state: TrackerState) = when (state) {
+    TrackerState.OK -> MaterialTheme.colorScheme.primary
+    TrackerState.ANNOUNCING -> MaterialTheme.colorScheme.onSurfaceVariant
+    TrackerState.WARNING -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.error
+}
+
+private fun formatAgo(epochMs: Long): String {
+    val seconds = ((System.currentTimeMillis() - epochMs) / 1000).coerceAtLeast(0)
+    return when {
+        seconds < 60 -> "${seconds}s"
+        seconds < 3600 -> "${seconds / 60}m"
+        else -> "${seconds / 3600}t"
     }
 }
 
