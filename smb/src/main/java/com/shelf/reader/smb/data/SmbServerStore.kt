@@ -32,7 +32,12 @@ class SmbServerStore(context: Context) {
 
     private val appContext = context.applicationContext
 
-    private val prefs by lazy {
+    /**
+     * Encrypted storage is optional: if the Keystore-backed preferences cannot
+     * be created, saved servers are kept in memory for this session only. They
+     * are never written to plaintext SharedPreferences.
+     */
+    private val prefs: android.content.SharedPreferences? by lazy {
         runCatching {
             val master = MasterKey.Builder(appContext)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -44,12 +49,7 @@ class SmbServerStore(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        }.getOrElse {
-            appContext.getSharedPreferences(
-                "${appContext.packageName}_smb_plain",
-                Context.MODE_PRIVATE
-            )
-        }
+        }.getOrNull()
     }
 
     private val _servers = MutableStateFlow<List<SmbSavedServer>>(emptyList())
@@ -67,7 +67,7 @@ class SmbServerStore(context: Context) {
         synchronized(loadLock) {
             if (loaded) return
             try {
-                val raw = prefs.getString(KEY_SERVERS, "[]") ?: "[]"
+                val raw = prefs?.getString(KEY_SERVERS, "[]") ?: "[]"
                 _servers.value = parse(raw)
             } catch (_: Throwable) {
                 _servers.value = emptyList()
@@ -115,7 +115,7 @@ class SmbServerStore(context: Context) {
                     put("defaultRemotePath", s.defaultRemotePath)
                 })
             }
-            prefs.edit().putString(KEY_SERVERS, json.toString()).apply()
+            prefs?.edit()?.putString(KEY_SERVERS, json.toString())?.apply()
         }
         _servers.value = list
     }

@@ -29,10 +29,11 @@ Built with **Kotlin 2.0+**, **Jetpack Compose (Material 3)**, **Room DB**, **And
 
 ### ⚡ Torrent & Cloud Storage Engine
 * **Embedded Torrent Client**: Background download engine (`TorrentEngine.kt`, `TorrentDownloadWorker.kt`) supporting magnet links, peer/seed stats, and auto-importing completed downloads into the library via **libtorrent4j** (BSD-3-Clause) JNI bindings for all ABIs.
-* **FTP / FTPS / SFTP Sync**: Browse remote servers, public-key SSH auth, encrypted Keystore credentials (`EncryptedSharedPreferences`), and periodic background folder watching (`FtpSyncWorker.kt`) via **Apache Commons Net** and **SSHJ**.
-* **SMB (Windows Share) Integration**: Native SMB/CIFS connector (`SmbClientEngine.kt`, `SmbSyncWorker.kt`) via **jcifs-ng** for local NAS and PC shares.
-* **WebDAV Support**: WebDAV server browser and background library synchronization (`WebdavSyncWorker.kt`) via **OkHttp**.
-* **LAN Discovery & OPDS Catalogs**: Built-in local-network source scan plus Standard Ebooks / Feedbooks / Project Gutenberg / LibriVox OPDS catalog shortcuts.
+* **FTP / FTPS / SFTP Sync**: Browse remote servers, public-key SSH auth, Keystore-encrypted credentials, and a durable, resumable transfer queue (`FtpSyncWorker.kt`) via **Apache Commons Net** and **SSHJ**.
+* **SMB (Windows Share) Integration**: Native SMB2/SMB3 connector (`SmbClientEngine.kt`, `SmbSyncWorker.kt`) via **jcifs-ng** for local NAS and PC shares. Downloads are staged and moved atomically; durable WorkManager sync is still in progress (see `docs/source-overhaul-architecture.md`).
+* **WebDAV Support**: WebDAV server browser and sync (`WebdavSyncWorker.kt`) via **OkHttp**, with namespace-tolerant `PROPFIND` parsing, origin-safe redirects and Range-based resume.
+* **Calibre Content Server**: First-class source (`:calibre` module) that browses the Calibre Content Server OPDS interface, supports Basic/Digest auth, search, and a durable download/import queue (`CalibreSyncWorker.kt`).
+* **LAN Discovery**: Built-in local-network scan for FTP/SMB/WebDAV/Calibre servers. The generic OPDS catalog feature and the "known OPDS catalogs" shortcuts were removed because they were not implemented.
 
 ### 🌲 Library UI (Apple Books-style 3-tab Bottom Nav)
 * **3 Bottom Tabs Only**: **Bøker** (Ebooks), **Lydbøker** (Audiobooks), **Innstillinger** (Settings) — matches the Apple Books shelf layout.

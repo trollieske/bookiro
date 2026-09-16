@@ -44,3 +44,9 @@ $RECYCLE.BIN/
 .coverlet/
 coverage/
 .kotlin/
+
+# Source fixtures (generated / local only)
+fixtures/smb-data/
+fixtures/webdav-data/
+fixtures/calibre-library/
+fixtures/calibre-config/

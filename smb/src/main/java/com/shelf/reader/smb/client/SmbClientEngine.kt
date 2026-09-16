@@ -125,26 +125,44 @@ class SmbClientEngine {
         }
     }
 
+    /**
+     * Downloads [remotePath] into [localFile] through a `<localFile>.part`
+     * staging file and promotes it to the final name only after the full length
+     * has been received. SMB input streams do not expose a reliable byte offset
+     * in this stack, so a restart is used rather than pretending to resume.
+     */
     suspend fun downloadFile(remotePath: String, localFile: File, onProgress: (Long, Long) -> Unit = { _, _ -> }): Long = withContext(Dispatchers.IO) {
         val ctx = baseContext ?: return@withContext -1L
         try {
             localFile.parentFile?.mkdirs()
+            val staging = File(localFile.parentFile, localFile.name + ".part")
             val url = buildUrl(remotePath)
             val smb = SmbFile(url, ctx)
             val total = smb.length()
             var downloaded = 0L
             smb.inputStream.use { input ->
-                FileOutputStream(localFile).use { out ->
-                    val buf = ByteArray(8192 * 8)
+                FileOutputStream(staging, false).use { out ->
+                    val buf = ByteArray(256 * 1024)
                     var read: Int
                     while (input.read(buf).also { read = it } != -1) {
                         out.write(buf, 0, read)
                         downloaded += read
                         onProgress(downloaded, total)
                     }
+                    out.flush()
                 }
             }
-            downloaded
+            if (total > 0 && staging.length() != total) {
+                return@withContext -1L
+            }
+            if (localFile.exists() && !localFile.delete()) return@withContext -1L
+            if (!staging.renameTo(localFile)) {
+                runCatching {
+                    staging.copyTo(localFile, overwrite = true)
+                    staging.delete()
+                }.getOrElse { return@withContext -1L }
+            }
+            localFile.length()
         } catch (_: Exception) {
             -1L
         }

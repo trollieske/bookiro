@@ -395,15 +395,24 @@ list. This section is a summary and may lag slightly.
 | Area | Status |
 |------|--------|
 | Architecture / root-cause analysis | done |
-| Generic OPDS + known catalogs removed | in progress |
-| Torrent identity/TLS/private-flag diagnostics | in progress |
-| SMB durable source + transfer | in progress |
-| WebDAV durable source + range resume | in progress |
-| Calibre Content Server module | in progress |
-| Unified Transfers UI for all sources | in progress |
-| Docker fixtures + integration docs | in progress |
-| README / release checklist | in progress |
+| Generic OPDS + known catalogs removed | done |
+| Calibre Content Server module | done (JVM-tested; live-server smoke pending) |
+| Torrent identity/TLS/private-flag diagnostics | done (JVM-tested; native smoke pending) |
+| WebDAV parser/redirect/staging hardening | done (JVM-tested) |
+| SMB browser + staging hardening | done (not integration-tested here) |
+| SMB/WebDAV durable WorkManager transfer | **not done** — still ViewModel-owned |
+| SMB/WebDAV credentials in Room + Keystore | **not done** — still EncryptedSharedPreferences (plaintext fallback removed) |
+| Unified Transfers UI for all sources | **partial** — FTP + Calibre observe Room; SMB/WebDAV do not |
+| Docker fixtures + integration docs | defined; not executed in this environment |
+| Release checklist | done |
+| README update | pending |
 
 Anything not marked `done` must not be described as finished in the README or
 release notes. Known external limits are listed in
 `docs/source-release-checklist.md`.
+
+The biggest remaining gap is that SMB and WebDAV transfers are still owned by
+their ViewModels (the original root cause R1–R3 from
+`ftp-sync-architecture.md`). The shared `download_tasks` queue (`source_kind`,
+`source_ref`) and the WebDAV/SMB engines were hardened so the follow-up can move
+them to WorkManager without a schema change, but that move itself is not done.

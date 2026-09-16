@@ -75,7 +75,7 @@ class WebdavSyncWorker(
         var totalImported = 0
 
         for (server in servers) {
-            val fullUrl = server.baseUrl.trimEnd('/') + "/" + server.defaultRemotePath.trimStart('/') + server.username
+            val fullUrl = server.baseUrl.trimEnd('/')
             val ok = engine.connect(
                 baseUrl = fullUrl,
                 username = server.username,

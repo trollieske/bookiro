@@ -9,6 +9,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
@@ -105,7 +106,7 @@ class WebdavClientEngine {
                 .apply { if (authHeader != null) header("Authorization", authHeader!!) }
                 .build()
 
-            val response = client!!.newCall(request).execute()
+            val response = execute(client!!, request)
             val success = response.isSuccessful || response.code == 404
             response.close()
             connected = success
@@ -129,11 +130,33 @@ class WebdavClientEngine {
         return "$base$clean"
     }
 
-    private fun normalizePath(href: String): String {
-        val base = baseUrl?.trimEnd('/') ?: return href
-        val withoutBase = href.removePrefix(base)
-        val decoded = Uri.decode(withoutBase).trimEnd('/')
-        return decoded.ifBlank { "/" }
+    /**
+     * Follows redirects manually so the Authorization header is never forwarded
+     * to a different origin (OkHttp's automatic redirect handling keeps it).
+     */
+    private fun execute(httpClient: OkHttpClient, request: Request): Response {
+        var current = request
+        repeat(MAX_REDIRECTS) {
+            val response = httpClient.newCall(current).execute()
+            val code = response.code
+            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                val location = response.header("Location")
+                response.close()
+                if (location.isNullOrBlank()) throw IllegalStateException("Redirect without Location")
+                val nextUrl = runCatching {
+                    current.url.resolve(location)
+                }.getOrNull() ?: throw IllegalStateException("Invalid redirect target")
+                val sameOrigin = nextUrl.host == current.url.host &&
+                    nextUrl.scheme == current.url.scheme &&
+                    nextUrl.port == current.url.port
+                val builder = current.newBuilder().url(nextUrl)
+                if (!sameOrigin) builder.removeHeader("Authorization")
+                current = builder.build()
+                return@repeat
+            }
+            return response
+        }
+        throw IllegalStateException("Too many redirects")
     }
 
     suspend fun listDirectory(path: String): List<WebdavEntry> = withContext(Dispatchers.IO) {
@@ -158,98 +181,23 @@ class WebdavClientEngine {
                 .apply { if (authHeader != null) header("Authorization", authHeader!!) }
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            val response = execute(httpClient, request)
             val bodyText = response.body?.string().orEmpty()
             response.close()
             if (!response.isSuccessful) return@withContext emptyList()
 
-            parseMultiStatus(bodyText, path)
+            WebdavMultiStatusParser.parse(bodyText, baseUrl.orEmpty(), path)
         } catch (_: Exception) {
             emptyList()
         }
     }
 
-    private fun parseMultiStatus(xml: String, requestPath: String): List<WebdavEntry> {
-        val factory = XmlPullParserFactory.newInstance().apply { isNamespaceAware = false }
-        val parser = factory.newPullParser()
-        parser.setInput(StringReader(xml))
-
-        val entries = mutableListOf<WebdavEntry>()
-        var eventType = parser.eventType
-        var inResponse = false
-        var inProp = false
-        var currentHref: String? = null
-        var currentName: String? = null
-        var isCollection = false
-        var size: Long = 0L
-        var modified: Long = 0L
-        var etag: String? = null
-        var contentType: String? = null
-
-        val targetPath = requestPath.trimEnd('/').ifBlank { "/" }
-
-        while (eventType != XmlPullParser.END_DOCUMENT) {
-            val localName = parser.name?.substringAfterLast(':') ?: ""
-            when (eventType) {
-                XmlPullParser.START_TAG -> {
-                    when (localName.lowercase()) {
-                        "response" -> {
-                            inResponse = true
-                            currentHref = null; currentName = null
-                            isCollection = false; size = 0L; modified = 0L
-                            etag = null; contentType = null
-                        }
-                        "propstat" -> {}
-                        "prop" -> inProp = true
-                        "href" -> if (inResponse && !inProp) currentHref = parser.nextText().trim()
-                        "displayname" -> if (inProp) currentName = parser.nextText().trim()
-                        "getcontentlength" -> if (inProp) size = parser.nextText().trim().toLongOrNull() ?: 0L
-                        "getlastmodified" -> if (inProp) {
-                            modified = parseHttpDate(parser.nextText().trim())
-                        }
-                        "getetag" -> if (inProp) etag = parser.nextText().trim().removeSurrounding("\"")
-                        "getcontenttype" -> if (inProp) contentType = parser.nextText().trim()
-                        "collection" -> if (inProp) isCollection = true
-                        "resourcetype" -> {}
-                    }
-                }
-                XmlPullParser.END_TAG -> {
-                    when (localName.lowercase()) {
-                        "prop" -> inProp = false
-                        "response" -> {
-                            inResponse = false
-                            val href = currentHref ?: ""
-                            val normalized = normalizePath(href)
-                            if (normalized != targetPath && normalized.isNotBlank()) {
-                                val name = currentName ?: normalized.substringAfterLast('/').ifEmpty { normalized }
-                                entries.add(
-                                    WebdavEntry(
-                                        name = name,
-                                        path = normalized,
-                                        href = href,
-                                        type = if (isCollection) WebdavEntryType.FOLDER else WebdavEntryType.FILE,
-                                        sizeBytes = size,
-                                        modifiedEpochSec = modified,
-                                        etag = etag,
-                                        contentType = contentType
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            eventType = parser.next()
-        }
-        return entries.sortedWith(compareBy<WebdavEntry> { it.type != WebdavEntryType.FOLDER }.thenBy { it.name.lowercase() })
-    }
-
-    private fun parseHttpDate(s: String): Long {
-        return runCatching {
-            java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US).parse(s)?.time?.div(1000L) ?: 0L
-        }.getOrElse { 0L }
-    }
-
+    /**
+     * Downloads [remotePath] into [localFile] via a `<localFile>.part` staging
+     * file. When the server supports HTTP Range the partial file is resumed
+     * (`206`); otherwise it is restarted. Only a fully received file is moved
+     * onto its final name, so a crash never leaves a truncated "complete" file.
+     */
     suspend fun downloadFile(
         remotePath: String,
         localFile: File,
@@ -258,26 +206,47 @@ class WebdavClientEngine {
         val httpClient = client ?: return@withContext -1L
         try {
             localFile.parentFile?.mkdirs()
+            val staging = File(localFile.parentFile, localFile.name + ".part")
+            val offset = if (staging.exists() && staging.length() > 0) staging.length() else 0L
             val url = buildHref(remotePath)
-            val request = Request.Builder().url(url).get()
-                .apply { if (authHeader != null) header("Authorization", authHeader!!) }
-                .build()
-            val response = httpClient.newCall(request).execute()
+            val builder = Request.Builder().url(url).get()
+            if (offset > 0) builder.header("Range", "bytes=$offset-")
+            if (authHeader != null) builder.header("Authorization", authHeader!!)
+
+            val response = execute(httpClient, builder.build())
             if (!response.isSuccessful) { response.close(); return@withContext -1L }
-            val body = response.body ?: return@withContext -1L
+            val resumed = offset > 0 && response.code == 206
+            val body = response.body ?: run { response.close(); return@withContext -1L }
             val total = body.contentLength()
-            val stream = body.byteStream()
-            FileOutputStream(localFile).use { out ->
-                val buf = ByteArray(8192 * 8)
-                var read: Int
-                var downloaded = 0L
-                while (stream.read(buf).also { read = it } != -1) {
-                    out.write(buf, 0, read)
-                    downloaded += read
-                    onProgress(downloaded, total)
+
+            FileOutputStream(staging, resumed).use { out ->
+                body.byteStream().use { stream ->
+                    val buf = ByteArray(256 * 1024)
+                    var written = if (resumed) offset else 0L
+                    while (true) {
+                        val read = stream.read(buf)
+                        if (read == -1) break
+                        out.write(buf, 0, read)
+                        written += read
+                        onProgress(written, total)
+                    }
+                    out.flush()
                 }
-                downloaded
             }
+
+            // A partial file stays as `.part` for the next attempt; only a
+            // verified, fully received file is promoted to its final name.
+            if (total > 0 && staging.length() != total) {
+                return@withContext -1L
+            }
+            if (localFile.exists() && !localFile.delete()) return@withContext -1L
+            if (!staging.renameTo(localFile)) {
+                runCatching {
+                    staging.copyTo(localFile, overwrite = true)
+                    staging.delete()
+                }.getOrElse { return@withContext -1L }
+            }
+            localFile.length()
         } catch (_: Exception) {
             -1L
         }
@@ -287,5 +256,9 @@ class WebdavClientEngine {
         val ext = name.substringAfterLast('.', "").lowercase()
         return ext in setOf("epub", "pdf", "mobi", "azw", "azw3", "fb2", "cbz", "cbr", "txt", "html", "rtf", "md",
             "m4b", "m4a", "mp3", "aac", "flac", "ogg", "opus", "wav", "zip")
+    }
+
+    private companion object {
+        private const val MAX_REDIRECTS = 5
     }
 }

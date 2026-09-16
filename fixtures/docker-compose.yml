@@ -1,0 +1,74 @@
+# Reproducible source fixtures.
+#
+# These containers are for local/CI verification of the SMB, WebDAV and Calibre
+# sources. They use non-sensitive test credentials that must never appear in
+# production code. See fixtures/README.md and docs/source-test-fixtures.md.
+#
+#   docker compose -f fixtures/docker-compose.yml up -d
+#
+# Ports are non-default where useful so they do not clash with a real NAS:
+#   SMB      445  (test user shelf / shelfpass, share "Books")
+#   WebDAV   8080 (test user shelf / shelfpass)
+#   Calibre  8081 (Content Server; first start needs a library import)
+
+services:
+  smb:
+    image: dperson/samba:latest
+    container_name: shelf-smb
+    command: >-
+      -u "shelf;shelfpass"
+      -s "Books;/mnt/books;yes;no;no;shelf;shelf;shelf"
+      -g "server min protocol = SMB2"
+      -g "server max protocol = SMB3"
+      -g "map to guest = never"
+      -p
+    ports:
+      - "445:445"
+    volumes:
+      - ./smb-data:/mnt/books:ro
+    restart: unless-stopped
+
+  webdav:
+    image: bytemark/webdav:latest
+    container_name: shelf-webdav
+    environment:
+      AUTH_TYPE: Basic
+      USERNAME: shelf
+      PASSWORD: shelfpass
+    ports:
+      - "8080:80"
+    volumes:
+      - ./webdav-data:/var/lib/dav/data
+    restart: unless-stopped
+
+  # Calibre Content Server. The first start needs a library; put EPUB/M4B files
+  # in ./calibre-library and import them once through the web UI, or point
+  # CALIBRE_LIBRARY at an existing metadata.db. The OPDS interface is then at
+  # http://localhost:8081/opds
+  calibre:
+    image: linuxserver/calibre:latest
+    container_name: shelf-calibre
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./calibre-config:/config
+      - ./calibre-library:/books
+    restart: unless-stopped
+
+# ---------------------------------------------------------------------------
+# Torrent tracker fixtures
+#
+# A public open tracker and a private-flag tracker are easiest to run from a
+# developer machine using the npm `bittorrent-tracker` package:
+#
+#   npx bittorrent-tracker --port 8000                # public/open
+#   npx bittorrent-tracker --port 8001 --http         # used by the private fixture
+#
+# The repository test harness (see docs/source-test-fixtures.md) creates a
+# private-flag .torrent whose announce URL points at the local tracker and
+# asserts that DHT/PEX/LSD stay disabled for it. No container image is pinned
+# here because the npm tracker is more reliable than the available images.
