@@ -290,8 +290,11 @@ private fun SourceCard(
                     Icon(Icons.Default.Sync, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (summary.hasWork) stringResource(R.string.ftpu_pause)
-                        else stringResource(R.string.ftpu_continue_sync),
+                        when {
+                            summary.hasWork -> stringResource(R.string.ftpu_pause)
+                            status == com.shelf.reader.ftp.viewmodel.SourceStatus.PAUSED -> stringResource(R.string.ftpu_resume)
+                            else -> stringResource(R.string.ftpu_continue_sync)
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

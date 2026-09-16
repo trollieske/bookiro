@@ -304,26 +304,42 @@ Physical (EVO Seedbox): see §9.
 
 ## 9. Benchmarks and measured results
 
-**Physical EVO Seedbox benchmarking could not be executed from this environment**
-(no Android device attached and no network access to the seedbox). The engine is
-built so the measurement is a configuration change, not a code change:
+### 9.1 Real-device run against the EVO Seedbox
 
-* `FtpTransferEngine` reads the lane count from `TransferPolicy`
-  (`concurrencyOverride` / transport default).
-* `TransferPolicy.CANDIDATE_BUFFERS` exposes 64 / 256 / 512 KiB and the buffer is
-  passed per transfer, so a benchmark harness can iterate them.
-* `FtpTransferRepository.observeForServer` + `FtpTransferRuntime` give per-file
-  and aggregate speed without extra instrumentation.
+Measured on the shipped engine (not a micro-benchmark):
 
-Default shipped: **256 KiB buffer**, **2 lanes on Wi-Fi**, **1 on mobile**,
-user-selectable 1–4 (clamped to 4 on Wi-Fi / 2 on mobile), always one stream per
-file. These are conservative starting values chosen to avoid seedbox
-rate-limiting; they are overridable per source.
+* Device: OnePlus CPH2653, Android 16 (SDK 36), Wi-Fi
+* Server: EVO Seedbox, **FTPS Explicit**, port 21
+* Queue: **1414 files** discovered in one pass and persisted to Room
+* Settings: **Auto = 2 lanes** (Wi-Fi default), **256 KiB** buffer, one stream
+  per file
 
-The physical test matrix to run on the target device is listed in the prompt
-(single 1 GB M4B, several 100–500 MB files, an EPUB, 1/2/3/4 lanes, 64/256/512 KiB
-buffers, network switch, screen off, process death). The expected procedure is
-unchanged; results are pending.
+| Observation | Result |
+|---|---|
+| Aggregate throughput (2 lanes) | **~3.7 – 4.9 MB/s** (40 s windows) |
+| Per-lane throughput | **1.6 – 2.1 MB/s** (Transfers screen / notification) |
+| Notification reading | e.g. `372 of 1414 · 26% · 680 KB/s · ~28 seconds left` |
+| Completed during run | **407 files / 2.10 GB**, 0 failed, 0 retried |
+| Leaving the screen (HOME) | continued: 338 → 532 MB in 40 s |
+| `force-stop` (process death) | froze at 119 files / 609 MB; after relaunch resumed to 147 / 729 MB in 25 s |
+| Pause from UI | `run=0`, progress frozen; `PAUSED_BY_USER=1024` |
+| Continue from UI | queue restored, 2 lanes, progress resumed |
+
+Interpretation: the seedbox/provider link is the limiter here, not the phone —
+two lanes already saturate what this FTPS endpoint gives per client, and the
+small-file mix (3–16 MB each) means per-file overhead dominates more than raw
+bandwidth. The Auto default of 2 on Wi-Fi is therefore a safe, reasonable value
+for this provider; the 1/3/4-lane and 64/512 KiB matrix is still worth running
+on a provider that allows more parallel connections.
+
+### 9.2 Still to measure
+
+The remaining matrix from the prompt — 1, 3 and 4 lanes, and 64/256/512 KiB
+buffers — was not run. It is a configuration change, not a code change: lane
+count comes from `TransferPolicy` (`concurrencyOverride` / transport default),
+`TransferPolicy.CANDIDATE_BUFFERS` exposes the buffer sizes and
+`FtpTransferRepository.observeForServer` + `FtpTransferRuntime` expose per-file
+and aggregate speed without extra instrumentation.
 
 ## 10. Test results
 
@@ -350,7 +366,8 @@ Localization validator (`tools/validate_localization.py`) passes for all 9 local
 
 ## 11. Known limitations
 
-* Physical throughput numbers against the EVO Seedbox are not measured here.
+* The 1/3/4-lane and 64/512 KiB buffer matrix has not been measured (the Auto=2
+  run against the EVO Seedbox is in §9.1).
 * FTPS uses an accept-all trust manager (seedboxes commonly present self-signed
   certificates). Certificate pinning is a follow-up hardening step.
 * SFTP uses trust-on-first-use host-key verification; a changed host key is
@@ -358,4 +375,5 @@ Localization validator (`tools/validate_localization.py`) passes for all 9 local
 * A dedicated in-app benchmark/diagnostics screen is not implemented; the
   policy/buffer knobs and runtime snapshot it would use are in place.
 * Periodic sync uses `KEEP` and enqueues manual work; very aggressive seeds with
-  many thousands of files have not been load-tested.
+  many thousands of files have not been load-tested (the 1414-file run is the
+  largest so far).

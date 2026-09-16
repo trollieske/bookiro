@@ -2,8 +2,10 @@ package com.shelf.reader
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibility
@@ -406,6 +408,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 )
             }
             composable(ShelfDestinations.Ftp.route) {
+                RequestNotificationPermissionIfNeeded()
                 FtpSourcesScreen(
                     onBack = { navController.popBackStack() },
                     onAddSource = { navController.navigate(ShelfDestinations.FtpAdd.route) },
@@ -440,6 +443,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 arguments = listOf(androidx.navigation.navArgument("serverId") { type = androidx.navigation.NavType.LongType })
             ) { backStack ->
                 val serverId = backStack.arguments?.getLong("serverId") ?: -1L
+                RequestNotificationPermissionIfNeeded()
                 FtpBrowserScreen(
                     serverId = serverId,
                     onBack = { navController.popBackStack() },
@@ -536,6 +540,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 arguments = listOf(androidx.navigation.navArgument("serverId") { type = androidx.navigation.NavType.LongType })
             ) { backStack ->
                 val serverId = backStack.arguments?.getLong("serverId") ?: -1L
+                RequestNotificationPermissionIfNeeded()
                 FtpSourceDetailsScreen(
                     serverId = serverId,
                     onBack = { navController.popBackStack() },
@@ -566,6 +571,32 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onImport = { navController.navigate(ShelfDestinations.Import.route) }
                 )
             }
+        }
+    }
+}
+
+/**
+ * Requests POST_NOTIFICATIONS once per process the first time the user opens the
+ * FTP area, so the foreground sync notification (file/percent/speed + Pause and
+ * Cancel) is actually visible on Android 13+.
+ */
+@Composable
+private fun RequestNotificationPermissionIfNeeded() {
+    if (android.os.Build.VERSION.SDK_INT < 33) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+        context,
+        android.Manifest.permission.POST_NOTIFICATIONS
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    if (granted) return
+    var asked by rememberSaveable { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(Unit) {
+        if (!asked) {
+            asked = true
+            launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }
