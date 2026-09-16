@@ -198,14 +198,20 @@ slot 3 → Book C.m4b
 
 `TransferPolicy`:
 
-| Transport | default | max user |
-|-----------|---------|----------|
-| Wi-Fi     | 2       | 4        |
-| Mobile    | 1       | 2        |
-| Same file | 1       | 1        |
+| Transport | Auto on battery | Auto while charging | max on battery | max while charging |
+|-----------|-----------------|---------------------|----------------|--------------------|
+| Wi-Fi     | 2               | 4                   | 4              | 6                  |
+| Mobile    | 1               | 2                   | 2              | 4                  |
+| Same file | 1               | 1                   | 1              | 1                  |
 
-`Auto` = the default. User can pin 1–4. Concurrency is **reduced** (never
-raised) after repeated connect failures / TCP resets / auth errors.
+`Auto` = the default. While charging the app allows more lanes because extra
+connections cost radio/TLS CPU that is cheap on external power. User can pin
+1–6. Concurrency is **reduced** (never raised) after repeated connect failures /
+TCP resets / auth errors.
+
+Measured on the EVO Seedbox (see §9): throughput scales with lanes up to 6
+(2 lanes ≈ 3.3 MB/s, 4 ≈ 4.8, 6 ≈ 5.7, and ≈ 6.5–7.4 after batching imports), so
+more lanes genuinely help rather than being assumed to help.
 
 ### 5.2 Buffers
 
@@ -221,10 +227,17 @@ remote file
  → download to <final>.part (append, offset = validated part length)
  → persist downloadedBytes (≤ every 500 ms or ≥ every 1 MiB)
  → verify part length == remote size
- → atomic rename .part → final
- → import
+ → atomic rename .part → final            (state → IMPORTING)
+ → batched per folder + import            (separate importer coroutine)
+ → consolidate once per run
  → COMPLETED
 ```
+
+Import is deliberately **not** done on the download lane. A single importer
+coroutine batches all `IMPORTING` rows by parent folder every ~750 ms, so one
+audiobook folder becomes one library call and the library-wide consolidation
+runs once at the end instead of once per file. The lanes keep downloading while
+this happens.
 
 * FTP: `REST` offset via `FTPClient.setRestartOffset`.
 * SFTP: `RemoteFile.read(offset, …)`.
@@ -308,29 +321,38 @@ Physical (EVO Seedbox): see §9.
 
 Measured on the shipped engine (not a micro-benchmark):
 
-* Device: OnePlus CPH2653, Android 16 (SDK 36), Wi-Fi
+* Device: OnePlus CPH2653, Android 16 (SDK 36), Wi-Fi, USB charging
 * Server: EVO Seedbox, **FTPS Explicit**, port 21
 * Queue: **1414 files** discovered in one pass and persisted to Room
-* Settings: **Auto = 2 lanes** (Wi-Fi default), **256 KiB** buffer, one stream
-  per file
+* Buffer: **256 KiB**, one stream per file
 
 | Observation | Result |
 |---|---|
-| Aggregate throughput (2 lanes) | **~3.7 – 4.9 MB/s** (40 s windows) |
+| Aggregate throughput, 2 lanes | **~3.2 – 3.5 MB/s** |
+| Aggregate throughput, 4 lanes | **~4.8 MB/s** |
+| Aggregate throughput, 6 lanes | **~5.6 – 5.7 MB/s** |
+| Aggregate throughput, 6 lanes + batched import | **~6.3 – 7.4 MB/s** |
 | Per-lane throughput | **1.6 – 2.1 MB/s** (Transfers screen / notification) |
 | Notification reading | e.g. `372 of 1414 · 26% · 680 KB/s · ~28 seconds left` |
-| Completed during run | **407 files / 2.10 GB**, 0 failed, 0 retried |
+| Full run | **1414 / 1414 completed, 9.42 GB, 0 failed, 0 retried** |
 | Leaving the screen (HOME) | continued: 338 → 532 MB in 40 s |
 | `force-stop` (process death) | froze at 119 files / 609 MB; after relaunch resumed to 147 / 729 MB in 25 s |
 | Pause from UI | `run=0`, progress frozen; `PAUSED_BY_USER=1024` |
-| Continue from UI | queue restored, 2 lanes, progress resumed |
+| Continue from UI | queue restored, lanes resumed |
+| App CPU while transferring | ~38% of one core before import batching, ~0% at idle after |
 
-Interpretation: the seedbox/provider link is the limiter here, not the phone —
-two lanes already saturate what this FTPS endpoint gives per client, and the
-small-file mix (3–16 MB each) means per-file overhead dominates more than raw
-bandwidth. The Auto default of 2 on Wi-Fi is therefore a safe, reasonable value
-for this provider; the 1/3/4-lane and 64/512 KiB matrix is still worth running
-on a provider that allows more parallel connections.
+Interpretation:
+
+* Lanes genuinely scale on this endpoint (2 → 4 → 6 lanes keeps improving), so
+  the old 6-thread version was not simply wrong. The seedbox/provider caps total
+  per-account throughput around 6–7 MB/s rather than the phone or the link.
+* The first version still had a per-file bottleneck: `importUris` reloads the
+  whole library and runs `consolidateFragmentedAudiobooks()` **once per file**.
+  Moving import off the transfer lanes and batching it per folder (one library
+  call per audiobook folder, one consolidation at the end) lifted 6-lane
+  throughput by ~15–20% and removed most of the CPU load.
+* Charging is USB, so `PowerState.isCharging` is true and Auto used the powered
+  lane count during these runs.
 
 ### 9.2 Still to measure
 
@@ -366,8 +388,8 @@ Localization validator (`tools/validate_localization.py`) passes for all 9 local
 
 ## 11. Known limitations
 
-* The 1/3/4-lane and 64/512 KiB buffer matrix has not been measured (the Auto=2
-  run against the EVO Seedbox is in §9.1).
+* Lane counts 2/4/6 are measured (§9.1); the 64/512 KiB buffer matrix and 1/3
+  lane counts were not re-run after import batching.
 * FTPS uses an accept-all trust manager (seedboxes commonly present self-signed
   certificates). Certificate pinning is a follow-up hardening step.
 * SFTP uses trust-on-first-use host-key verification; a changed host key is
@@ -377,3 +399,7 @@ Localization validator (`tools/validate_localization.py`) passes for all 9 local
 * Periodic sync uses `KEEP` and enqueues manual work; very aggressive seeds with
   many thousands of files have not been load-tested (the 1414-file run is the
   largest so far).
+* After the final consolidation, a `download_tasks.imported_book_id` may point at
+  a book row that was merged away (74 interim ids collapsed into 30 books in the
+  1414-file run). Transfers are still correct; there is no "open book from a
+  transfer" entry point yet.
