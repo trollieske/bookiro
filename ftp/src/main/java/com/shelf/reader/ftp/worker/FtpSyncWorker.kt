@@ -57,7 +57,8 @@ class FtpSyncWorker(
             importer = graph.importer,
             runtime = FtpGraph.runtime,
             transportProvider = { NetworkTransport.detect(applicationContext) },
-            onUpdate = { updateForeground(graph.sourceRepository.getSource(serverId) ?: source) }
+            onUpdate = { updateForeground(graph.sourceRepository.getSource(serverId) ?: source) },
+            powerProvider = { com.shelf.reader.ftp.transfer.PowerState.isCharging(applicationContext) }
         )
 
         val result = try {
@@ -150,6 +151,20 @@ class FtpSyncWorker(
                 .getWorkInfosForUniqueWork(uniqueName(serverId))
                 .await()
             return info.any { it.state == androidx.work.WorkInfo.State.RUNNING }
+        }
+
+        /**
+         * User-initiated start. If the worker is not actually running (for example it
+         * is parked in WorkManager timing backoff after retries) the existing work is
+         * replaced so the tap takes effect immediately.
+         */
+        suspend fun enqueueOrRestart(context: Context, source: FtpSource) {
+            val policy = if (isExecuting(context, source.id)) {
+                ExistingWorkPolicy.KEEP
+            } else {
+                ExistingWorkPolicy.REPLACE
+            }
+            enqueue(context, source, policy)
         }
 
         private fun constraintsFor(source: FtpSource): Constraints {

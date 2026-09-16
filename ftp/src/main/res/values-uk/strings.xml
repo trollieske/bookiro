@@ -137,4 +137,5 @@
     <string name="ftpu_notif_progress">%1$d з %2$d · %3$d%%</string>
     <string name="ftpu_notif_pause">Пауза</string>
     <string name="ftpu_notif_cancel">Скасувати</string>
+    <string name="ftpu_concurrency_hint">Авто використовує більше з\'єднань під час заряджання. Виберіть число, щоб задати вручну.</string>
 </resources>

@@ -16,7 +16,9 @@ data class TransferPolicy(
 ) {
     companion object {
         const val MAX_WIFI_CONCURRENCY = 4
+        const val MAX_WIFI_CONCURRENCY_POWERED = 6
         const val MAX_MOBILE_CONCURRENCY = 2
+        const val MAX_MOBILE_CONCURRENCY_POWERED = 4
         const val SAME_FILE_STREAMS = 1
 
         const val BUFFER_64_KIB = 64 * 1024
@@ -33,38 +35,46 @@ data class TransferPolicy(
 /**
  * Concurrency policy.
  *
- * - `Auto` starts at 2 on Wi-Fi and 1 on mobile.
- * - A user override is clamped to a safe per-transport maximum.
+ * - `Auto` is conservative on battery (2 Wi-Fi / 1 mobile) and more aggressive
+ *   while charging (4 Wi-Fi / 2 mobile), because extra lanes cost radio and TLS
+ *   CPU that matter on battery but are cheap on external power.
+ * - A user override is clamped to a safe per-transport maximum, which is also
+ *   higher while charging.
  * - Concurrency is only ever reduced (never raised) while errors are frequent.
  */
 object TransferPolicyResolver {
 
     /** Auto default for a transport. */
-    fun autoConcurrency(transport: TransportType): Int = when (transport) {
-        TransportType.WIFI -> 2
-        TransportType.MOBILE -> 1
-        TransportType.OTHER -> 2
+    fun autoConcurrency(transport: TransportType, powered: Boolean = false): Int = when (transport) {
+        TransportType.WIFI -> if (powered) 4 else 2
+        TransportType.MOBILE -> if (powered) 2 else 1
+        TransportType.OTHER -> if (powered) 4 else 2
     }
 
-    fun maxConcurrency(transport: TransportType): Int = when (transport) {
-        TransportType.WIFI -> TransferPolicy.MAX_WIFI_CONCURRENCY
-        TransportType.MOBILE -> TransferPolicy.MAX_MOBILE_CONCURRENCY
-        TransportType.OTHER -> TransferPolicy.MAX_WIFI_CONCURRENCY
+    fun maxConcurrency(transport: TransportType, powered: Boolean = false): Int = when (transport) {
+        TransportType.WIFI ->
+            if (powered) TransferPolicy.MAX_WIFI_CONCURRENCY_POWERED else TransferPolicy.MAX_WIFI_CONCURRENCY
+        TransportType.MOBILE ->
+            if (powered) TransferPolicy.MAX_MOBILE_CONCURRENCY_POWERED else TransferPolicy.MAX_MOBILE_CONCURRENCY
+        TransportType.OTHER ->
+            if (powered) TransferPolicy.MAX_WIFI_CONCURRENCY_POWERED else TransferPolicy.MAX_WIFI_CONCURRENCY
     }
 
     /**
      * @param userOverride 0 = Auto, otherwise the user's pinned lane count.
      * @param degraded true when recent operations failed often; halves the lanes
      *        (but never below 1).
+     * @param powered true while the device is charging.
      */
     fun resolve(
         transport: TransportType,
         userOverride: Int = 0,
         degraded: Boolean = false,
-        bufferSize: Int = TransferPolicy.DEFAULT_BUFFER
+        bufferSize: Int = TransferPolicy.DEFAULT_BUFFER,
+        powered: Boolean = false
     ): TransferPolicy {
-        val base = if (userOverride <= 0) autoConcurrency(transport)
-        else userOverride.coerceIn(1, maxConcurrency(transport))
+        val base = if (userOverride <= 0) autoConcurrency(transport, powered)
+        else userOverride.coerceIn(1, maxConcurrency(transport, powered))
         val effective = if (degraded) (base / 2).coerceAtLeast(1) else base
         return TransferPolicy(effective, bufferSize)
     }

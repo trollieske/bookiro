@@ -137,4 +137,5 @@
     <string name="ftpu_notif_progress">%1$d av %2$d · %3$d%%</string>
     <string name="ftpu_notif_pause">Pausa</string>
     <string name="ftpu_notif_cancel">Avbryt</string>
+    <string name="ftpu_concurrency_hint">Auto anvander fler anslutningar vid laddning. Valj en siffra for att tvinga det.</string>
 </resources>

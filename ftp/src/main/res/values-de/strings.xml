@@ -137,4 +137,5 @@
     <string name="ftpu_notif_progress">%1$d von %2$d · %3$d%%</string>
     <string name="ftpu_notif_pause">Pause</string>
     <string name="ftpu_notif_cancel">Abbrechen</string>
+    <string name="ftpu_concurrency_hint">Auto nutzt beim Laden mehr Verbindungen. Eine Zahl erzwingt sie.</string>
 </resources>

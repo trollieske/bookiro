@@ -73,7 +73,7 @@ class FtpTransfersViewModel(application: Application) : AndroidViewModel(applica
     fun retry(taskId: Long) = viewModelScope.launch(Dispatchers.IO) {
         graph.transferRepository.retry(taskId)
         graph.transferRepository.getTask(taskId)?.serverId?.let { serverId ->
-            graph.sourceRepository.getSource(serverId)?.let { FtpSyncWorker.enqueue(getApplication(), it) }
+            graph.sourceRepository.getSource(serverId)?.let { FtpSyncWorker.enqueueOrRestart(getApplication(), it) }
         }
     }
 
@@ -85,7 +85,7 @@ class FtpTransfersViewModel(application: Application) : AndroidViewModel(applica
             task.serverId?.let { serverIds.add(it) }
         }
         serverIds.forEach { serverId ->
-            graph.sourceRepository.getSource(serverId)?.let { FtpSyncWorker.enqueue(getApplication(), it) }
+            graph.sourceRepository.getSource(serverId)?.let { FtpSyncWorker.enqueueOrRestart(getApplication(), it) }
         }
     }
 
@@ -96,7 +96,7 @@ class FtpTransfersViewModel(application: Application) : AndroidViewModel(applica
     fun prioritize(taskId: Long) = viewModelScope.launch(Dispatchers.IO) {
         graph.transferRepository.prioritize(taskId)
         graph.transferRepository.getTask(taskId)?.serverId?.let { serverId ->
-            graph.sourceRepository.getSource(serverId)?.let { FtpSyncWorker.enqueue(getApplication(), it) }
+            graph.sourceRepository.getSource(serverId)?.let { FtpSyncWorker.enqueueOrRestart(getApplication(), it) }
         }
     }
 

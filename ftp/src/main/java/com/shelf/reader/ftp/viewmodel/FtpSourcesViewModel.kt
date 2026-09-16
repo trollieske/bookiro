@@ -42,7 +42,7 @@ class FtpSourcesViewModel(application: Application) : AndroidViewModel(applicati
         val source = graph.sourceRepository.getSource(serverId) ?: return@launch
         // "Continue" resumes paused rows first, then hands off to the worker.
         graph.transferRepository.resume(serverId)
-        FtpSyncWorker.enqueue(getApplication(), source)
+        FtpSyncWorker.enqueueOrRestart(getApplication(), source)
     }
 
     fun pause(serverId: Long) = viewModelScope.launch(Dispatchers.IO) {

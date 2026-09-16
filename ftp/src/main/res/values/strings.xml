@@ -137,4 +137,5 @@
     <string name="ftpu_notif_progress">%1$d of %2$d · %3$d%%</string>
     <string name="ftpu_notif_pause">Pause</string>
     <string name="ftpu_notif_cancel">Cancel</string>
+    <string name="ftpu_concurrency_hint">Auto uses more connections while charging. Pin a number to force it.</string>
 </resources>

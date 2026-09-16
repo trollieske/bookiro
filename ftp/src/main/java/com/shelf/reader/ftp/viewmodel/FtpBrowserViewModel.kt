@@ -182,7 +182,7 @@ class FtpBrowserViewModel(
         val selectedEntries = current.entries.filter { it.name in current.selected && it.type == FtpEntryType.FILE }
         if (selectedEntries.isEmpty()) return@launch
         val report = graph.transferRepository.enqueue(serverId, base, selectedEntries)
-        source?.let { FtpSyncWorker.enqueue(getApplication(), it) }
+        source?.let { FtpSyncWorker.enqueueOrRestart(getApplication(), it) }
         _state.value = _state.value.copy(
             selected = emptySet(),
             lastQueuedCount = report.added + report.alreadyQueued
@@ -198,7 +198,7 @@ class FtpBrowserViewModel(
             val all = client.listDirectoryRecursive(current.path, maxDepth = FOLDER_SYNC_DEPTH)
                 .filter { com.shelf.reader.ftp.domain.MediaFormats.isBook(it.name) }
             val report = graph.transferRepository.enqueue(serverId, base, all)
-            source?.let { FtpSyncWorker.enqueue(getApplication(), it) }
+            source?.let { FtpSyncWorker.enqueueOrRestart(getApplication(), it) }
             _state.value = _state.value.copy(folderBusy = false, lastQueuedCount = report.added + report.alreadyQueued)
         } catch (e: FtpException) {
             _state.value = _state.value.copy(folderBusy = false, error = mapError(e))
@@ -210,7 +210,7 @@ class FtpBrowserViewModel(
     fun prioritize(entry: FtpEntry) = viewModelScope.launch(Dispatchers.IO) {
         val task = graph.transferRepository.taskForRemote(serverId, entry.path) ?: return@launch
         graph.transferRepository.prioritize(task.id)
-        source?.let { FtpSyncWorker.enqueue(getApplication(), it) }
+        source?.let { FtpSyncWorker.enqueueOrRestart(getApplication(), it) }
     }
 
     private fun getSourceBasePath(): String = source?.basePath?.ifBlank { "/" } ?: basePath

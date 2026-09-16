@@ -55,9 +55,8 @@ object FtpSyncCoordinator {
             val source = graph.sourceRepository.getSource(serverId) ?: continue
             if (source.state == com.shelf.reader.data.local.entity.FtpSourceStateEntity.DISABLED) continue
             // Skip only a worker that is actually executing; an ENQUEUED work left in
-            // backoff is not executing and is replaced to clear the delay.
-            if (FtpSyncWorker.isExecuting(context, serverId)) continue
-            FtpSyncWorker.enqueue(context, source, androidx.work.ExistingWorkPolicy.REPLACE)
+            // backoff is replaced to clear the delay.
+            FtpSyncWorker.enqueueOrRestart(context, source)
         }
         return recovered
     }

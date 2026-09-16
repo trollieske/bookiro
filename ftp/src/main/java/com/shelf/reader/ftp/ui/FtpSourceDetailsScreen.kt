@@ -282,6 +282,7 @@ private fun StatRow(label: String, value: String) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SyncSettingsDialog(
     wifiOnly: Boolean,
@@ -314,13 +315,16 @@ private fun SyncSettingsDialog(
                     Switch(checked = charging, onCheckedChange = { charging = it })
                 }
                 Text(stringResource(R.string.ftpu_concurrency_title), style = ShelfTypography.LabelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     FilterChip(
                         selected = concurrencyValue == 0,
                         onClick = { concurrencyValue = 0 },
                         label = { Text(stringResource(R.string.ftpu_concurrency_auto), style = ShelfTypography.LabelSmall) }
                     )
-                    (1..4).forEach { value ->
+                    (1..6).forEach { value ->
                         FilterChip(
                             selected = concurrencyValue == value,
                             onClick = { concurrencyValue = value },
@@ -328,6 +332,11 @@ private fun SyncSettingsDialog(
                         )
                     }
                 }
+                Text(
+                    stringResource(R.string.ftpu_concurrency_hint),
+                    style = ShelfTypography.LabelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {

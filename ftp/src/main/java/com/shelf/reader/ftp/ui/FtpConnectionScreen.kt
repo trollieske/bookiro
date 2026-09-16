@@ -222,7 +222,7 @@ fun FtpConnectionScreen(
                     onClick = { vm.updateConcurrency(0) },
                     label = { Text(stringResource(R.string.ftpu_concurrency_auto), style = ShelfTypography.LabelSmall) }
                 )
-                (1..4).forEach { value ->
+                (1..6).forEach { value ->
                     FilterChip(
                         selected = state.concurrencyOverride == value,
                         onClick = { vm.updateConcurrency(value) },
@@ -230,6 +230,11 @@ fun FtpConnectionScreen(
                     )
                 }
             }
+            Text(
+                stringResource(R.string.ftpu_concurrency_hint),
+                style = ShelfTypography.LabelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = vm::testConnection, enabled = state.testState != FtpTestState.TESTING) {

@@ -36,7 +36,7 @@ class FtpSourceDetailsViewModel(
     fun syncNow() = viewModelScope.launch(Dispatchers.IO) {
         val source = graph.sourceRepository.getSource(serverId) ?: return@launch
         graph.transferRepository.resume(serverId)
-        FtpSyncWorker.enqueue(getApplication(), source)
+        FtpSyncWorker.enqueueOrRestart(getApplication(), source)
     }
 
     fun pause() = viewModelScope.launch(Dispatchers.IO) {

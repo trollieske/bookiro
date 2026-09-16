@@ -87,7 +87,7 @@ class FtpConnectionViewModel(
     fun updateSyncEnabled(value: Boolean) { _state.value = _state.value.copy(syncEnabled = value) }
     fun updateWifiOnly(value: Boolean) { _state.value = _state.value.copy(wifiOnly = value) }
     fun updateChargingOnly(value: Boolean) { _state.value = _state.value.copy(chargingOnly = value) }
-    fun updateConcurrency(value: Int) { _state.value = _state.value.copy(concurrencyOverride = value.coerceIn(0, 4)) }
+    fun updateConcurrency(value: Int) { _state.value = _state.value.copy(concurrencyOverride = value.coerceIn(0, 6)) }
 
     fun updateProtocol(protocol: FtpProtocol) {
         val current = _state.value
