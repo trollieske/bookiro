@@ -26,4 +26,5 @@
     <string name="wdav_notif_title">WebDAV-синхронизация</string>
     <string name="wdav_notif_channel_desc">Синхронизация Nextcloud/Owncloud/WebDAV</string>
     <string name="wdav_notif_text">Ищем новые книги в облачных сервисах…</string>
+    <string name="wdav_notif_detail">Загрузка %1$s</string>
 </resources>

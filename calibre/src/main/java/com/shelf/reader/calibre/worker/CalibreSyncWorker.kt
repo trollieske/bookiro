@@ -58,6 +58,10 @@ class CalibreSyncWorker(
                 )
         }
 
+        fun cancel(context: Context, sourceId: Long) {
+            androidx.work.WorkManager.getInstance(context).cancelUniqueWork(uniqueName(sourceId))
+        }
+
         private const val RETRY_BACKOFF_MS = 30_000L
         private const val MAX_RUN_ATTEMPTS = 5
     }

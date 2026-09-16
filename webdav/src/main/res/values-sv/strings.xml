@@ -26,4 +26,5 @@
     <string name="wdav_notif_title">WebDAV-synk</string>
     <string name="wdav_notif_channel_desc">Synk av Nextcloud/Owncloud/WebDAV</string>
     <string name="wdav_notif_text">Letar efter nya böcker på molntjänster…</string>
+    <string name="wdav_notif_detail">Laddar ner %1$s</string>
 </resources>

@@ -244,4 +244,13 @@
     <string name="app_dur_ms">%1$d хв %2$d с</string>
     <string name="app_dur_s">%1$d с</string>
     <string name="app_chapter_n">Розділ %1$d</string>
+    <string name="transfers_title">Передачі</string>
+    <string name="transfers_clear_completed">Очистити завершені</string>
+    <string name="transfers_empty">Передач ще немає.</string>
+    <string name="transfers_syncing">Синхронізація</string>
+    <string name="transfers_queued">У черзі</string>
+    <string name="transfers_failed">Збій</string>
+    <string name="transfers_pause">Пауза</string>
+    <string name="transfers_resume">Продовжити</string>
+    <string name="transfers_cancel">Скасувати</string>
 </resources>

@@ -4,15 +4,26 @@ import android.net.Uri
 import jcifs.CIFSContext
 import jcifs.config.PropertyConfiguration
 import jcifs.context.BaseContext
+import jcifs.smb.NtStatus
 import jcifs.smb.NtlmPasswordAuthenticator
+import jcifs.smb.SmbAuthException
+import jcifs.smb.SmbException
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.Properties
 
 enum class SmbEntryType { FILE, FOLDER, UNKNOWN }
+
+/** Classified SMB failure so the UI can distinguish auth from network/not-found. */
+enum class SmbErrorKind { AUTH, NOT_FOUND, NETWORK, TIMEOUT, UNKNOWN }
+
+data class SmbConnectResult(val success: Boolean, val kind: SmbErrorKind? = null)
 
 data class SmbEntry(
     val name: String,
@@ -40,7 +51,27 @@ class SmbClientEngine {
         password: String,
         smbVersion: String = "AUTO",
         enableEncryption: Boolean = false
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Boolean = connectResult(
+        host = host,
+        port = port,
+        shareName = shareName,
+        domain = domain,
+        username = username,
+        password = password,
+        smbVersion = smbVersion,
+        enableEncryption = enableEncryption
+    ).success
+
+    suspend fun connectResult(
+        host: String,
+        port: Int = 445,
+        shareName: String,
+        domain: String? = null,
+        username: String,
+        password: String,
+        smbVersion: String = "AUTO",
+        enableEncryption: Boolean = false
+    ): SmbConnectResult = withContext(Dispatchers.IO) {
         try {
             val props = Properties().apply {
                 setProperty("jcifs.smb.client.minVersion", when (smbVersion) {
@@ -72,14 +103,32 @@ class SmbClientEngine {
             val testFile = SmbFile(rootUrl, baseContext)
             testFile.exists()
             connected = true
-            true
-        } catch (e: Exception) {
-            try { disconnect() } catch (_: Exception) {}
-            false
+            SmbConnectResult(success = true)
+        } catch (e: Throwable) {
+            runCatching { disconnect() }
+            SmbConnectResult(success = false, kind = classify(e))
         }
     }
 
-    suspend fun disconnect() = withContext(Dispatchers.IO) {
+    private fun classify(e: Throwable): SmbErrorKind = when (e) {
+        is SmbAuthException -> SmbErrorKind.AUTH
+        is SocketTimeoutException -> SmbErrorKind.TIMEOUT
+        is UnknownHostException, is ConnectException -> SmbErrorKind.NETWORK
+        is SmbException -> when (e.ntStatus) {
+            NtStatus.NT_STATUS_ACCESS_DENIED,
+            NtStatus.NT_STATUS_LOGON_FAILURE -> SmbErrorKind.AUTH
+            NtStatus.NT_STATUS_BAD_NETWORK_NAME,
+            NtStatus.NT_STATUS_OBJECT_NAME_NOT_FOUND,
+            NtStatus.NT_STATUS_OBJECT_PATH_NOT_FOUND -> SmbErrorKind.NOT_FOUND
+            else -> SmbErrorKind.UNKNOWN
+        }
+        else -> SmbErrorKind.UNKNOWN
+    }
+
+    suspend fun disconnect() = withContext(Dispatchers.IO) { closeNow() }
+
+    /** Synchronous cleanup for callers that cannot suspend (e.g. ViewModel.onCleared). */
+    fun closeNow() {
         connected = false
         rootUrl = null
         baseContext = null
@@ -131,7 +180,7 @@ class SmbClientEngine {
      * has been received. SMB input streams do not expose a reliable byte offset
      * in this stack, so a restart is used rather than pretending to resume.
      */
-    suspend fun downloadFile(remotePath: String, localFile: File, onProgress: (Long, Long) -> Unit = { _, _ -> }): Long = withContext(Dispatchers.IO) {
+    suspend fun downloadFile(remotePath: String, localFile: File, onProgress: suspend (Long, Long) -> Unit = { _, _ -> }): Long = withContext(Dispatchers.IO) {
         val ctx = baseContext ?: return@withContext -1L
         try {
             localFile.parentFile?.mkdirs()

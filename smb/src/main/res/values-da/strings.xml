@@ -27,4 +27,5 @@
     <string name="smbu_notif_title">SMB-synkronisering</string>
     <string name="smbu_notif_channel_desc">SMB/Windows-fildeling synkronisering</string>
     <string name="smbu_notif_text">Leder efter nye bøger på netværksdrev…</string>
+    <string name="smbu_notif_detail">Downloader %1$s</string>
 </resources>

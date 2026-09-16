@@ -27,4 +27,5 @@
     <string name="smbu_notif_title">SMB-Sync</string>
     <string name="smbu_notif_channel_desc">SMB/Windows-Freigaben-Sync</string>
     <string name="smbu_notif_text">Suche nach neuen Büchern auf Netzlaufwerken…</string>
+    <string name="smbu_notif_detail">%1$s wird heruntergeladen</string>
 </resources>

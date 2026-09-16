@@ -25,6 +25,11 @@ import javax.net.ssl.X509TrustManager
 
 private const val TAG_WEBDAV_ENGINE = "WebdavClientEngine"
 
+/** Classified WebDAV failure so the UI can translate a precise state. */
+enum class WebdavErrorKind { AUTH, FORBIDDEN, NOT_FOUND, SERVER, NETWORK, TIMEOUT, UNKNOWN }
+
+data class WebdavConnectResult(val success: Boolean, val kind: WebdavErrorKind? = null)
+
 enum class WebdavEntryType { FILE, FOLDER, UNKNOWN }
 
 data class WebdavEntry(
@@ -56,14 +61,34 @@ class WebdavClientEngine {
         authType: String = "BASIC",
         trustAllCertificates: Boolean = false,
         userAgent: String? = null
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Boolean = connectResult(
+        baseUrl = baseUrl,
+        username = username,
+        password = password,
+        bearerToken = bearerToken,
+        authType = authType,
+        trustAllCertificates = trustAllCertificates,
+        userAgent = userAgent
+    ).success
+
+    suspend fun connectResult(
+        baseUrl: String,
+        username: String,
+        password: String? = null,
+        bearerToken: String? = null,
+        authType: String = "BASIC",
+        trustAllCertificates: Boolean = false,
+        userAgent: String? = null
+    ): WebdavConnectResult = withContext(Dispatchers.IO) {
         try {
             val trustAll = trustAllCertificates
             val builder = OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
-                .followRedirects(true)
+                // Redirects are followed manually so Authorization never crosses origins.
+                .followRedirects(false)
+                .followSslRedirects(false)
 
             if (userAgent != null) {
                 builder.addInterceptor { chain ->
@@ -74,11 +99,10 @@ class WebdavClientEngine {
             if (trustAll) {
                 val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
                     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                        Log.w(TAG_WEBDAV_ENGINE, "Trust-all: godtar klientsertifikat ${chain?.size ?: 0} stk (authType=$authType). Ikke anbefalt i produksjon.")
+                        Log.w(TAG_WEBDAV_ENGINE, "Trust-all enabled by the user (client certificate, authType=$authType)")
                     }
                     override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                        val subject = chain?.firstOrNull()?.subjectX500Principal?.name?.take(120) ?: "ukjent"
-                        Log.w(TAG_WEBDAV_ENGINE, "Trust-all: godtar tjener-sertifikat: $subject (authType=$authType). Ikke anbefalt i produksjon — aktivert av bruker.")
+                        Log.w(TAG_WEBDAV_ENGINE, "Trust-all enabled by the user (server certificate, authType=$authType)")
                     }
                     override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
                 })
@@ -107,17 +131,40 @@ class WebdavClientEngine {
                 .build()
 
             val response = execute(client!!, request)
-            val success = response.isSuccessful || response.code == 404
+            val code = response.code
             response.close()
-            connected = success
-            success
-        } catch (_: Exception) {
+            val result = if (response.isSuccessful) {
+                WebdavConnectResult(success = true)
+            } else {
+                WebdavConnectResult(success = false, kind = classify(code))
+            }
+            connected = result.success
+            result
+        } catch (e: Throwable) {
             connected = false
-            false
+            WebdavConnectResult(success = false, kind = classifyThrowable(e))
         }
     }
 
-    suspend fun disconnect() = withContext(Dispatchers.IO) {
+    private fun classify(code: Int): WebdavErrorKind = when (code) {
+        401 -> WebdavErrorKind.AUTH
+        403 -> WebdavErrorKind.FORBIDDEN
+        404 -> WebdavErrorKind.NOT_FOUND
+        in 500..599 -> WebdavErrorKind.SERVER
+        else -> WebdavErrorKind.UNKNOWN
+    }
+
+    private fun classifyThrowable(e: Throwable): WebdavErrorKind = when (e) {
+        is java.net.SocketTimeoutException -> WebdavErrorKind.TIMEOUT
+        is java.net.UnknownHostException, is java.net.ConnectException -> WebdavErrorKind.NETWORK
+        is java.io.IOException -> WebdavErrorKind.NETWORK
+        else -> WebdavErrorKind.UNKNOWN
+    }
+
+    suspend fun disconnect() = withContext(Dispatchers.IO) { closeNow() }
+
+    /** Synchronous cleanup for callers that cannot suspend (e.g. ViewModel.onCleared). */
+    fun closeNow() {
         connected = false
         authHeader = null
         baseUrl = null
@@ -201,7 +248,7 @@ class WebdavClientEngine {
     suspend fun downloadFile(
         remotePath: String,
         localFile: File,
-        onProgress: (Long, Long) -> Unit = { _, _ -> }
+        onProgress: suspend (Long, Long) -> Unit = { _, _ -> }
     ): Long = withContext(Dispatchers.IO) {
         val httpClient = client ?: return@withContext -1L
         try {

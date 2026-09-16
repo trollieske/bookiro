@@ -244,4 +244,13 @@
     <string name="app_dur_ms">%1$d мин %2$d с</string>
     <string name="app_dur_s">%1$d с</string>
     <string name="app_chapter_n">Глава %1$d</string>
+    <string name="transfers_title">Передачи</string>
+    <string name="transfers_clear_completed">Очистить завершённые</string>
+    <string name="transfers_empty">Передач пока нет.</string>
+    <string name="transfers_syncing">Синхронизация</string>
+    <string name="transfers_queued">В очереди</string>
+    <string name="transfers_failed">Ошибка</string>
+    <string name="transfers_pause">Пауза</string>
+    <string name="transfers_resume">Продолжить</string>
+    <string name="transfers_cancel">Отмена</string>
 </resources>

@@ -87,6 +87,13 @@ class Converters {
         value?.let { SmbAuthTypeEntity.valueOf(it) }
 
     @TypeConverter
+    fun remoteSourceStateToString(value: RemoteSourceStateEntity?): String? = value?.name
+
+    @TypeConverter
+    fun stringToRemoteSourceState(value: String?): RemoteSourceStateEntity? =
+        value?.let { runCatching { RemoteSourceStateEntity.valueOf(it) }.getOrNull() }
+
+    @TypeConverter
     fun webdavAuthTypeToString(value: WebdavAuthTypeEntity?): String? = value?.name
 
     @TypeConverter

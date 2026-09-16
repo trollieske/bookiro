@@ -27,4 +27,5 @@
     <string name="smbu_notif_title">Synchro SMB</string>
     <string name="smbu_notif_channel_desc">Synchronisation du partage SMB/Windows</string>
     <string name="smbu_notif_text">Recherche de nouveaux livres sur les lecteurs réseau…</string>
+    <string name="smbu_notif_detail">Téléchargement de %1$s</string>
 </resources>

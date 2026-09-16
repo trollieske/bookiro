@@ -5,6 +5,9 @@ import androidx.room.*
 enum class SmbVersionEntity { SMB1, SMB2, SMB3, AUTO }
 enum class SmbAuthTypeEntity { NTLM, KERBEROS, GUEST }
 
+/** Lifecycle state shared by the durable SMB/WebDAV sources. */
+enum class RemoteSourceStateEntity { ACTIVE, DISABLED, NEEDS_AUTH, CONNECTION_ERROR }
+
 @Entity(tableName = "smb_servers")
 data class SmbServerEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
@@ -37,6 +40,11 @@ data class SmbServerEntity(
     @ColumnInfo(name = "sync_last_check_at") val syncLastCheckAt: Long? = null,
 
     @ColumnInfo(name = "last_connected_at") val lastConnectedAt: Long? = null,
+    @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
+    @ColumnInfo(name = "state") val state: RemoteSourceStateEntity = RemoteSourceStateEntity.ACTIVE,
+    @ColumnInfo(name = "last_error") val lastError: String? = null,
+    @ColumnInfo(name = "concurrency_override") val concurrencyOverride: Int = 0,
+    @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
@@ -79,6 +87,11 @@ data class WebdavServerEntity(
     @ColumnInfo(name = "sync_last_check_at") val syncLastCheckAt: Long? = null,
 
     @ColumnInfo(name = "last_connected_at") val lastConnectedAt: Long? = null,
+    @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
+    @ColumnInfo(name = "state") val state: RemoteSourceStateEntity = RemoteSourceStateEntity.ACTIVE,
+    @ColumnInfo(name = "last_error") val lastError: String? = null,
+    @ColumnInfo(name = "concurrency_override") val concurrencyOverride: Int = 0,
+    @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()

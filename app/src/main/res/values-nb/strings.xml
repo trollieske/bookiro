@@ -244,4 +244,13 @@
     <string name="app_dur_ms">%1$d min %2$d sek</string>
     <string name="app_dur_s">%1$d sek</string>
     <string name="app_chapter_n">Kapittel %1$d</string>
+    <string name="transfers_title">Overføringer</string>
+    <string name="transfers_clear_completed">Fjern fullførte</string>
+    <string name="transfers_empty">Ingen overføringer ennå.</string>
+    <string name="transfers_syncing">Synkroniserer</string>
+    <string name="transfers_queued">I kø</string>
+    <string name="transfers_failed">Feilet</string>
+    <string name="transfers_pause">Pause</string>
+    <string name="transfers_resume">Fortsett</string>
+    <string name="transfers_cancel">Avbryt</string>
 </resources>

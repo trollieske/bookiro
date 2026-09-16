@@ -2,6 +2,7 @@ package com.shelf.reader.data.local.dao
 
 import androidx.room.*
 import com.shelf.reader.data.local.entity.*
+import com.shelf.reader.data.transfer.SourceCounts
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -313,6 +314,44 @@ interface DownloadTaskDao {
 
     @Query("DELETE FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref")
     suspend fun deleteForSource(kind: String, ref: String)
+
+    @Query(
+        "UPDATE download_tasks SET status = 'QUEUED', error_message = NULL, error_kind = NULL, " +
+            "next_attempt_at = NULL, updated_at = :now " +
+            "WHERE source_kind = :kind AND source_ref = :ref AND status IN ('RUNNING','VERIFYING','IMPORTING')"
+    )
+    suspend fun rehydrateActiveForSource(kind: String, ref: String, now: Long = System.currentTimeMillis()): Int
+
+    @Query(
+        "UPDATE download_tasks SET status = CASE WHEN :paused = 1 THEN 'PAUSED_BY_USER' ELSE 'QUEUED' END, updated_at = :now " +
+            "WHERE source_kind = :kind AND source_ref = :ref AND status IN " +
+            "('QUEUED','PENDING','RUNNING','VERIFYING','IMPORTING','RETRYING','WAITING_FOR_NETWORK','PAUSED','PAUSED_BY_USER')"
+    )
+    suspend fun setPausedForSource(kind: String, ref: String, paused: Boolean, now: Long = System.currentTimeMillis())
+
+    @Query(
+        "SELECT COUNT(*) AS total, " +
+            "IFNULL(SUM(CASE WHEN status IN ('QUEUED','PENDING') THEN 1 ELSE 0 END), 0) AS queued, " +
+            "IFNULL(SUM(CASE WHEN status IN ('RUNNING','VERIFYING','IMPORTING') THEN 1 ELSE 0 END), 0) AS running, " +
+            "IFNULL(SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS completed, " +
+            "IFNULL(SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed, " +
+            "IFNULL(SUM(CASE WHEN status IN ('PAUSED','PAUSED_BY_USER') THEN 1 ELSE 0 END), 0) AS paused, " +
+            "IFNULL(SUM(CASE WHEN status IN ('RETRYING','WAITING_FOR_NETWORK') THEN 1 ELSE 0 END), 0) AS retrying " +
+            "FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref"
+    )
+    suspend fun countsForSource(kind: String, ref: String): TransferCounts
+
+    @Query(
+        "SELECT source_ref AS sourceRef, COUNT(*) AS total, " +
+            "IFNULL(SUM(CASE WHEN status IN ('QUEUED','PENDING') THEN 1 ELSE 0 END), 0) AS queued, " +
+            "IFNULL(SUM(CASE WHEN status IN ('RUNNING','VERIFYING','IMPORTING') THEN 1 ELSE 0 END), 0) AS running, " +
+            "IFNULL(SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS completed, " +
+            "IFNULL(SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed, " +
+            "IFNULL(SUM(CASE WHEN status IN ('PAUSED','PAUSED_BY_USER') THEN 1 ELSE 0 END), 0) AS paused, " +
+            "IFNULL(SUM(CASE WHEN status IN ('RETRYING','WAITING_FOR_NETWORK') THEN 1 ELSE 0 END), 0) AS retrying " +
+            "FROM download_tasks WHERE source_kind = :kind AND source_ref IS NOT NULL GROUP BY source_ref"
+    )
+    fun observeCountsForKind(kind: String): Flow<List<SourceCounts>>
 }
 
 @Dao

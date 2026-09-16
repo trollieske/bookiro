@@ -404,4 +404,67 @@ class FakeDownloadTaskDao : DownloadTaskDao {
         rows.entries.removeIf { it.value.sourceKind == kind && it.value.sourceRef == ref }
         publish()
     }
+
+    override suspend fun rehydrateActiveForSource(kind: String, ref: String, now: Long): Int {
+        var count = 0
+        rows.values
+            .filter { it.sourceKind == kind && it.sourceRef == ref }
+            .forEach { task ->
+                if (task.status == DownloadStatusEntity.RUNNING || task.status == DownloadStatusEntity.VERIFYING ||
+                    task.status == DownloadStatusEntity.IMPORTING
+                ) {
+                    rows[task.id] = task.copy(status = DownloadStatusEntity.QUEUED)
+                    count++
+                }
+            }
+        if (count > 0) publish()
+        return count
+    }
+
+    override suspend fun setPausedForSource(kind: String, ref: String, paused: Boolean, now: Long) {
+        rows.values.filter { it.sourceKind == kind && it.sourceRef == ref }.forEach { task ->
+            if (task.status in setOf(
+                    DownloadStatusEntity.QUEUED, DownloadStatusEntity.PENDING, DownloadStatusEntity.RUNNING,
+                    DownloadStatusEntity.RETRYING, DownloadStatusEntity.WAITING_FOR_NETWORK,
+                    DownloadStatusEntity.PAUSED, DownloadStatusEntity.PAUSED_BY_USER
+                )
+            ) {
+                rows[task.id] = task.copy(
+                    status = if (paused) DownloadStatusEntity.PAUSED_BY_USER else DownloadStatusEntity.QUEUED
+                )
+            }
+        }
+        publish()
+    }
+
+    override suspend fun countsForSource(kind: String, ref: String): TransferCounts {
+        val tasks = rows.values.filter { it.sourceKind == kind && it.sourceRef == ref }
+        return TransferCounts(
+            total = tasks.size,
+            queued = tasks.count { it.status == DownloadStatusEntity.QUEUED || it.status == DownloadStatusEntity.PENDING },
+            running = tasks.count { it.status.isActive },
+            completed = tasks.count { it.status == DownloadStatusEntity.COMPLETED },
+            failed = tasks.count { it.status == DownloadStatusEntity.FAILED },
+            paused = tasks.count { it.status == DownloadStatusEntity.PAUSED || it.status == DownloadStatusEntity.PAUSED_BY_USER },
+            retrying = tasks.count { it.status == DownloadStatusEntity.RETRYING || it.status == DownloadStatusEntity.WAITING_FOR_NETWORK }
+        )
+    }
+
+    override fun observeCountsForKind(kind: String): Flow<List<com.shelf.reader.data.transfer.SourceCounts>> =
+        flow.map { list ->
+            list.filter { it.sourceKind == kind && it.sourceRef != null }
+                .groupBy { it.sourceRef!! }
+                .map { (ref, tasks) ->
+                    com.shelf.reader.data.transfer.SourceCounts(
+                        sourceRef = ref,
+                        total = tasks.size,
+                        queued = tasks.count { it.status == DownloadStatusEntity.QUEUED || it.status == DownloadStatusEntity.PENDING },
+                        running = tasks.count { it.status.isActive },
+                        completed = tasks.count { it.status == DownloadStatusEntity.COMPLETED },
+                        failed = tasks.count { it.status == DownloadStatusEntity.FAILED },
+                        paused = tasks.count { it.status == DownloadStatusEntity.PAUSED || it.status == DownloadStatusEntity.PAUSED_BY_USER },
+                        retrying = tasks.count { it.status == DownloadStatusEntity.RETRYING || it.status == DownloadStatusEntity.WAITING_FOR_NETWORK }
+                    )
+                }
+        }
 }

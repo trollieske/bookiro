@@ -87,16 +87,17 @@ fun WebdavScreen(
         }
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().padding(16.dp)) {
-            if (state.savedServers.isNotEmpty() && !state.isConnected) {
+            if (state.sources.isNotEmpty() && !state.isConnected) {
                 SavedWebdavServersPanel(
-                    saved = state.savedServers,
+                    saved = state.sources,
                     activeId = state.activeServerId,
                     onLoad = { vm.loadServer(it) },
                     onConnect = { vm.loadServer(it); vm.connect() },
                     onDelete = { id ->
                         vm.deleteSaved(id)
                         scope.launch { snackbarHostState.showSnackbar(ctx.getString(R.string.wdav_server_deleted)) }
-                    }
+                    },
+                    onSync = { vm.syncNow(it) }
                 )
                 Spacer(Modifier.height(16.dp))
             }
@@ -119,11 +120,11 @@ fun WebdavScreen(
 
             if (showSaveDialog) {
                 SaveServerDialog(
-                    initialName = state.savedServers.firstOrNull { it.id == state.activeServerId }?.displayName
+                    initialName = state.sources.firstOrNull { it.source.id == state.activeServerId }?.source?.displayName
                         ?: state.displayName.ifBlank { state.baseUrl },
                     onDismiss = { showSaveDialog = false },
                     onSave = { name ->
-                        vm.saveCurrentAs(name)
+                        vm.save(name)
                         showSaveDialog = false
                         scope.launch { snackbarHostState.showSnackbar(ctx.getString(R.string.wdav_saved)) }
                     }
@@ -190,17 +191,19 @@ fun WebdavScreen(
 
 @Composable
 private fun SavedWebdavServersPanel(
-    saved: List<com.shelf.reader.webdav.data.WebdavSavedServer>,
+    saved: List<com.shelf.reader.webdav.viewmodel.WebdavSourceSummary>,
     activeId: Long?,
     onLoad: (Long) -> Unit,
     onConnect: (Long) -> Unit,
-    onDelete: (Long) -> Unit
+    onDelete: (Long) -> Unit,
+    onSync: (Long) -> Unit
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(stringResource(R.string.wdav_saved_servers), style = ShelfTypography.TitleSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
-            saved.forEach { s ->
+            saved.forEach { summary ->
+                val s = summary.source
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -217,8 +220,23 @@ private fun SavedWebdavServersPanel(
                             style = ShelfTypography.BodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        val active = summary.counts.running + summary.counts.queued + summary.counts.retrying
+                        if (active > 0 || summary.counts.failed > 0) {
+                            Text(
+                                "${summary.counts.running} / ${summary.counts.total} · " +
+                                    (if (summary.counts.failed > 0) "${summary.counts.failed} feilet" else "${summary.counts.queued} i kø"),
+                                style = ShelfTypography.BodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        s.lastError?.let {
+                            Text(it, style = ShelfTypography.BodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                     }
                     Row {
+                        IconButton(onClick = { onSync(s.id) }) {
+                            Icon(Icons.Default.Sync, stringResource(R.string.wdav_sync_folder), tint = MaterialTheme.colorScheme.primary)
+                        }
                         IconButton(onClick = { onConnect(s.id) }) {
                             Icon(Icons.Default.PowerSettingsNew, "Koble til", tint = MaterialTheme.colorScheme.primary)
                         }

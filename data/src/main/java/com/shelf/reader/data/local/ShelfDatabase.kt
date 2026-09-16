@@ -36,7 +36,7 @@ import com.shelf.reader.data.local.entity.*
         PodcastPlaybackEntity::class,
         PodcastDownloadEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -211,6 +211,24 @@ abstract class ShelfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v10 -> v11: makes SMB and WebDAV durable sources.
+         *
+         * Purely additive columns. Existing rows become ACTIVE with no error;
+         * `is_active`, credentials and sync settings are untouched.
+         */
+        val MIGRATION_10_11: androidx.room.migration.Migration = object : androidx.room.migration.Migration(10, 11) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                for (table in listOf("smb_servers", "webdav_servers")) {
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `last_sync_at` INTEGER")
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `state` TEXT NOT NULL DEFAULT 'ACTIVE'")
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `last_error` TEXT")
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `concurrency_override` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `charging_only` INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+        }
+
         @Volatile
         private var INSTANCE: ShelfDatabase? = null
 
@@ -226,7 +244,7 @@ abstract class ShelfDatabase : RoomDatabase() {
                 ShelfDatabase::class.java,
                 DB_NAME
             )
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .fallbackToDestructiveMigration()
             val db = runCatching {
                 base

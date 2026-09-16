@@ -27,4 +27,5 @@
     <string name="smbu_notif_title">SMB sync</string>
     <string name="smbu_notif_channel_desc">SMB/Windows file share sync</string>
     <string name="smbu_notif_text">Looking for new books on network drives…</string>
+    <string name="smbu_notif_detail">Downloading %1$s</string>
 </resources>

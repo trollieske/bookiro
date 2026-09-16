@@ -27,4 +27,5 @@
     <string name="smbu_notif_title">SMB-синхронізація</string>
     <string name="smbu_notif_channel_desc">Синхронізація спільних папок SMB/Windows</string>
     <string name="smbu_notif_text">Шукаємо нові книги на мережевих дисках…</string>
+    <string name="smbu_notif_detail">Завантаження %1$s</string>
 </resources>

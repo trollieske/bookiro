@@ -68,6 +68,7 @@ import com.shelf.reader.ftp.ui.FtpConnectionScreen
 import com.shelf.reader.ftp.ui.FtpSourceDetailsScreen
 import com.shelf.reader.ftp.ui.FtpSourcesScreen
 import com.shelf.reader.ftp.ui.FtpTransfersScreen
+import com.shelf.reader.app.ui.RemoteTransfersScreen
 import com.shelf.reader.smb.ui.SmbScreen
 import com.shelf.reader.webdav.ui.WebdavScreen
 import com.shelf.reader.calibre.ui.CalibreBrowserScreen
@@ -454,7 +455,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 )
             }
             composable(ShelfDestinations.Transfers.route) {
-                FtpTransfersScreen(onBack = { navController.popBackStack() })
+                RemoteTransfersScreen(onBack = { navController.popBackStack() })
             }
             composable(ShelfDestinations.Smb.route) {
                 SmbScreen(

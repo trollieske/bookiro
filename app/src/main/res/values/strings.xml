@@ -244,4 +244,13 @@
     <string name="app_dur_ms">%1$d min %2$d s</string>
     <string name="app_dur_s">%1$d s</string>
     <string name="app_chapter_n">Chapter %1$d</string>
+    <string name="transfers_title">Transfers</string>
+    <string name="transfers_clear_completed">Clear completed</string>
+    <string name="transfers_empty">No transfers yet.</string>
+    <string name="transfers_syncing">Syncing</string>
+    <string name="transfers_queued">Queued</string>
+    <string name="transfers_failed">Failed</string>
+    <string name="transfers_pause">Pause</string>
+    <string name="transfers_resume">Resume</string>
+    <string name="transfers_cancel">Cancel</string>
 </resources>

@@ -398,21 +398,26 @@ list. This section is a summary and may lag slightly.
 | Generic OPDS + known catalogs removed | done |
 | Calibre Content Server module | done (JVM-tested; live-server smoke pending) |
 | Torrent identity/TLS/private-flag diagnostics | done (JVM-tested; native smoke pending) |
-| WebDAV parser/redirect/staging hardening | done (JVM-tested) |
-| SMB browser + staging hardening | done (not integration-tested here) |
-| SMB/WebDAV durable WorkManager transfer | **not done** — still ViewModel-owned |
-| SMB/WebDAV credentials in Room + Keystore | **not done** — still EncryptedSharedPreferences (plaintext fallback removed) |
-| Unified Transfers UI for all sources | **partial** — FTP + Calibre observe Room; SMB/WebDAV do not |
+| SMB durable source + WorkManager transfer | done (not integration-tested here) |
+| WebDAV durable source + range resume | done (not integration-tested here) |
+| SMB/WebDAV credentials in Room + Keystore | done |
+| Unified Transfers UI for all sources | done |
 | Docker fixtures + integration docs | defined; not executed in this environment |
 | Release checklist | done |
-| README update | pending |
+| README update | done |
 
-Anything not marked `done` must not be described as finished in the README or
-release notes. Known external limits are listed in
-`docs/source-release-checklist.md`.
+All four remote file sources (FTP, SMB, WebDAV, Calibre) now follow the same
+contract: Room is the source of truth, credentials are Keystore ciphertext,
+transfers run in a per-source foreground worker, and the UI only observes data.
 
-The biggest remaining gap is that SMB and WebDAV transfers are still owned by
-their ViewModels (the original root cause R1–R3 from
-`ftp-sync-architecture.md`). The shared `download_tasks` queue (`source_kind`,
-`source_ref`) and the WebDAV/SMB engines were hardened so the follow-up can move
-them to WorkManager without a schema change, but that move itself is not done.
+Remaining work is verification rather than architecture:
+
+* run `fixtures/docker-compose.yml` on a machine with Docker and execute the
+  SMB/WebDAV/Calibre integration matrix in `docs/source-test-fixtures.md`;
+* smoke-test the torrent native session and its private-flag behaviour on a
+  physical device / emulator;
+* optionally migrate the legacy FTP `FtpCredentialCipher` and the Calibre
+  transfer repository onto the shared `RemoteTransferRepository` for one
+  implementation instead of two.
+
+Known external limits are listed in `docs/source-release-checklist.md`.
