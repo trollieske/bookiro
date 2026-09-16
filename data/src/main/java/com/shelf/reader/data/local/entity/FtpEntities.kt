@@ -7,6 +7,42 @@ enum class FtpModeEntity { PASSIVE, ACTIVE }
 enum class SyncIntervalEntity { MANUAL, MIN_15, HOUR_1, HOUR_6, DAILY, ON_APP_OPEN }
 enum class ConnectionSecurityEntity { EXPLICIT_TLS, IMPLICIT_TLS, NONE }
 
+/**
+ * Lifecycle state of a stored FTP/FTPS/SFTP source.
+ *
+ * A connection failure must never delete the source or its credentials; it only
+ * moves the source into [NEEDS_AUTH] or [CONNECTION_ERROR] so the UI can offer
+ * an explicit retry / sign-in instead of an empty login form.
+ */
+enum class FtpSourceStateEntity { ACTIVE, DISABLED, NEEDS_AUTH, CONNECTION_ERROR }
+
+/**
+ * Authoritative per-file transfer state. `PENDING` and `PAUSED` are legacy
+ * values kept for rows written by older builds; new code always writes the
+ * explicit states below.
+ */
+enum class DownloadStatusEntity {
+    /** Legacy alias for [QUEUED]; tolerated on read only. */
+    PENDING,
+    /** Legacy alias for [PAUSED_BY_USER]; tolerated on read only. */
+    PAUSED,
+    QUEUED,
+    RUNNING,
+    PAUSED_BY_USER,
+    WAITING_FOR_NETWORK,
+    RETRYING,
+    VERIFYING,
+    IMPORTING,
+    COMPLETED,
+    FAILED,
+    CANCELLED;
+
+    val isTerminal: Boolean get() = this == COMPLETED || this == CANCELLED
+    val isActive: Boolean
+        get() = this == RUNNING || this == VERIFYING || this == IMPORTING || this == RETRYING
+    val isRunnable: Boolean get() = this == QUEUED || this == PENDING
+}
+
 @Entity(tableName = "ftp_servers")
 data class FtpServerEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
@@ -40,6 +76,16 @@ data class FtpServerEntity(
 
     @ColumnInfo(name = "last_connected_at") val lastConnectedAt: Long? = null,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
+
+    /** Lifecycle state; see [FtpSourceStateEntity]. Never a replacement for [isActive]. */
+    @ColumnInfo(name = "state") val state: FtpSourceStateEntity = FtpSourceStateEntity.ACTIVE,
+    /** Masked, human-readable last error. Must never contain credentials or full remote paths. */
+    @ColumnInfo(name = "last_error") val lastError: String? = null,
+    /** 0 = Auto (transport default). Otherwise a user-pinned lane count. */
+    @ColumnInfo(name = "concurrency_override") val concurrencyOverride: Int = 0,
+    @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,
+    @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
+
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
 )
@@ -49,7 +95,11 @@ data class FtpServerEntity(
     foreignKeys = [
         ForeignKey(entity = FtpServerEntity::class, parentColumns = ["id"], childColumns = ["server_id"], onDelete = ForeignKey.SET_NULL)
     ],
-    indices = [Index("server_id")]
+    indices = [
+        Index("server_id"),
+        Index("status"),
+        Index(value = ["server_id", "remote_path"], unique = true)
+    ]
 )
 data class DownloadTaskEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
@@ -72,10 +122,22 @@ data class DownloadTaskEntity(
 
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "started_at") val startedAt: Long? = null,
-    @ColumnInfo(name = "completed_at") val completedAt: Long? = null
-)
+    @ColumnInfo(name = "completed_at") val completedAt: Long? = null,
 
-enum class DownloadStatusEntity { PENDING, RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED }
+    /** Remote size/mtime captured at enqueue time; used for resume validation. */
+    @ColumnInfo(name = "remote_mtime") val remoteMtime: Long = 0L,
+    /** Explicit staging path (`<local_path>.part`); null until a lane starts. */
+    @ColumnInfo(name = "staging_path") val stagingPath: String? = null,
+    /** Last time bytes/status were flushed; drives progress rate limiting. */
+    @ColumnInfo(name = "last_progress_at") val lastProgressAt: Long? = null,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    /** Classified failure kind ("auth", "network", "storage", "verify", …). */
+    @ColumnInfo(name = "error_kind") val errorKind: String? = null,
+    /** Per-file observed speed, bytes/s, flushed with progress. */
+    @ColumnInfo(name = "bytes_per_sec") val bytesPerSec: Long = 0L,
+    /** Earliest time a RETRYING task may run again (exponential backoff). */
+    @ColumnInfo(name = "next_attempt_at") val nextAttemptAt: Long? = null
+)
 
 @Entity(
     tableName = "cached_paths",
@@ -108,4 +170,15 @@ data class SyncHistoryEntity(
     @ColumnInfo(name = "files_failed") val filesFailed: Int = 0,
     @ColumnInfo(name = "status") val status: DownloadStatusEntity = DownloadStatusEntity.PENDING,
     @ColumnInfo(name = "error_message") val errorMessage: String? = null
+)
+
+/** Aggregate queue counters used by the notification and Transfers screen. */
+data class TransferCounts(
+    val total: Int = 0,
+    val queued: Int = 0,
+    val running: Int = 0,
+    val completed: Int = 0,
+    val failed: Int = 0,
+    val paused: Int = 0,
+    val retrying: Int = 0
 )

@@ -35,7 +35,7 @@ import com.shelf.reader.data.local.entity.*
         PodcastPlaybackEntity::class,
         PodcastDownloadEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -122,6 +122,43 @@ abstract class ShelfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 -> v8: makes the FTP/FTPS/SFTP sync engine durable.
+         *
+         * Purely additive columns plus two indices. No existing column is
+         * dropped or renamed, so previously imported books are untouched.
+         * The `download_tasks` unique index is created only after pre-existing
+         * duplicate `(server_id, remote_path)` rows are collapsed.
+         */
+        val MIGRATION_7_8: androidx.room.migration.Migration = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `state` TEXT NOT NULL DEFAULT 'ACTIVE'")
+                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `last_error` TEXT")
+                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `concurrency_override` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `charging_only` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `last_sync_at` INTEGER")
+
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `remote_mtime` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `staging_path` TEXT")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `last_progress_at` INTEGER")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `error_kind` TEXT")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `bytes_per_sec` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `next_attempt_at` INTEGER")
+
+                // Collapse legacy duplicates before the unique index is created.
+                db.execSQL(
+                    "DELETE FROM `download_tasks` WHERE `id` NOT IN " +
+                        "(SELECT MIN(`id`) FROM `download_tasks` GROUP BY `server_id`, `remote_path`)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_download_tasks_status` ON `download_tasks` (`status`)")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_download_tasks_server_id_remote_path` " +
+                        "ON `download_tasks` (`server_id`, `remote_path`)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: ShelfDatabase? = null
 
@@ -137,7 +174,7 @@ abstract class ShelfDatabase : RoomDatabase() {
                 ShelfDatabase::class.java,
                 DB_NAME
             )
-                .addMigrations(MIGRATION_6_7)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
             val db = runCatching {
                 base
