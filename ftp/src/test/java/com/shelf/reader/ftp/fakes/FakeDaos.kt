@@ -138,6 +138,9 @@ class FakeDownloadTaskDao : DownloadTaskDao {
     override suspend fun getByRemote(serverId: Long, remotePath: String): DownloadTaskEntity? =
         rows.values.firstOrNull { it.serverId == serverId && it.remotePath == remotePath }
 
+    override suspend fun importingForServer(serverId: Long): List<DownloadTaskEntity> =
+        rows.values.filter { it.serverId == serverId && it.status == DownloadStatusEntity.IMPORTING }
+
     override suspend fun getNextPending(): DownloadTaskEntity? =
         rows.values.filter { it.status == DownloadStatusEntity.PENDING }.minByOrNull { it.createdAt }
 

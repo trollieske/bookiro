@@ -59,6 +59,7 @@ class FtpTransferEngine(
     private val runtime: FtpTransferRuntime,
     private val transportProvider: () -> TransportType,
     private val onUpdate: suspend () -> Unit,
+    private val powerProvider: () -> Boolean = { false },
     private val clock: () -> Long = System::currentTimeMillis,
     private val maxRetries: Int = DEFAULT_MAX_RETRIES
 ) {
@@ -77,7 +78,8 @@ class FtpTransferEngine(
 
         val policy = TransferPolicyResolver.resolve(
             transport = transportProvider(),
-            userOverride = source.concurrencyOverride
+            userOverride = source.concurrencyOverride,
+            powered = powerProvider()
         )
 
         val completed = AtomicInteger(0)
@@ -86,8 +88,19 @@ class FtpTransferEngine(
         val authFailed = AtomicBoolean(false)
         val storageFull = AtomicBoolean(false)
         val connectionFailures = AtomicInteger(0)
+        val downloadsDone = AtomicBoolean(false)
 
         coroutineScope {
+            // Imports run off the download lanes: lanes only fetch + verify + atomically
+            // move files, and one importer batches them per folder. This keeps the
+            // network lanes busy and avoids the library layer's per-file full scan.
+            val importJob = launch(Dispatchers.IO) {
+                importLoop(serverId, source, downloadsDone, isStopped)
+                if (!isStopped()) {
+                    runCatching { importer.consolidateFragmentedAudiobooks() }
+                }
+            }
+
             val lanes = (0 until policy.concurrency).map {
                 launch(Dispatchers.IO) {
                     var client: RemoteFileClient? = null
@@ -166,6 +179,8 @@ class FtpTransferEngine(
                 }
             }
             lanes.joinAll()
+            downloadsDone.set(true)
+            importJob.join()
         }
 
         runtime.clearServer(serverId)
@@ -200,7 +215,7 @@ class FtpTransferEngine(
 
         // Already fully present (e.g. reset row or previous completed run).
         if (finalFile.exists() && (expectedSize <= 0L || finalFile.length() == expectedSize)) {
-            return finishAndImport(task, finalFile)
+            return handOffToImport(task)
         }
         if (finalFile.exists() && expectedSize > 0L && finalFile.length() != expectedSize) {
             finalFile.delete()
@@ -270,7 +285,7 @@ class FtpTransferEngine(
                 transferRepository.fail(task.id, "Downloaded file is empty", "verify")
                 return FileOutcome.FAILED
             }
-            return finishAndImport(task, finalFile)
+            return handOffToImport(task)
         } catch (e: kotlinx.coroutines.CancellationException) {
             flushProgress(task.id, latestBytes)
             runtime.remove(task.id)
@@ -300,24 +315,64 @@ class FtpTransferEngine(
         }
     }
 
-    private suspend fun finishAndImport(task: DownloadTaskEntity, finalFile: File): FileOutcome {
+    private suspend fun handOffToImport(task: DownloadTaskEntity): FileOutcome {
         transferRepository.transition(task.id, DownloadStatusEntity.VERIFYING)
         transferRepository.transition(task.id, DownloadStatusEntity.IMPORTING)
-        if (!task.autoImport) {
-            transferRepository.markCompleted(task.id, null)
-            runtime.remove(task.id)
-            return FileOutcome.COMPLETED
-        }
-        val existingBookId = importer.findImportedBookId(finalFile.absolutePath)
-        val bookId = existingBookId ?: importer.import(finalFile, task.serverId ?: 0L, task.remotePath)
-        if (bookId == null) {
-            transferRepository.fail(task.id, "Import failed", "import")
-            runtime.remove(task.id)
-            return FileOutcome.FAILED
-        }
-        transferRepository.markCompleted(task.id, bookId)
         runtime.remove(task.id)
         return FileOutcome.COMPLETED
+    }
+
+    /**
+     * Single importer coroutine. It batches all IMPORTING rows of a server by
+     * parent folder so one audiobook folder becomes one library call instead of
+     * one per track. Download lanes are never blocked by this.
+     */
+    private suspend fun importLoop(
+        serverId: Long,
+        source: FtpSource,
+        downloadsDone: AtomicBoolean,
+        isStopped: () -> Boolean
+    ) {
+        while (!isStopped()) {
+            val pending = transferRepository.importing(serverId)
+            if (pending.isNotEmpty()) {
+                importPending(source, pending)
+            } else if (downloadsDone.get()) {
+                break
+            } else {
+                delay(IMPORT_POLL_MS)
+            }
+        }
+        val remaining = transferRepository.importing(serverId)
+        if (remaining.isNotEmpty()) importPending(source, remaining)
+    }
+
+    private suspend fun importPending(source: FtpSource, tasks: List<DownloadTaskEntity>) {
+        val groups = tasks
+            .filter { it.localPath != null }
+            .groupBy { File(it.localPath!!).parentFile?.absolutePath ?: it.localPath!! }
+
+        for ((_, group) in groups) {
+            if (!group.first().autoImport) {
+                group.forEach { runCatching { transferRepository.markCompleted(it.id, null) } }
+                continue
+            }
+            val files = group.mapNotNull { it.localPath }.map { File(it) }.filter { it.exists() }
+            if (files.isEmpty()) {
+                group.forEach { runCatching { transferRepository.fail(it.id, "File missing before import", "import") } }
+                continue
+            }
+            val alreadyImported = importer.findImportedBookId(files.first().absolutePath)
+            val bookId = alreadyImported ?: runCatching {
+                importer.importBatch(files, source.id, group.first().remotePath)
+            }.getOrNull()
+            if (bookId == null) {
+                group.forEach { runCatching { transferRepository.fail(it.id, "Import failed", "import") } }
+            } else {
+                group.forEach { runCatching { transferRepository.markCompleted(it.id, bookId) } }
+            }
+        }
+        runCatching { onUpdate() }
     }
 
     private suspend fun handleFailure(task: DownloadTaskEntity, e: FtpException): FileOutcome {
@@ -367,5 +422,6 @@ class FtpTransferEngine(
         private const val MAX_CONNECTION_FAILURES = 3
         private const val BASE_BACKOFF_MS = 2_000L
         private const val MAX_BACKOFF_MS = 60_000L
+        private const val IMPORT_POLL_MS = 750L
     }
 }

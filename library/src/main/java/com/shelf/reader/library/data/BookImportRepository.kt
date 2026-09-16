@@ -90,7 +90,9 @@ class BookImportRepository(
         source: ImportSourceEntity,
         serverId: Long? = null,
         remotePath: String? = null,
-        filePathOverride: String? = null
+        filePathOverride: String? = null,
+        /** Callers that import in batches should pass false and consolidate once at the end. */
+        consolidate: Boolean = true
     ): List<Long> = withContext(dispatchers.io) {
         val insertedIds = mutableListOf<Long>()
         val audioUris = mutableListOf<Pair<Uri, String>>()
@@ -149,7 +151,7 @@ class BookImportRepository(
             }
         }
 
-        consolidateFragmentedAudiobooks()
+        if (consolidate) consolidateFragmentedAudiobooks()
 
         insertedIds
     }

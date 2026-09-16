@@ -127,6 +127,9 @@ interface DownloadTaskDao {
     @Query("SELECT * FROM download_tasks WHERE server_id = :serverId AND remote_path = :remotePath LIMIT 1")
     suspend fun getByRemote(serverId: Long, remotePath: String): DownloadTaskEntity?
 
+    @Query("SELECT * FROM download_tasks WHERE server_id = :serverId AND status = 'IMPORTING' ORDER BY created_at ASC")
+    suspend fun importingForServer(serverId: Long): List<DownloadTaskEntity>
+
     @Query("SELECT * FROM download_tasks WHERE status = 'PENDING' ORDER BY priority DESC, created_at ASC LIMIT 1")
     suspend fun getNextPending(): DownloadTaskEntity?
 
@@ -226,7 +229,7 @@ interface DownloadTaskDao {
 
     @Query(
         "UPDATE download_tasks SET status = CASE WHEN :paused = 1 THEN 'PAUSED_BY_USER' ELSE 'QUEUED' END, updated_at = :now " +
-            "WHERE server_id = :serverId AND status IN ('QUEUED','PENDING','RUNNING','RETRYING','WAITING_FOR_NETWORK','PAUSED','PAUSED_BY_USER')"
+            "WHERE server_id = :serverId AND status IN ('QUEUED','PENDING','RUNNING','VERIFYING','IMPORTING','RETRYING','WAITING_FOR_NETWORK','PAUSED','PAUSED_BY_USER')"
     )
     suspend fun setPausedForServer(serverId: Long, paused: Boolean, now: Long = System.currentTimeMillis())
 

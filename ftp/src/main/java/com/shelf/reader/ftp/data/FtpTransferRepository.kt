@@ -41,6 +41,9 @@ class FtpTransferRepository(
     suspend fun taskForRemote(serverId: Long, remotePath: String): DownloadTaskEntity? =
         withContext(Dispatchers.IO) { taskDao.getByRemote(serverId, remotePath) }
 
+    suspend fun importing(serverId: Long): List<DownloadTaskEntity> =
+        withContext(Dispatchers.IO) { taskDao.importingForServer(serverId) }
+
     fun downloadRoot(serverId: Long): File = downloadRootForServer(serverId)
 
     /**

@@ -19,14 +19,15 @@ class BookImportFtpImporter(
     override suspend fun findImportedBookId(localPath: String): Long? =
         runCatching { db.bookDao().getByPath(localPath)?.id }.getOrNull()
 
-    override suspend fun import(localFile: File, serverId: Long, remotePath: String): Long? =
+    override suspend fun importBatch(localFiles: List<File>, serverId: Long, remotePath: String?): Long? =
         runCatching {
             repo.importUris(
-                uris = listOf(Uri.fromFile(localFile)),
+                uris = localFiles.map { Uri.fromFile(it) },
                 source = ImportSourceEntity.FTP_DOWNLOAD,
                 serverId = serverId,
                 remotePath = remotePath,
-                filePathOverride = localFile.absolutePath
+                filePathOverride = null,
+                consolidate = false
             ).firstOrNull()
         }.getOrNull()
 
