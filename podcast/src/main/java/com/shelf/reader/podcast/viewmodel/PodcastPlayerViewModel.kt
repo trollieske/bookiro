@@ -11,10 +11,10 @@ import androidx.lifecycle.viewModelScope
 import com.shelf.reader.data.local.ShelfDatabase
 import com.shelf.reader.podcast.data.remote.NetworkStatus
 import com.shelf.reader.podcast.data.repository.PodcastRepository
+import com.shelf.reader.podcast.playback.PodcastNowPlaying
 import com.shelf.reader.podcast.playback.PodcastPlaybackLauncher
 import com.shelf.reader.podcast.playback.PodcastPlaybackService
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,20 +55,21 @@ class PodcastPlayerViewModel(
     val state: StateFlow<PodcastPlayerUiState> = _state.asStateFlow()
 
     private var service: PodcastPlaybackService? = null
-    private var tickerJob: Job? = null
+    private var nowPlayingJob: Job? = null
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val local = binder as? PodcastPlaybackService.LocalBinder
             service = local?.getService()
             _state.value = _state.value.copy(serviceBound = service != null)
-            startTicker()
+            observeNowPlaying()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            nowPlayingJob?.cancel()
+            nowPlayingJob = null
             service = null
             _state.value = _state.value.copy(serviceBound = false)
-            stopTicker()
         }
     }
 
@@ -117,30 +118,41 @@ class PodcastPlayerViewModel(
         }
     }
 
-    private fun startTicker() {
-        stopTicker()
-        tickerJob = viewModelScope.launch {
-            while (true) {
-                val svc = service ?: break
-                val remMs = svc.sleepTimerRemainingMs()
-                val sleepMinutes = if (remMs > 0L) (remMs / 60_000L).toInt().coerceAtLeast(1) else null
-                _state.value = _state.value.copy(
-                    isPlaying = svc.isPlaying(),
-                    positionMs = svc.currentPositionMs(),
-                    durationMs = svc.durationMs(),
-                    playbackSpeed = svc.playbackSpeed(),
-                    serviceBound = true,
-                    sleepTimerMinutes = sleepMinutes,
-                    sleepTimerRemainingMs = remMs
-                )
-                delay(500L)
-            }
+    /**
+     * The service owns the now-playing snapshot; the UI observes it instead of
+     * polling the binder every 500 ms.
+     */
+    private fun observeNowPlaying() {
+        val svc = service ?: return
+        nowPlayingJob?.cancel()
+        nowPlayingJob = viewModelScope.launch {
+            svc.nowPlaying.collect { np -> applyNowPlaying(np) }
         }
     }
 
-    private fun stopTicker() {
-        tickerJob?.cancel()
-        tickerJob = null
+    private fun applyNowPlaying(np: PodcastNowPlaying) {
+        if (np.episodeId <= 0L) return
+        val current = _state.value
+        // Ignore a stale snapshot from a different episode than this screen shows.
+        if (current.episodeId > 0L && np.episodeId != current.episodeId) return
+        val sleepMinutes = if (np.sleepTimerRemainingMs > 0L) {
+            (np.sleepTimerRemainingMs / 60_000L).toInt().coerceAtLeast(1)
+        } else {
+            null
+        }
+        _state.value = current.copy(
+            feedId = if (np.feedId > 0L) np.feedId else current.feedId,
+            title = np.title.ifBlank { current.title },
+            podcastTitle = np.podcastTitle.ifBlank { current.podcastTitle },
+            artworkUrl = np.artworkUrl ?: current.artworkUrl,
+            isPlaying = np.isPlaying,
+            positionMs = np.positionMs,
+            durationMs = if (np.durationMs > 0L) np.durationMs else current.durationMs,
+            playbackSpeed = np.playbackSpeed,
+            serviceBound = true,
+            sleepTimerMinutes = sleepMinutes,
+            sleepTimerRemainingMs = np.sleepTimerRemainingMs
+        )
     }
 
     fun playPause() {
@@ -177,7 +189,8 @@ class PodcastPlayerViewModel(
     }
 
     override fun onCleared() {
-        stopTicker()
+        nowPlayingJob?.cancel()
+        nowPlayingJob = null
         runCatching { getApplication<Application>().unbindService(connection) }
         service = null
         super.onCleared()

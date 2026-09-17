@@ -1,5 +1,6 @@
 package com.shelf.reader
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,9 +57,11 @@ import com.shelf.reader.library.viewmodel.LibraryMode
 import com.shelf.reader.library.ui.SampleBooks
 import com.shelf.reader.reader.ui.ReaderScreen
 import com.shelf.reader.player.ui.PlayerScreen
+import com.shelf.reader.player.service.AudiobookPlaybackService
 import com.shelf.reader.podcast.ui.PodcastDetailScreen
 import com.shelf.reader.podcast.ui.PodcastDiscoverScreen
 import com.shelf.reader.podcast.ui.PodcastPlayerScreen
+import com.shelf.reader.podcast.playback.PodcastPlaybackService
 import com.shelf.reader.podcast.ui.PodcastRootScreen
 import com.shelf.reader.podcast.ui.podcastDetailVmFactory
 import com.shelf.reader.podcast.ui.podcastDiscoverVmFactory
@@ -147,133 +151,60 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
             val isPodcastPlayerScreen = currentDestination?.route?.startsWith("podcasts/player") == true
 
             Column {
-                if (activeAudio != null && !isPlayerScreen) {
-                    val active = activeAudio!!
-                    Surface(
-                        tonalElevation = 8.dp,
-                        shadowElevation = 12.dp,
-                        color = com.shelf.reader.designsystem.theme.OmarchyColors.Panel,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                navController.navigate(ShelfDestinations.Player.routeFor(active.bookId))
-                            }
-                    ) {
-                        Column {
-                            LinearProgressIndicator(
-                                progress = { active.progressPercent },
-                                modifier = Modifier.fillMaxWidth().height(3.dp),
-                                color = com.shelf.reader.designsystem.theme.OmarchyColors.Accent,
-                                trackColor = Color(0x33FFFFFF)
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = com.shelf.reader.designsystem.theme.OmarchyColors.Hairline,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Headphones, contentDescription = null, tint = com.shelf.reader.designsystem.theme.OmarchyColors.Accent, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        active.title.ifBlank { stringResource(R.string.player_title) },
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    val subLabel = if (active.sleepTimerRemainingMs > 0L) {
-                                        val m = (active.sleepTimerRemainingMs / 60_000L).toInt().coerceAtLeast(1)
-                                        "${active.author} • ${stringResource(R.string.main_sleep_remaining, m)}"
-                                    } else {
-                                        active.author.ifBlank { stringResource(R.string.main_playing) }
-                                    }
-                                    Text(
-                                        subLabel,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = com.shelf.reader.designsystem.theme.OmarchyColors.Dim,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                IconButton(onClick = {
-                                    com.shelf.reader.data.repository.ActivePlaybackState.clear()
-                                }) {
-                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = com.shelf.reader.designsystem.theme.OmarchyColors.Dim)
-                                }
-                            }
+                val context = LocalContext.current
+                // Single now-playing slot. NowPlayingOwnership guarantees at most one
+                // engine publishes at a time; if both ever race, the playing one wins.
+                val mini = listOfNotNull(
+                    activePodcast?.takeIf { !isPodcastPlayerScreen }?.let { active ->
+                        val podSubtitle = if (active.sleepTimerRemainingMs > 0L) {
+                            val m = (active.sleepTimerRemainingMs / 60_000L).toInt().coerceAtLeast(1)
+                            "${active.podcastTitle.ifBlank { stringResource(com.shelf.reader.podcast.R.string.pod_nav_title) }} • ${stringResource(R.string.main_sleep_remaining, m)}"
+                        } else {
+                            active.podcastTitle.ifBlank { stringResource(com.shelf.reader.podcast.R.string.pod_nav_title) }
                         }
-                    }
-                }
-
-                if (activePodcast != null && !isPodcastPlayerScreen) {
-                    val active = activePodcast!!
-                    Surface(
-                        tonalElevation = 8.dp,
-                        shadowElevation = 12.dp,
-                        color = com.shelf.reader.designsystem.theme.OmarchyColors.Panel,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                navController.navigate(ShelfDestinations.PodcastPlayer.routeFor(active.episodeId))
-                            }
-                    ) {
-                        Column {
-                            LinearProgressIndicator(
-                                progress = { active.progressPercent },
-                                modifier = Modifier.fillMaxWidth().height(3.dp),
-                                color = com.shelf.reader.designsystem.theme.OmarchyColors.Accent,
-                                trackColor = Color(0x33FFFFFF)
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = com.shelf.reader.designsystem.theme.OmarchyColors.Hairline,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Podcasts, contentDescription = null, tint = com.shelf.reader.designsystem.theme.OmarchyColors.Accent, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        active.title.ifBlank { stringResource(com.shelf.reader.podcast.R.string.pod_nav_title) },
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        active.podcastTitle.ifBlank { stringResource(com.shelf.reader.podcast.R.string.pod_nav_title) },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = com.shelf.reader.designsystem.theme.OmarchyColors.Dim,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                        MiniPlayerInfo(
+                            isPlaying = active.isPlaying,
+                            title = active.title.ifBlank { stringResource(com.shelf.reader.podcast.R.string.pod_nav_title) },
+                            subtitle = podSubtitle,
+                            icon = Icons.Default.Podcasts,
+                            progress = active.progressPercent,
+                            onClick = { navController.navigate(ShelfDestinations.PodcastPlayer.routeFor(active.episodeId)) },
+                            onDismiss = {
+                                runCatching {
+                                    context.startService(
+                                        Intent(context, PodcastPlaybackService::class.java)
+                                            .setAction(PodcastPlaybackService.ACTION_STOP)
                                     )
                                 }
-                                IconButton(onClick = {
-                                    com.shelf.reader.data.repository.PodcastPlaybackState.clear()
-                                }) {
-                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = com.shelf.reader.designsystem.theme.OmarchyColors.Dim)
-                                }
                             }
+                        )
+                    },
+                    activeAudio?.takeIf { !isPlayerScreen }?.let { active ->
+                        val subLabel = if (active.sleepTimerRemainingMs > 0L) {
+                            val m = (active.sleepTimerRemainingMs / 60_000L).toInt().coerceAtLeast(1)
+                            "${active.author} • ${stringResource(R.string.main_sleep_remaining, m)}"
+                        } else {
+                            active.author.ifBlank { stringResource(R.string.main_playing) }
                         }
+                        MiniPlayerInfo(
+                            isPlaying = active.isPlaying,
+                            title = active.title.ifBlank { stringResource(R.string.player_title) },
+                            subtitle = subLabel,
+                            icon = Icons.Default.Headphones,
+                            progress = active.progressPercent,
+                            onClick = { navController.navigate(ShelfDestinations.Player.routeFor(active.bookId)) },
+                            onDismiss = {
+                                runCatching {
+                                    context.startService(
+                                        Intent(context, AudiobookPlaybackService::class.java)
+                                            .setAction(AudiobookPlaybackService.ACTION_STOP)
+                                    )
+                                }
+                            }
+                        )
                     }
-                }
+                )
+                (mini.firstOrNull { it.isPlaying } ?: mini.firstOrNull())?.let { NowPlayingBar(it) }
 
                 if (currentDestination?.route in showBottomRoutes) {
                     LaunchedEffect(currentDestination?.route) { libraryNavVisible = true }
@@ -603,6 +534,78 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onBack = { navController.popBackStack() },
                     onImport = { navController.navigate(ShelfDestinations.Import.route) }
                 )
+            }
+        }
+    }
+}
+
+private data class MiniPlayerInfo(
+    val isPlaying: Boolean,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val progress: Float,
+    val onClick: () -> Unit,
+    val onDismiss: () -> Unit
+)
+
+/** The app's single now-playing bar (audiobook or podcast). */
+@Composable
+private fun NowPlayingBar(info: MiniPlayerInfo) {
+    Surface(
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp,
+        color = OmarchyColors.Panel,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = info.onClick)
+    ) {
+        Column {
+            LinearProgressIndicator(
+                progress = { info.progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(3.dp),
+                color = OmarchyColors.Accent,
+                trackColor = Color(0x33FFFFFF)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = OmarchyColors.Hairline,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(info.icon, contentDescription = null, tint = OmarchyColors.Accent, modifier = Modifier.size(20.dp))
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        info.title,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        info.subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OmarchyColors.Dim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = info.onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.action_close),
+                        tint = OmarchyColors.Dim
+                    )
+                }
             }
         }
     }

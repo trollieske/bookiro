@@ -1,5 +1,7 @@
 package com.shelf.reader.core.playback
 
+import android.util.Log
+
 /**
  * Process-wide arbiter that keeps Shelf's two independent audio engines from
  * ever playing at the same time.
@@ -10,9 +12,13 @@ package com.shelf.reader.core.playback
  * the arbiter to stop every other registered engine.
  *
  * Registration uses a stable media-session id (e.g. "shelf_audio",
- * "shelf_podcast"). Hooks are expected to marshal to their own main thread.
+ * "shelf_podcast"). Hooks are expected to be idempotent, thread-safe, and to
+ * stop their engine **synchronously when invoked on the main thread** so the
+ * audio output is released before the new engine starts playing.
  */
 object PlaybackArbiter {
+
+    private const val TAG = "PlaybackArbiter"
 
     private val stoppers = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
 
@@ -30,12 +36,22 @@ object PlaybackArbiter {
         stoppers.remove(id)
     }
 
-    /** Stops every registered engine except [exceptId]. Safe to call from any thread. */
-    fun stopOthers(exceptId: String) {
+    /**
+     * Stops every registered engine except [exceptId]. Safe to call from any thread.
+     *
+     * @return the ids whose hook was invoked, so callers can log/verify a hand-off.
+     */
+    fun stopOthers(exceptId: String): List<String> {
+        val invoked = ArrayList<String>(stoppers.size)
         stoppers.forEach { (id, stop) ->
-            if (id != exceptId) {
-                runCatching { stop() }
+            if (id == exceptId) return@forEach
+            invoked.add(id)
+            runCatching { stop() }.onFailure { t ->
+                // A throwing stopper must never prevent the other engine from starting,
+                // but it must be visible instead of silently swallowed.
+                Log.w(TAG, "stop hook for '$id' failed", t)
             }
         }
+        return invoked
     }
 }

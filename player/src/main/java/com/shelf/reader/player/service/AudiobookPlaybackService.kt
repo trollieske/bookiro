@@ -37,12 +37,20 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.shelf.reader.data.local.ShelfDatabase
 import com.shelf.reader.data.local.entity.FormatEntity
 import com.shelf.reader.data.local.entity.ReadingProgressEntity
+import com.shelf.reader.player.AudiobookNowPlaying
 import com.shelf.reader.player.engine.AudiobookChapter
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -76,9 +84,14 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
         const val ACTION_SKIP_BACK = "com.shelf.reader.player.SKIP_BACK"
         const val ACTION_SKIP_FORWARD = "com.shelf.reader.player.SKIP_FORWARD"
+        const val ACTION_STOP = "com.shelf.reader.player.STOP"
     }
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, t ->
+            Log.e(TAG, "service coroutine failed", t)
+        }
+    )
     private var player: ExoPlayer? = null
     private var session: MediaSession? = null
     private var librarySession: MediaLibraryService.MediaLibrarySession? = null
@@ -87,6 +100,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var chapterEngine: com.shelf.reader.player.engine.AudiobookEngine? = null
     private val binder = LocalBinder()
     private var sleepTimer: android.os.CountDownTimer? = null
+
+    /** Single writer of the engine's now-playing snapshot (UI + mini-player). */
+    private val _nowPlaying = MutableStateFlow(AudiobookNowPlaying())
+    val nowPlaying: StateFlow<AudiobookNowPlaying> = _nowPlaying.asStateFlow()
+    private var progressTickerJob: Job? = null
+    private var loadWatchdogJob: Job? = null
+    private var lastProgressSaveMs = 0L
 
     inner class LocalBinder : Binder() {
         fun getService(): AudiobookPlaybackService = this@AudiobookPlaybackService
@@ -123,8 +143,12 @@ class AudiobookPlaybackService : MediaLibraryService() {
                         val startPlaying = exo.playWhenReady
                         loadBook(bookId)
                         if (startPlaying) serviceScope.launch(Dispatchers.Main) { player?.playWhenReady = true }
+                        return
                     }
                 }
+                // Chapter transition inside the same book: refresh immediately instead
+                // of waiting for the next ticker tick.
+                publishNowPlaying()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -133,13 +157,24 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 when (playbackState) {
                     Player.STATE_ENDED -> {
                         serviceScope.launch { saveProgress(1.0f) }
+                        com.shelf.reader.data.repository.ActivePlaybackState.dismiss()
                     }
                 }
+                publishNowPlaying()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 Log.d(TAG, "onIsPlayingChanged: $isPlaying")
+                if (isPlaying) {
+                    // A real playback start (play button, notification, Bluetooth, car)
+                    // owns the single audio output: stop podcasts through the arbiter.
+                    // Loading a book does NOT do this — only actually playing it does.
+                    com.shelf.reader.core.playback.PlaybackArbiter.stopOthers(
+                        com.shelf.reader.core.playback.PlaybackArbiter.ID_AUDIOBOOK
+                    )
+                }
                 maybePersistProgress()
+                publishNowPlaying()
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -355,65 +390,115 @@ class AudiobookPlaybackService : MediaLibraryService() {
         com.shelf.reader.core.playback.PlaybackArbiter.register(
             com.shelf.reader.core.playback.PlaybackArbiter.ID_AUDIOBOOK
         ) { stopForOtherMedia() }
+        ensureProgressTicker()
     }
 
     /** Called by [com.shelf.reader.core.playback.PlaybackArbiter] when podcasts take over. */
     private fun stopForOtherMedia() {
-        serviceScope.launch(Dispatchers.Main) {
+        // Runs synchronously when already on the main thread so the audio output is
+        // released before the new engine starts.
+        runOnMain {
             runCatching {
                 maybePersistProgress()
+                // Hide + suppress first, so the pause callback cannot re-publish the bar.
+                com.shelf.reader.data.repository.ActivePlaybackState.dismiss()
                 player?.pause()
                 player?.playWhenReady = false
-                com.shelf.reader.data.repository.ActivePlaybackState.clear()
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
-        // Audiobook playback takes over the single audio output: stop podcasts.
-        com.shelf.reader.core.playback.PlaybackArbiter.stopOthers(
-            com.shelf.reader.core.playback.PlaybackArbiter.ID_AUDIOBOOK
-        )
+        val action = intent?.action
+        // Always satisfy the startForegroundService() contract; the live media
+        // notification replaces this placeholder as soon as the player reports the
+        // seek / metadata change.
+        startForegroundLoading()
+
+        when (action) {
+            ACTION_STOP -> {
+                // Mini-player close: pause and hide, without tearing down the service.
+                runOnMain {
+                    maybePersistProgress()
+                    com.shelf.reader.data.repository.ActivePlaybackState.dismiss()
+                    player?.pause()
+                    player?.playWhenReady = false
+                }
+                if (player?.mediaItemCount == 0) stopForegroundAndSelf()
+            }
+            ACTION_SKIP_BACK -> player?.let { it.seekTo((it.currentPosition - SEEK_BACK_MS).coerceAtLeast(0L)) }
+            ACTION_SKIP_FORWARD -> player?.let { it.seekTo((it.currentPosition + SEEK_FORWARD_MS).coerceAtMost(it.duration.coerceAtLeast(0L))) }
+            ACTION_LOAD_BOOK -> {
+                // NOTE: audio arbitration happens when playback actually starts
+                // (onIsPlayingChanged), not on load — opening the player screen must
+                // not kill a podcast that is currently playing.
+                val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L)
+                if (bookId > 0L) {
+                    loadBook(bookId)
+                    startLoadWatchdog()
+                } else {
+                    stopForegroundAndSelf()
+                }
+            }
+            else -> {
+                // Unknown or null restart intent: do not linger with a placeholder.
+                if (player?.mediaItemCount == 0) stopForegroundAndSelf()
+            }
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    /** Foreground placeholder for the brief window before a book is prepared. */
+    private fun startForegroundLoading() {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         } else 0
-
-        val initialNotif = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+        val notif = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.ply_notif_loading))
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
             .build()
-
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, initialNotif, type)
+                startForeground(NOTIFICATION_ID, notif, type)
             } else {
-                startForeground(NOTIFICATION_ID, initialNotif)
+                startForeground(NOTIFICATION_ID, notif)
             }
         } catch (e: Exception) {
             Log.e(TAG, "startForeground failed", e)
         }
+    }
 
-        when (intent?.action) {
-            ACTION_LOAD_BOOK -> {
-                val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L)
-                if (bookId > 0) loadBook(bookId)
-            }
-            ACTION_SKIP_BACK -> {
-                val p = player
-                if (p != null) {
-                    p.seekTo((p.currentPosition - SEEK_BACK_MS).coerceAtLeast(0L))
-                }
-            }
-            ACTION_SKIP_FORWARD -> {
-                val p = player
-                if (p != null) {
-                    p.seekTo((p.currentPosition + SEEK_FORWARD_MS).coerceAtMost(p.duration.coerceAtLeast(0L)))
-                }
+    /** Removes the placeholder notification and stops the service. */
+    private fun stopForegroundAndSelf() {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
             }
         }
-        return super.onStartCommand(intent, flags, startId)
+        // Also clear a notification orphaned by a previous process kill.
+        runCatching { NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID) }
+        stopSelf()
+    }
+
+    /**
+     * Safety net: if loading never produces a playable item (missing file, bad
+     * source, exception) the "Loading\u2026" notification must not become permanent.
+     */
+    private fun startLoadWatchdog() {
+        loadWatchdogJob?.cancel()
+        loadWatchdogJob = serviceScope.launch(Dispatchers.Main) {
+            delay(20_000L)
+            val p = player
+            if (p == null || p.mediaItemCount == 0) {
+                Log.w(TAG, "load watchdog: no media item after timeout; stopping")
+                stopForegroundAndSelf()
+            }
+        }
     }
 
     private var activeChapters: List<AudiobookChapter> = emptyList()
@@ -423,10 +508,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private fun loadBook(bookId: Long) {
         currentBookId = bookId
         val p = player ?: return
-        // Audiobook playback takes over the single audio output: stop podcasts.
-        com.shelf.reader.core.playback.PlaybackArbiter.stopOthers(
-            com.shelf.reader.core.playback.PlaybackArbiter.ID_AUDIOBOOK
-        )
         serviceScope.launch {
             val db = db ?: return@launch
             val book = db.bookDao().getById(bookId) ?: return@launch
@@ -514,6 +595,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
                         p.seekTo(targetIdx, offsetMs)
                     }
                     p.prepare()
+                    loadWatchdogJob?.cancel()
+                    publishNowPlaying()
                 }
             } else if (source != null) {
                 val dur = book.durationMs ?: C.TIME_UNSET
@@ -536,6 +619,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 withContext(Dispatchers.Main) {
                     p.setMediaItem(item, (prog * (if (dur == C.TIME_UNSET) 0L else dur).toDouble()).toLong().coerceAtLeast(0L))
                     p.prepare()
+                    loadWatchdogJob?.cancel()
+                    publishNowPlaying()
                 }
             }
         }
@@ -563,6 +648,65 @@ class AudiobookPlaybackService : MediaLibraryService() {
         db?.progressDao()?.insertOrReplace(
             ReadingProgressEntity(bookId = currentBookId, progressPercent = pct)
         )
+    }
+
+    /**
+     * Single writer of both the engine snapshot and the app-wide mini-player state.
+     * Must be called on the player's main thread.
+     */
+    private fun publishNowPlaying() {
+        val p = player ?: return
+        if (currentBookId <= 0L) return
+        val pos = currentPositionMs().coerceAtLeast(0L)
+        val dur = durationMs().takeIf { it > 0L } ?: 0L
+        val remaining = sleepTimerRemainingMs()
+        val meta = p.mediaMetadata
+        val snapshot = AudiobookNowPlaying(
+            bookId = currentBookId,
+            title = meta.title?.toString() ?: "",
+            author = meta.artist?.toString() ?: "",
+            isPlaying = p.isPlaying,
+            positionMs = pos,
+            durationMs = dur,
+            playbackSpeed = p.playbackParameters.speed,
+            chapterIndex = p.currentMediaItemIndex,
+            chapters = activeChapters,
+            sleepTimerRemainingMs = remaining
+        )
+        _nowPlaying.value = snapshot
+        com.shelf.reader.data.repository.ActivePlaybackState.update(
+            bookId = snapshot.bookId,
+            title = snapshot.title,
+            author = snapshot.author,
+            isPlaying = snapshot.isPlaying,
+            progressPercent = if (dur > 0L) pos.toFloat() / dur.toFloat() else 0f,
+            sleepTimerMinutes = if (remaining > 0L) (remaining / 60_000L).toInt().coerceAtLeast(1) else null,
+            sleepTimerRemainingMs = remaining
+        )
+    }
+
+    /** Publishes position while playing; nothing changes while paused, so it idles. */
+    private fun ensureProgressTicker() {
+        if (progressTickerJob?.isActive == true) return
+        progressTickerJob = serviceScope.launch(Dispatchers.Main) {
+            while (isActive) {
+                val p = player
+                if (p != null && p.isPlaying) {
+                    publishNowPlaying()
+                    maybePersistProgressThrottled()
+                }
+                delay(500L)
+            }
+        }
+    }
+
+    /** Periodic safety net so progress survives a process kill mid-playback. */
+    private fun maybePersistProgressThrottled() {
+        val now = System.currentTimeMillis()
+        if (now - lastProgressSaveMs >= 10_000L) {
+            lastProgressSaveMs = now
+            maybePersistProgress()
+        }
     }
 
     private fun ensureChannel() {
@@ -596,6 +740,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 } else if (p.volume < 1.0f && millisUntilFinished >= 30_000L) {
                     p.volume = 1.0f
                 }
+                // Keep the mini-player countdown live even while paused.
+                publishNowPlaying()
             }
 
             override fun onFinish() {
@@ -615,9 +761,11 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 }
                 sleepTimer = null
                 sleepTimerEndTimeMs = 0L
+                publishNowPlaying()
                 Log.i(TAG, "Sleep timer expired, playback stopped.")
             }
         }.start()
+        publishNowPlaying()
     }
 
     fun cancelSleepTimer() {
@@ -625,6 +773,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         sleepTimer = null
         sleepTimerEndTimeMs = 0L
         player?.volume = 1.0f
+        publishNowPlaying()
     }
 
     fun sleepTimerRemainingMs(): Long {
@@ -640,6 +789,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         cancelSleepTimer()
+        progressTickerJob?.cancel()
+        progressTickerJob = null
+        loadWatchdogJob?.cancel()
+        loadWatchdogJob = null
+        _nowPlaying.value = AudiobookNowPlaying()
+        runCatching { NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID) }
+        com.shelf.reader.data.repository.ActivePlaybackState.dismiss()
         com.shelf.reader.core.playback.PlaybackArbiter.unregister(
             com.shelf.reader.core.playback.PlaybackArbiter.ID_AUDIOBOOK
         )
@@ -661,7 +817,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibraryService.MediaLibrarySession? = librarySession
 
-    fun currentBookId(): Long = currentBookId
     fun currentPositionMs(): Long {
         val p = player ?: return 0L
         val idx = p.currentMediaItemIndex
@@ -679,10 +834,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
         return player?.duration?.takeIf { it > 0L } ?: C.TIME_UNSET
     }
 
-    fun isPlaying(): Boolean = player?.isPlaying == true
-    fun playbackSpeed(): Float = player?.playbackParameters?.speed ?: 1f
-    fun bookTitle(): String? = session?.player?.mediaMetadata?.title?.toString()
-    fun bookAuthor(): String? = session?.player?.mediaMetadata?.artist?.toString()
     fun playPause() {
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             player?.let { it.playWhenReady = !it.playWhenReady }
@@ -704,6 +855,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             } else {
                 p.seekTo(ms.coerceAtLeast(0L).let { if (durationMs() != C.TIME_UNSET) it.coerceAtMost(durationMs()) else it })
             }
+            publishNowPlaying()
         } else {
             serviceScope.launch(Dispatchers.Main) { seekTo(ms) }
         }
@@ -712,12 +864,19 @@ class AudiobookPlaybackService : MediaLibraryService() {
     fun setSpeed(speed: Float) {
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             player?.setPlaybackSpeed(speed.coerceIn(0.5f, 3f))
+            publishNowPlaying()
         } else {
             serviceScope.launch(Dispatchers.Main) { setSpeed(speed) }
         }
     }
-    fun chapters(): List<AudiobookChapter> = activeChapters
-    fun currentChapterIndex(): Int = player?.currentMediaItemIndex ?: 0
+    /** Runs [block] on the player's main thread, immediately when already there. */
+    private fun runOnMain(block: () -> Unit) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            block()
+        } else {
+            serviceScope.launch(Dispatchers.Main) { block() }
+        }
+    }
 
     private fun parseChapters(json: String): List<AudiobookChapter> {
         if (json.isBlank()) return emptyList()

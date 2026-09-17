@@ -32,12 +32,16 @@ import com.shelf.reader.data.prefs.UserPreferencesRepository
 import com.shelf.reader.data.repository.PodcastPlaybackState
 import com.shelf.reader.podcast.R
 import com.shelf.reader.podcast.data.repository.PodcastRepository
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -67,6 +71,7 @@ class PodcastPlaybackService : MediaSessionService() {
         const val CMD_SET_SLEEP = "CMD_PODCAST_SET_SLEEP"
         const val ACTION_SKIP_BACK = "com.shelf.reader.podcast.SKIP_BACK"
         const val ACTION_SKIP_FORWARD = "com.shelf.reader.podcast.SKIP_FORWARD"
+        const val ACTION_STOP = "com.shelf.reader.podcast.STOP"
 
         /** Fraction of the episode after which it counts as completed. */
         const val COMPLETION_PERCENT = 0.98f
@@ -76,7 +81,11 @@ class PodcastPlaybackService : MediaSessionService() {
 
     // ExoPlayer may only be accessed from the main thread, so the service scope is
     // main-dispatched. Any blocking work (network, files) dispatches to IO itself.
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, t ->
+            Log.e(TAG, "service coroutine failed", t)
+        }
+    )
     private var player: ExoPlayer? = null
     private var session: MediaSession? = null
     private var db: ShelfDatabase? = null
@@ -85,9 +94,14 @@ class PodcastPlaybackService : MediaSessionService() {
     private var currentEpisodeId: Long = -1L
     private var currentFeedId: Long = -1L
     private var tickerJob: Job? = null
+    private var loadWatchdogJob: Job? = null
     private var sleepTimer: android.os.CountDownTimer? = null
     private var sleepTimerEndTimeMs: Long = 0L
     private val binder = LocalBinder()
+
+    /** Single writer of the engine's now-playing snapshot (UI + mini-player). */
+    private val _nowPlaying = MutableStateFlow(PodcastNowPlaying())
+    val nowPlaying: StateFlow<PodcastNowPlaying> = _nowPlaying.asStateFlow()
 
     inner class LocalBinder : Binder() {
         fun getService(): PodcastPlaybackService = this@PodcastPlaybackService
@@ -133,6 +147,9 @@ class PodcastPlaybackService : MediaSessionService() {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
+                    // A real playback start owns the single audio output: stop audiobooks.
+                    // Loading an episode does NOT do this — only actually playing it does.
+                    PlaybackArbiter.stopOthers(PlaybackArbiter.ID_PODCAST)
                     ensureTicker()
                 } else {
                     persistProgress()
@@ -263,17 +280,61 @@ class PodcastPlaybackService : MediaSessionService() {
 
     /** Called by [PlaybackArbiter] when audiobooks take over. */
     private fun stopForOtherMedia() {
-        serviceScope.launch(Dispatchers.Main) {
+        // Runs synchronously when already on the main thread so the audio output is
+        // released before the new engine starts.
+        onMain {
             runCatching {
                 persistProgress()
+                // Hide + suppress first, so the pause callback cannot re-publish the bar
+                // and briefly steal it back from the audiobook that just started.
+                PodcastPlaybackState.dismiss()
                 player?.pause()
                 player?.playWhenReady = false
-                PodcastPlaybackState.clear()
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        // Always satisfy the startForegroundService() contract; the live media
+        // notification replaces this placeholder as soon as the player reports the
+        // seek / metadata change.
+        startForegroundLoading()
+
+        when (action) {
+            ACTION_STOP -> {
+                // Mini-player close: pause and hide, without tearing down the service.
+                onMain {
+                    player?.pause()
+                    player?.playWhenReady = false
+                    PodcastPlaybackState.dismiss()
+                }
+                if (player?.mediaItemCount == 0) stopForegroundAndSelf()
+            }
+            ACTION_SKIP_BACK -> player?.let { it.seekTo((it.currentPosition - SEEK_BACK_MS).coerceAtLeast(0L)) }
+            ACTION_SKIP_FORWARD -> player?.let {
+                val max = it.duration.takeIf { d -> d > 0 } ?: Long.MAX_VALUE
+                it.seekTo((it.currentPosition + SEEK_FORWARD_MS).coerceAtMost(max))
+            }
+            ACTION_LOAD_EPISODE -> {
+                val episodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
+                if (episodeId > 0L) {
+                    loadEpisode(episodeId, autoPlay = true)
+                    startLoadWatchdog()
+                } else {
+                    stopForegroundAndSelf()
+                }
+            }
+            else -> {
+                // Unknown or null restart intent: do not linger with a placeholder.
+                if (player?.mediaItemCount == 0) stopForegroundAndSelf()
+            }
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    /** Foreground placeholder for the brief window before an episode is prepared. */
+    private fun startForegroundLoading() {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         } else 0
@@ -289,32 +350,61 @@ class PodcastPlaybackService : MediaSessionService() {
                 startForeground(NOTIFICATION_ID, initial)
             }
         }
+    }
 
-        when (intent?.action) {
-            ACTION_LOAD_EPISODE -> {
-                val episodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
-                if (episodeId > 0) loadEpisode(episodeId, autoPlay = true)
-            }
-            ACTION_SKIP_BACK -> player?.let { it.seekTo((it.currentPosition - SEEK_BACK_MS).coerceAtLeast(0L)) }
-            ACTION_SKIP_FORWARD -> player?.let {
-                val max = it.duration.takeIf { d -> d > 0 } ?: Long.MAX_VALUE
-                it.seekTo((it.currentPosition + SEEK_FORWARD_MS).coerceAtMost(max))
+    /** Removes the placeholder notification and stops the service. */
+    private fun stopForegroundAndSelf() {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
             }
         }
-        return super.onStartCommand(intent, flags, startId)
+        // Also clear a notification orphaned by a previous process kill.
+        runCatching { NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID) }
+        stopSelf()
+    }
+
+    /**
+     * Safety net: if loading never produces a playable item (offline stream, missing
+     * download, exception) the "Loading\u2026" notification must not become permanent.
+     */
+    private fun startLoadWatchdog() {
+        loadWatchdogJob?.cancel()
+        loadWatchdogJob = serviceScope.launch(Dispatchers.Main) {
+            delay(20_000L)
+            val p = player
+            if (p == null || p.mediaItemCount == 0) {
+                Log.w(TAG, "load watchdog: no media item after timeout; stopping")
+                stopForegroundAndSelf()
+            }
+        }
     }
 
     fun loadEpisode(episodeId: Long, autoPlay: Boolean = true) {
         val p = player ?: return
         val repo = repository ?: return
-        // Starting a podcast must safely stop audiobook playback.
-        PlaybackArbiter.stopOthers(PlaybackArbiter.ID_PODCAST)
+        // NOTE: audio arbitration happens when playback actually starts
+        // (onIsPlayingChanged), not on load — opening an episode must not kill an
+        // audiobook that is currently playing.
         currentEpisodeId = episodeId
         serviceScope.launch {
-            val episode = repo.getEpisode(episodeId) ?: return@launch
+            val episode = repo.getEpisode(episodeId)
+            if (episode == null) {
+                Log.e(TAG, "loadEpisode: episode $episodeId not found")
+                stopForegroundAndSelf()
+                return@launch
+            }
             currentFeedId = episode.feedId
             val feed = repo.getFeed(episode.feedId)
-            val source = repo.resolvePlaybackSource(episodeId) ?: return@launch
+            val source = repo.resolvePlaybackSource(episodeId)
+            if (source == null) {
+                Log.e(TAG, "loadEpisode: no playback source for $episodeId")
+                stopForegroundAndSelf()
+                return@launch
+            }
             val playback = repo.getPlayback(episodeId)
             val artwork = episode.artworkUrl ?: feed?.artworkUrl
 
@@ -340,6 +430,7 @@ class PodcastPlaybackService : MediaSessionService() {
             val globalSpeed = runCatching { prefs?.podcastSpeed?.first() }.getOrNull() ?: 1f
             withContext(Dispatchers.Main) {
                 p.setMediaItem(item)
+                loadWatchdogJob?.cancel()
                 p.setPlaybackSpeed(globalSpeed.coerceIn(0.5f, 3f))
                 val start = if (playback?.isCompleted == true) 0L else playback?.positionMs ?: 0L
                 if (start > 0L) p.seekTo(start)
@@ -385,7 +476,7 @@ class PodcastPlaybackService : MediaSessionService() {
         if (episodeId <= 0L) return
         val repo = repository ?: return
         repo.savePlayback(episodeId, 0L, player?.duration?.takeIf { it > 0 }, completed = true)
-        PodcastPlaybackState.clear()
+        PodcastPlaybackState.dismiss()
     }
 
     private fun persistProgress() {
@@ -407,16 +498,31 @@ class PodcastPlaybackService : MediaSessionService() {
         val pos = p.currentPosition.coerceAtLeast(0L)
         val dur = p.duration.takeIf { it > 0 } ?: 0L
         val meta = p.mediaMetadata
-        PodcastPlaybackState.update(
+        val remaining = sleepTimerRemainingMs()
+        val snapshot = PodcastNowPlaying(
             episodeId = episodeId,
             feedId = currentFeedId,
             title = meta.title?.toString() ?: "",
             podcastTitle = meta.albumTitle?.toString() ?: "",
             artworkUrl = meta.artworkUri?.toString(),
             isPlaying = p.isPlaying,
+            positionMs = pos,
+            durationMs = dur,
+            playbackSpeed = p.playbackParameters.speed,
+            sleepTimerRemainingMs = remaining
+        )
+        _nowPlaying.value = snapshot
+        PodcastPlaybackState.update(
+            episodeId = episodeId,
+            feedId = currentFeedId,
+            title = snapshot.title,
+            podcastTitle = snapshot.podcastTitle,
+            artworkUrl = snapshot.artworkUrl,
+            isPlaying = snapshot.isPlaying,
             progressPercent = if (dur > 0L) pos.toFloat() / dur.toFloat() else 0f,
             positionMs = pos,
-            durationMs = dur
+            durationMs = dur,
+            sleepTimerRemainingMs = remaining
         )
     }
 
@@ -440,8 +546,15 @@ class PodcastPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         tickerJob?.cancel()
+        loadWatchdogJob?.cancel()
+        loadWatchdogJob = null
         cancelSleepTimer()
         PlaybackArbiter.unregister(PlaybackArbiter.ID_PODCAST)
+        // Synchronous so the bar never outlives the service, even if the coroutine
+        // below is cancelled before it runs.
+        PodcastPlaybackState.dismiss()
+        _nowPlaying.value = PodcastNowPlaying()
+        runCatching { NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID) }
         serviceScope.launch(Dispatchers.Main) {
             persistProgress()
             session?.release()
@@ -449,7 +562,6 @@ class PodcastPlaybackService : MediaSessionService() {
             player?.release()
             session = null
             player = null
-            PodcastPlaybackState.clear()
             serviceScope.cancel()
         }
         super.onDestroy()
@@ -459,11 +571,7 @@ class PodcastPlaybackService : MediaSessionService() {
 
     // ---- Local binder API used by the player screen ----
 
-    fun isPlaying(): Boolean = player?.isPlaying == true
     fun currentPositionMs(): Long = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
-    fun durationMs(): Long = player?.duration?.takeIf { it > 0L } ?: 0L
-    fun playbackSpeed(): Float = player?.playbackParameters?.speed ?: 1f
-    fun episodeId(): Long = currentEpisodeId
 
     // ---- Sleep timer ----
 
@@ -481,6 +589,8 @@ class PodcastPlaybackService : MediaSessionService() {
                 } else if (p.volume < 1.0f && millisUntilFinished >= 30_000L) {
                     p.volume = 1.0f
                 }
+                // Keep the mini-player countdown live even while paused.
+                publishState()
             }
 
             override fun onFinish() {
@@ -492,8 +602,10 @@ class PodcastPlaybackService : MediaSessionService() {
                 persistProgress()
                 sleepTimer = null
                 sleepTimerEndTimeMs = 0L
+                publishState()
             }
         }.start()
+        publishState()
     }
 
     fun cancelSleepTimer() {
@@ -501,6 +613,7 @@ class PodcastPlaybackService : MediaSessionService() {
         sleepTimer = null
         sleepTimerEndTimeMs = 0L
         player?.volume = 1.0f
+        publishState()
     }
 
     fun sleepTimerRemainingMs(): Long {
@@ -518,6 +631,7 @@ class PodcastPlaybackService : MediaSessionService() {
         onMain {
             val p = player ?: return@onMain
             p.seekTo(com.shelf.reader.podcast.domain.PodcastSeek.clamp(ms, p.duration.takeIf { d -> d > 0 } ?: 0L))
+            publishState()
         }
     }
 
@@ -526,7 +640,10 @@ class PodcastPlaybackService : MediaSessionService() {
 
     fun setSpeed(speed: Float) {
         val clamped = speed.coerceIn(0.5f, 3f)
-        onMain { player?.setPlaybackSpeed(clamped) }
+        onMain {
+            player?.setPlaybackSpeed(clamped)
+            publishState()
+        }
         val id = currentEpisodeId
         serviceScope.launch {
             if (id > 0L) repository?.savePlaybackSpeed(id, clamped)

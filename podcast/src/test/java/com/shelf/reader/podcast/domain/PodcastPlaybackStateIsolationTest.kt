@@ -1,6 +1,7 @@
 package com.shelf.reader.podcast.domain
 
 import com.shelf.reader.data.repository.ActivePlaybackState
+import com.shelf.reader.data.repository.NowPlayingOwnership
 import com.shelf.reader.data.repository.PodcastPlaybackState
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -9,86 +10,127 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Podcast playback progress must stay separate from ebook/audiobook progress.
- * The two mini-player states are also mutually exclusive.
+ * The two mini-player states stay separate and mutually exclusive through
+ * [NowPlayingOwnership]. The regression these tests lock down is the flickering
+ * bar: a background/paused engine refreshing its progress must never evict the
+ * engine that is actually playing.
  */
 class PodcastPlaybackStateIsolationTest {
 
     @After
     fun tearDown() {
-        ActivePlaybackState.clear()
-        PodcastPlaybackState.clear()
+        NowPlayingOwnership.reset()
     }
 
-    @Test
-    fun `starting a podcast clears the audiobook state`() {
+    private fun publishAudiobook(isPlaying: Boolean) {
         ActivePlaybackState.update(
             bookId = 42L,
             title = "Audiobook",
             author = "Author",
-            isPlaying = true,
+            isPlaying = isPlaying,
             progressPercent = 0.5f,
             sleepTimerMinutes = null,
             sleepTimerRemainingMs = 0L
         )
-        assertNotNull(ActivePlaybackState.state.value)
+    }
 
+    private fun publishPodcast(isPlaying: Boolean) {
         PodcastPlaybackState.update(
             episodeId = 7L,
             feedId = 3L,
             title = "Episode",
             podcastTitle = "Podcast",
             artworkUrl = null,
-            isPlaying = true,
+            isPlaying = isPlaying,
             progressPercent = 0.1f,
             positionMs = 1000L,
             durationMs = 10_000L
         )
+    }
+
+    @Test
+    fun `a podcast claims the slot once the audiobook is retired`() {
+        publishAudiobook(isPlaying = true)
+        assertNotNull(ActivePlaybackState.state.value)
+
+        // The arbiter stops the audiobook before the podcast starts.
+        ActivePlaybackState.clear()
+        publishPodcast(isPlaying = true)
+
         assertNull(ActivePlaybackState.state.value)
         assertNotNull(PodcastPlaybackState.state.value)
     }
 
     @Test
-    fun `starting an audiobook clears the podcast state`() {
-        PodcastPlaybackState.update(
-            episodeId = 7L,
-            feedId = 3L,
-            title = "Episode",
-            podcastTitle = "Podcast",
-            artworkUrl = null,
-            isPlaying = true,
-            progressPercent = 0.1f,
-            positionMs = 1000L,
-            durationMs = 10_000L
-        )
+    fun `an audiobook claims the slot once the podcast is retired`() {
+        publishPodcast(isPlaying = true)
         assertNotNull(PodcastPlaybackState.state.value)
 
-        ActivePlaybackState.update(
-            bookId = 42L,
-            title = "Audiobook",
-            author = "Author",
-            isPlaying = true,
-            progressPercent = 0.5f,
-            sleepTimerMinutes = null,
-            sleepTimerRemainingMs = 0L
-        )
+        // The arbiter stops the podcast before the audiobook starts.
+        PodcastPlaybackState.clear()
+        publishAudiobook(isPlaying = true)
+
+        assertNull(PodcastPlaybackState.state.value)
+        assertNotNull(ActivePlaybackState.state.value)
+    }
+
+    @Test
+    fun `a paused audiobook refresh cannot evict a playing podcast`() {
+        publishAudiobook(isPlaying = true)
+        ActivePlaybackState.clear() // arbiter hand-off
+        publishPodcast(isPlaying = true)
+
+        // Audiobook player keeps ticking every 500 ms after being paused.
+        repeat(5) { publishAudiobook(isPlaying = false) }
+
+        assertNull(ActivePlaybackState.state.value)
+        assertNotNull(PodcastPlaybackState.state.value)
+        assertEquals(7L, PodcastPlaybackState.state.value!!.episodeId)
+    }
+
+    @Test
+    fun `a stale audiobook playing tick cannot evict a playing podcast`() {
+        publishAudiobook(isPlaying = true)
+        ActivePlaybackState.clear() // arbiter hand-off
+        publishPodcast(isPlaying = true)
+
+        // A read racing the pause can still report isPlaying = true for one tick.
+        publishAudiobook(isPlaying = true)
+
+        assertNull(ActivePlaybackState.state.value)
+        assertNotNull(PodcastPlaybackState.state.value)
+    }
+
+    @Test
+    fun `a paused podcast cannot steal the slot back from a playing audiobook`() {
+        publishPodcast(isPlaying = true)
+        PodcastPlaybackState.clear() // arbiter hand-off
+        publishAudiobook(isPlaying = true)
+
+        // Pausing fires onIsPlayingChanged(false) -> publishState().
+        publishPodcast(isPlaying = false)
+
         assertNull(PodcastPlaybackState.state.value)
         assertNotNull(ActivePlaybackState.state.value)
     }
 
     @Test
     fun `clearing podcast state leaves audiobook state untouched`() {
-        ActivePlaybackState.update(
-            bookId = 42L,
-            title = "Audiobook",
-            author = "Author",
-            isPlaying = false,
-            progressPercent = 0.5f,
-            sleepTimerMinutes = null,
-            sleepTimerRemainingMs = 0L
-        )
+        publishAudiobook(isPlaying = false)
         PodcastPlaybackState.clear()
         assertNotNull(ActivePlaybackState.state.value)
         assertEquals(42L, ActivePlaybackState.state.value!!.bookId)
+    }
+
+    @Test
+    fun `dismissing the audiobook hides it until playback restarts`() {
+        publishAudiobook(isPlaying = true)
+        ActivePlaybackState.dismiss()
+
+        publishAudiobook(isPlaying = false)
+        assertNull(ActivePlaybackState.state.value)
+
+        publishAudiobook(isPlaying = true)
+        assertNotNull(ActivePlaybackState.state.value)
     }
 }
