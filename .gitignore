@@ -50,3 +50,10 @@ fixtures/smb-data/
 fixtures/webdav-data/
 fixtures/calibre-library/
 fixtures/calibre-config/
+
+# Xcode / iOS
+iosApp/build/
+iosApp/**/xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcworkspace/xcuserdata/
