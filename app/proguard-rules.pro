@@ -1,5 +1,5 @@
 -keepattributes *Annotation*
--keep class com.shelf.reader.data.** { *; }
+-keep class com.bookrio.data.** { *; }
 -keep class androidx.compose.** { *; }
 -keep class kotlinx.coroutines.** { *; }
 -dontwarn org.jetbrains.annotations.**

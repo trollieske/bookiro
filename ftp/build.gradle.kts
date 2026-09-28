@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.ftp"
+    namespace = "com.bookrio.ftp"
     compileSdk = 35
 
     defaultConfig {

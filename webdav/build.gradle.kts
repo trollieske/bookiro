@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.webdav"
+    namespace = "com.bookrio.webdav"
     compileSdk = 35
 
     defaultConfig {

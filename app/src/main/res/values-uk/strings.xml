@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shelf</string>
+    <string name="app_name">Bookrio</string>
     <string name="nav_books">Книги</string>
     <string name="nav_settings">Налаштування</string>
     <string name="shelf_audiobooks">Аудіокниги</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Тема</string>
     <string name="player_title">Аудіокнига</string>
     <string name="settings_title">Налаштування</string>
-    <string name="onboarding_title">Ласкаво просимо до Shelf</string>
+    <string name="onboarding_title">Ласкаво просимо до Bookrio</string>
     <string name="onboarding_body">Читайте та слухайте. Локально. Без зайвого шуму.</string>
     <string name="onboarding_cta">Відкрити полицю</string>
     <string name="settings_reader">Читач</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Додає книг автоматично</string>
     <string name="settings_online_cover">Пошук обкладинок онлайн</string>
     <string name="settings_online_cover_sub">Шукати обкладинки в інтернеті</string>
-    <string name="settings_about_description">Shelf — приватний читач і плеєр аудіокниг без реклами</string>
+    <string name="settings_about_description">Bookrio — приватний читач і плеєр аудіокниг без реклами</string>
     <string name="action_continue">Продовжити</string>
     <string name="action_save">Зберегти</string>
     <string name="action_cancel">Скасувати</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Залишилось</string>
     <string name="book_details_pages_left">%1$d стор.</string>
     <string name="book_details_delete_title">Видалити книгу</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(через Shelf)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(через Bookrio)</string>
     <string name="book_details_share_snack">Поділитися книгою: %1$s</string>
     <string name="book_details_pages_label">Сторінки</string>
     <string name="book_details_change_cover_snack">Змінити обкладинку</string>

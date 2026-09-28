@@ -30,7 +30,7 @@
     <string name="ply_notif_play">Воспроизвести</string>
     <string name="ply_notif_skip_forward">Вперёд 30 с</string>
     <string name="ply_notif_next">Следующая</string>
-    <string name="ply_library_root">Библиотека Shelf</string>
+    <string name="ply_library_root">Библиотека Bookrio</string>
     <string name="ply_notif_channel">Воспроизведение</string>
     <string name="ply_notif_channel_desc">Уведомления о воспроизведении аудиокниг</string>
     <string name="ply_prepare_error">Не удалось подготовить аудиокнигу</string>

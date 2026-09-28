@@ -18,7 +18,7 @@
     <string name="rdr_share">Del</string>
     <string name="rdr_share_progress">Del lesefremgang</string>
     <string name="rdr_share_text">Jeg leser "%1$s" — %2$s (side %3$d av %4$d, %5$d%%)
-#ShelfApp</string>
+#Bookrio</string>
     <string name="rdr_chapter">Kapittel %1$d</string>
     <string name="rdr_pages_left">%1$d sider igjen · %2$s · %3$d av %4$d</string>
     <string name="rdr_contents">Innhold</string>

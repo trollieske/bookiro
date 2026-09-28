@@ -2,13 +2,13 @@
 <resources>
     <string name="pod_nav_title">Подкасты</string>
 
-    <string name="pod_root_header">ПОДКАСТЫ</string>
+    <string name="pod_root_header">Подкасты</string>
     <string name="pod_root_empty_body">Подписывайтесь на открытые подкасты. Слушайте когда хотите. Скачивайте когда нужно.</string>
     <string name="pod_add_rss">Добавить RSS-канал</string>
     <string name="pod_search_podcasts">Поиск подкастов</string>
     <string name="pod_what_is_rss">Что такое RSS-канал?</string>
     <string name="pod_help_title">Что такое RSS-канал?</string>
-    <string name="pod_help_body">RSS-канал — это открытый адрес, по которому Shelf получает новые выпуски напрямую из подкаста, на который вы подписаны.</string>
+    <string name="pod_help_body">RSS-канал — это открытый адрес, по которому Bookrio получает новые выпуски напрямую из подкаста, на который вы подписаны.</string>
     <string name="pod_following_new">ПОДПИСКИ \u00b7 %1$d НОВЫХ</string>
     <string name="pod_following">ПОДПИСКИ</string>
     <string name="pod_refresh">Обновить</string>

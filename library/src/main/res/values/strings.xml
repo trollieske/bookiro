@@ -18,6 +18,7 @@
     <string name="lib_sort_author">Author</string>
     <string name="lib_sort_recent">Recent</string>
     <string name="lib_sort_title">Title</string>
+    <string name="lib_view_toggle_a11y">Toggle grid or list view</string>
     <string name="lib_sort_added">Date added</string>
     <string name="lib_remaining">%1$s left</string>
 </resources>

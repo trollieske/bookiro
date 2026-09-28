@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.calibre"
+    namespace = "com.bookrio.calibre"
     compileSdk = 35
 
     defaultConfig {

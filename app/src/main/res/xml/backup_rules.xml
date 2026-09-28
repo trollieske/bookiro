@@ -6,5 +6,5 @@
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
-    <exclude domain="sharedpref" path="com.shelf.reader_ftp_plain.xml" />
+    <exclude domain="sharedpref" path="com.bookrio_ftp_plain.xml" />
 </full-backup-content>

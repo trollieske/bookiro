@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Shelf"
+rootProject.name = "Bookrio"
 
 include(":app")
 include(":core")

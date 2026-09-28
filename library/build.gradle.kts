@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.library"
+    namespace = "com.bookrio.library"
     compileSdk = 35
 
     defaultConfig {

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.pagecurl"
+    namespace = "com.bookrio.pagecurl"
     compileSdk = 35
 
     defaultConfig {

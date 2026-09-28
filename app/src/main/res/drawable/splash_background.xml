@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launch splash (API < 31): black background with the centered Bookrio mark.
+    API 31+ uses windowSplashScreen* from values-v31/themes.xml instead.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/brand_bg" />
+    <item
+        android:drawable="@drawable/bookrio_splash"
+        android:gravity="center" />
+</layer-list>

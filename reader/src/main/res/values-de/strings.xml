@@ -18,7 +18,7 @@
     <string name="rdr_share">Teilen</string>
     <string name="rdr_share_progress">Lesefortschritt teilen</string>
     <string name="rdr_share_text">Ich lese "%1$s" — %2$s (Seite %3$d von %4$d, %5$d%%)
-#ShelfApp</string>
+#Bookrio</string>
     <string name="rdr_chapter">Kapitel %1$d</string>
     <string name="rdr_pages_left">%1$d Seiten übrig · %2$s · %3$d von %4$d</string>
     <string name="rdr_contents">Inhalt</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shelf</string>
+    <string name="app_name">Bookrio</string>
     <string name="nav_books">Bøger</string>
     <string name="nav_settings">Indstillinger</string>
     <string name="shelf_audiobooks">Lydbøger</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Tema</string>
     <string name="player_title">Lydbog</string>
     <string name="settings_title">Indstillinger</string>
-    <string name="onboarding_title">Velkommen til Shelf</string>
+    <string name="onboarding_title">Velkommen til Bookrio</string>
     <string name="onboarding_body">Læs og lyt. Lokalt. Uden støj.</string>
     <string name="onboarding_cta">Åbn hylden</string>
     <string name="settings_reader">Læser</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Tilføjer bøger automatisk</string>
     <string name="settings_online_cover">Online omslagssøgning</string>
     <string name="settings_online_cover_sub">Søg efter omslag på internettet</string>
-    <string name="settings_about_description">Shelf – en privat, reklamefri læser og lydbogsafspiller</string>
+    <string name="settings_about_description">Bookrio – en privat, reklamefri læser og lydbogsafspiller</string>
     <string name="action_continue">Fortsæt</string>
     <string name="action_save">Gem</string>
     <string name="action_cancel">Annuller</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Tilbage</string>
     <string name="book_details_pages_left">%1$d sider</string>
     <string name="book_details_delete_title">Slet bog</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(via Shelf)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(via Bookrio)</string>
     <string name="book_details_share_snack">Del bog: %1$s</string>
     <string name="book_details_pages_label">Sider</string>
     <string name="book_details_change_cover_snack">Skift omslag</string>

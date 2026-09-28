@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.torrent"
+    namespace = "com.bookrio.torrent"
     compileSdk = 35
 
     defaultConfig {

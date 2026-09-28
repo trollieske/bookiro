@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android 12+ system splash: black canvas with the Bookrio mark, so the
+        cold-start is on-brand instead of the legacy windowBackground.
+    -->
+    <style name="Theme.Shelf" parent="Theme.Shelf.Base">
+        <item name="android:windowSplashScreenBackground">@color/brand_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+    </style>
+</resources>

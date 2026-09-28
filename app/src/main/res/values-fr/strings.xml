@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shelf</string>
+    <string name="app_name">Bookrio</string>
     <string name="nav_books">Livres</string>
     <string name="nav_settings">Paramètres</string>
     <string name="shelf_audiobooks">Livres audio</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Thème</string>
     <string name="player_title">Livre audio</string>
     <string name="settings_title">Paramètres</string>
-    <string name="onboarding_title">Bienvenue sur Shelf</string>
+    <string name="onboarding_title">Bienvenue sur Bookrio</string>
     <string name="onboarding_body">Lire et écouter. En local. Sans bruit.</string>
     <string name="onboarding_cta">Ouvrir l\'étagère</string>
     <string name="settings_reader">Lecteur</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Ajoute les livres automatiquement</string>
     <string name="settings_online_cover">Recherche de couverture en ligne</string>
     <string name="settings_online_cover_sub">Recherche des couvertures sur Internet</string>
-    <string name="settings_about_description">Shelf — un lecteur et lecteur audio privé, sans publicité</string>
+    <string name="settings_about_description">Bookrio — un lecteur et lecteur audio privé, sans publicité</string>
     <string name="action_continue">Continuer</string>
     <string name="action_save">Enregistrer</string>
     <string name="action_cancel">Annuler</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Restant</string>
     <string name="book_details_pages_left">%1$d pages</string>
     <string name="book_details_delete_title">Supprimer le livre</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(via Shelf)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(via Bookrio)</string>
     <string name="book_details_share_snack">Partager le livre : %1$s</string>
     <string name="book_details_pages_label">Pages</string>
     <string name="book_details_change_cover_snack">Changer la couverture</string>

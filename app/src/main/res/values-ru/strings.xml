@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shelf</string>
+    <string name="app_name">Bookrio</string>
     <string name="nav_books">Книги</string>
     <string name="nav_settings">Настройки</string>
     <string name="shelf_audiobooks">Аудиокниги</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Тема</string>
     <string name="player_title">Аудиокнига</string>
     <string name="settings_title">Настройки</string>
-    <string name="onboarding_title">Добро пожаловать в Shelf</string>
+    <string name="onboarding_title">Добро пожаловать в Bookrio</string>
     <string name="onboarding_body">Читайте и слушайте. Локально. Без лишнего шума.</string>
     <string name="onboarding_cta">Открыть полку</string>
     <string name="settings_reader">Читатель</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Добавляет книги автоматически</string>
     <string name="settings_online_cover">Поиск обложек онлайн</string>
     <string name="settings_online_cover_sub">Искать обложки в интернете</string>
-    <string name="settings_about_description">Shelf — частный читатель и плеер аудиокниг без рекламы</string>
+    <string name="settings_about_description">Bookrio — частный читатель и плеер аудиокниг без рекламы</string>
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>
     <string name="action_cancel">Отмена</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Осталось</string>
     <string name="book_details_pages_left">%1$d стр.</string>
     <string name="book_details_delete_title">Удалить книгу</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(через Shelf)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(через Bookrio)</string>
     <string name="book_details_share_snack">Поделиться книгой: %1$s</string>
     <string name="book_details_pages_label">Страницы</string>
     <string name="book_details_change_cover_snack">Изменить обложку</string>

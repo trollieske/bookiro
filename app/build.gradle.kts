@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader"
+    namespace = "com.bookrio"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.shelf.reader"
+        applicationId = "com.bookrio"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -130,7 +130,9 @@ dependencies {
     implementation(libs.androidx.security.crypto.ktx)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.guava.android)
-    implementation(libs.pagecurl.oleksandrbalan)
+    // NOTE: pagecurl is provided by the vendored local module :pagecurl (see reader).
+    // Do NOT also depend on the Maven artifact here — it duplicates eu.wewox.pagecurl
+    // classes and breaks the R8/minified release build.
 
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)

@@ -1,0 +1,742 @@
+package com.bookrio.library.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import coil.compose.AsyncImage
+import com.bookrio.core.domain.model.LibrarySortMode
+import com.bookrio.core.domain.model.LibraryViewType
+import com.bookrio.core.domain.model.SortDirection
+import com.bookrio.designsystem.components.BookCoverCard
+import com.bookrio.designsystem.components.BookVisual
+import com.bookrio.designsystem.theme.ShelfTypography
+import com.bookrio.library.R
+import com.bookrio.library.sort.ResumeSelector
+import com.bookrio.library.viewmodel.GridEntry
+import com.bookrio.library.viewmodel.LibraryMode
+import com.bookrio.library.viewmodel.LibraryViewModel
+import com.bookrio.library.viewmodel.ResumeItem
+
+// Omarchy-inspirert bibliotek-krom: svart base, lime-aksent, ingen hevede kort.
+private val LibBg = com.bookrio.designsystem.theme.OmarchyColors.Bg
+private val LibHeaderBg = com.bookrio.designsystem.theme.OmarchyColors.HeaderBg
+private val LibHairline = com.bookrio.designsystem.theme.OmarchyColors.Hairline
+private val LibAccent = com.bookrio.designsystem.theme.OmarchyColors.Accent
+private val LibDim = com.bookrio.designsystem.theme.OmarchyColors.Dim
+private val LibFg = com.bookrio.designsystem.theme.OmarchyColors.Fg
+private val LibFgBright = com.bookrio.designsystem.theme.OmarchyColors.FgBright
+private val LibPanel = com.bookrio.designsystem.theme.OmarchyColors.Panel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LibraryScreen(
+    mode: LibraryMode,
+    onBookClick: (Long) -> Unit,
+    onBookLongClick: (Long) -> Unit,
+    onImportClick: () -> Unit,
+    onFtpClick: () -> Unit,
+    onSettingsClick: () -> Unit = {},
+    onNavVisibilityChange: (Boolean) -> Unit = {},
+    vmFactory: androidx.lifecycle.ViewModelProvider.Factory? = null,
+    vm: LibraryViewModel = viewModel(factory = vmFactory ?: defaultLibraryVmFactory())
+) {
+    val ui by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(mode) { vm.setMode(mode) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var showResumeSheet by rememberSaveable { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(search) { vm.setQuery(search) }
+
+    // Rulle-retning fra rutenettet: ned = skjul nav, opp = vis nav.
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+    LaunchedEffect(gridState, onNavVisibilityChange) {
+        var lastIndex = 0
+        var lastOffset = 0
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                when {
+                    index > lastIndex || (index == lastIndex && offset > lastOffset) ->
+                        onNavVisibilityChange(false)
+                    index < lastIndex || (index == lastIndex && offset < lastOffset) ->
+                        onNavVisibilityChange(true)
+                }
+                lastIndex = index
+                lastOffset = offset
+            }
+    }
+    LaunchedEffect(listState, onNavVisibilityChange) {
+        var lastIndex = 0
+        var lastOffset = 0
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                when {
+                    index > lastIndex || (index == lastIndex && offset > lastOffset) ->
+                        onNavVisibilityChange(false)
+                    index < lastIndex || (index == lastIndex && offset < lastOffset) ->
+                        onNavVisibilityChange(true)
+                }
+                lastIndex = index
+                lastOffset = offset
+            }
+    }
+    val booksToDisplay = remember(ui.flatGridBooks) { ui.flatGridBooks.distinctBy { it.id } }
+    LaunchedEffect(booksToDisplay.isEmpty(), search, mode) {
+        if (booksToDisplay.isEmpty() || search.isNotBlank()) onNavVisibilityChange(true)
+    }
+
+    val resumeCandidates = when (mode) {
+        LibraryMode.Books -> ui.resumeEbooks
+        LibraryMode.Audio -> ui.resumeAudios
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            contentWindowInsets = WindowInsets(0.dp),
+            containerColor = LibBg,
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { innerPadding ->
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .background(LibBg)
+                    .padding(innerPadding)
+            ) {
+                // Flat toppband: tittel + minimalt ikoner. Ingen heving, bare hårlinje.
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(LibHeaderBg)
+                        .statusBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    var showSearchField by rememberSaveable { mutableStateOf(false) }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Image(
+                                painter = painterResource(com.bookrio.designsystem.R.drawable.bookrio_mark),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                when (mode) {
+                                    LibraryMode.Books -> stringResource(R.string.lib_books)
+                                    LibraryMode.Audio -> stringResource(R.string.lib_audiobooks)
+                                },
+                                style = ShelfTypography.TitleLarge,
+                                color = LibFgBright,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    vm.setViewType(
+                                        if (ui.viewType == LibraryViewType.LIST) LibraryViewType.GRID
+                                        else LibraryViewType.LIST
+                                    )
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    if (ui.viewType == LibraryViewType.LIST) Icons.Default.GridView else Icons.Default.ViewList,
+                                    contentDescription = stringResource(R.string.lib_view_toggle_a11y),
+                                    tint = LibDim,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            IconButton(onClick = { showSearchField = !showSearchField }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.lib_search_a11y), tint = if (search.isNotEmpty() || showSearchField) LibAccent else LibDim, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = onFtpClick, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.CloudSync, contentDescription = stringResource(R.string.lib_sources_a11y), tint = LibDim, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = onImportClick, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.lib_import_a11y), tint = LibFgBright, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.lib_settings_a11y), tint = LibDim, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+
+                    // Søk: skjult ikon som ekspanderer. Skarpe hjørner, ingen chip-rad.
+                    AnimatedVisibility(visible = showSearchField || search.isNotEmpty()) {
+                        Column {
+                            Spacer(Modifier.height(4.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = LibPanel,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp)
+                                ) {
+                                    Icon(Icons.Default.Search, contentDescription = null, tint = LibAccent, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        if (search.isEmpty()) {
+                                            Text(stringResource(R.string.lib_search_hint), color = LibDim, fontSize = 12.sp, maxLines = 1)
+                                        }
+                                        androidx.compose.foundation.text.BasicTextField(
+                                            value = search,
+                                            onValueChange = { search = it },
+                                            singleLine = true,
+                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = LibFgBright)
+                                        )
+                                    }
+                                    if (search.isNotEmpty()) {
+                                        IconButton(onClick = { search = "" }, modifier = Modifier.size(20.dp)) {
+                                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.lib_clear_a11y), tint = LibDim)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(LibHairline)
+                )
+
+                // Sort Rail: alltid synlig over rutenettet, i begge faner.
+                SortRail(
+                    activeMode = ui.sortMode,
+                    direction = ui.direction,
+                    onSelect = { vm.setSortMode(it) },
+                    onToggleDirection = { vm.toggleSortDirection() }
+                )
+
+                // Fortsett-linje: waybar/tmux-stil. Monospace, lavkontrast, full bredde, ikke kort.
+                if (resumeCandidates.isNotEmpty()) {
+                    ResumeStrip(
+                        primary = resumeCandidates.first(),
+                        extraCount = resumeCandidates.size - 1,
+                        onClickPrimary = { onBookClick(resumeCandidates.first().bookId) },
+                        onClickMore = { showResumeSheet = true }
+                    )
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    if (ui.isLoading) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = LibDim)
+                        }
+                    } else if (booksToDisplay.isEmpty()) {
+                        CleanEmptyState(
+                            onImportClick = onImportClick,
+                            onFtpClick = onFtpClick
+                        )
+                    } else if (ui.viewType == LibraryViewType.LIST) {
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            items(ui.gridEntries) { entry ->
+                                when (entry) {
+                                    is GridEntry.SectionLabel -> SectionLabel(entry.text)
+                                    is GridEntry.BookEntry -> BookListRow(
+                                        book = entry.book,
+                                        onClick = { onBookClick(entry.book.id) },
+                                        onLongClick = { onBookLongClick(entry.book.id) }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            state = gridState,
+                            columns = GridCells.Adaptive(minSize = 115.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                ui.gridEntries,
+                                span = { entry ->
+                                    GridItemSpan(if (entry is GridEntry.SectionLabel) maxLineSpan else 1)
+                                }
+                            ) { entry ->
+                                when (entry) {
+                                    is GridEntry.SectionLabel -> SectionLabel(entry.text)
+                                    is GridEntry.BookEntry -> {
+                                        val b = entry.book
+                                        BookCoverCard(
+                                            book = b.copy(leanDegrees = 0f),
+                                            onClick = { onBookClick(b.id) },
+                                            onLongClick = { onBookLongClick(b.id) },
+                                            showFormatBadge = false,
+                                            showInlineProgress = false,
+                                            underCoverContent = {
+                                                if (b.progress > 0f) {
+                                                    ThinProgressBar(progress = b.progress)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // +N: enkel mørk bottom sheet med aktive fortsett-kandidater.
+        if (showResumeSheet && resumeCandidates.size > 1) {
+            ModalBottomSheet(
+                onDismissRequest = { showResumeSheet = false },
+                containerColor = LibPanel,
+                contentColor = LibFg,
+                tonalElevation = 0.dp
+            ) {
+                Text(
+                    stringResource(R.string.lib_continue),
+                    style = ShelfTypography.TitleMedium,
+                    color = LibFgBright,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                resumeCandidates.take(ResumeSelector.MAX_CANDIDATES).forEach { item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showResumeSheet = false
+                                onBookClick(item.bookId)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "▸",
+                            color = LibAccent,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(end = 10.dp)
+                        )
+                        AsyncImage(
+                            model = item.coverPath,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(width = 28.dp, height = 38.dp)
+                                .background(LibHairline, RoundedCornerShape(2.dp)),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                item.title,
+                                style = ShelfTypography.BodyMedium,
+                                color = LibFgBright,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                listOfNotNull(item.author.takeIf { it.isNotBlank() }, item.detail).joinToString(" · "),
+                                style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
+                                color = LibDim,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.navigationBarsPadding())
+            }
+        }
+    }
+}
+
+/** Sort Rail: kompakt terminal/HUD-selector over rutenettet. Ingen Material-chips. */
+@Composable
+private fun LibrarySortMode.sortLabel(): String = when (this) {
+    LibrarySortMode.HYLLE -> stringResource(R.string.lib_sort_shelf)
+    LibrarySortMode.SERIE -> stringResource(R.string.lib_sort_series)
+    LibrarySortMode.FORFATTER -> stringResource(R.string.lib_sort_author)
+    LibrarySortMode.NYLIG -> stringResource(R.string.lib_sort_recent)
+    LibrarySortMode.TITTEL -> stringResource(R.string.lib_sort_title)
+    LibrarySortMode.LAGT_TIL -> stringResource(R.string.lib_sort_added)
+}
+
+@Composable
+private fun SortRail(
+    activeMode: LibrarySortMode,
+    direction: SortDirection,
+    onSelect: (LibrarySortMode) -> Unit,
+    onToggleDirection: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(LibBg)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        LibrarySortMode.entries.forEach { mode ->
+            val active = mode == activeMode
+            Column(
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .clickable { onSelect(mode) }
+                    .padding(horizontal = 10.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    mode.sortLabel(),
+                    color = if (active) LibAccent else LibDim,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.drawBehind {
+                        // Aktiv modus: tynn lime-understrek, like bred som etiketten.
+                        if (active) {
+                            drawRect(
+                                color = LibAccent,
+                                topLeft = Offset(0f, size.height + 2.dp.toPx()),
+                                size = Size(size.width, 1.dp.toPx())
+                            )
+                        }
+                    }
+                )
+            }
+        }
+        // ⇅: kompakt, visuelt adskilt retningHandling.
+        Box(
+            modifier = Modifier
+                .heightIn(min = 44.dp)
+                .padding(start = 6.dp)
+                .background(LibPanel, RoundedCornerShape(4.dp))
+                .clickable { onToggleDirection() }
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                if (direction == SortDirection.ASC) "↑" else "↓",
+                color = LibAccent,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+/** Full-bredde HYLLE-seksjonsetikett: monospace, lav kontrast, 1px skille. */
+@Composable
+private fun SectionLabel(text: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(LibHairline)
+        )
+        Text(
+            text,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            color = LibDim,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 5.dp, bottom = 2.dp)
+        )
+    }
+}
+
+/** List-view rad: lite omslag + tittel/forfatter + progresjon. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BookListRow(
+    book: BookVisual,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 46.dp, height = 66.dp)
+                .background(LibHairline, RoundedCornerShape(3.dp))
+        ) {
+            val cp = book.coverImagePath
+            if (!cp.isNullOrBlank()) {
+                AsyncImage(
+                    model = cp,
+                    contentDescription = book.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                book.title,
+                style = ShelfTypography.BodyLarge,
+                color = LibFgBright,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            val author = book.author.takeIf { it.isNotBlank() }
+            if (author != null) {
+                Text(
+                    author,
+                    style = ShelfTypography.BodySmall,
+                    color = LibDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (book.progress > 0f) {
+                Spacer(Modifier.height(6.dp))
+                ThinProgressBar(progress = book.progress)
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            book.format.name,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            color = LibDim,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+/** Fortsett-linje: liten monospace, lav kontrast, full bredde. 2px visuell vekt maks. */
+@Composable
+private fun ResumeStrip(
+    primary: ResumeItem,
+    extraCount: Int,
+    onClickPrimary: () -> Unit,
+    onClickMore: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClickPrimary)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "▸",
+            color = LibAccent,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Text(
+            text = "${primary.title} · ${primary.detail}",
+            style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
+            color = LibDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        if (extraCount > 0) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .background(LibPanel, RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClickMore)
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    "+$extraCount",
+                    color = LibAccent,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+/** 2px fremdriftslinje under omslaget — aksent på LibHairline-spor. Ingen etiketter. */
+@Composable
+private fun ThinProgressBar(progress: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp)
+            .height(2.dp)
+            .background(LibHairline)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0.01f, 1f))
+                .background(LibAccent)
+        )
+    }
+}
+
+@Composable
+private fun CleanEmptyState(
+    onImportClick: () -> Unit,
+    onFtpClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = LibPanel,
+                modifier = Modifier.size(72.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = LibDim,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text(
+                stringResource(R.string.lib_empty_title),
+                style = ShelfTypography.TitleLarge,
+                color = LibFgBright,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                stringResource(R.string.lib_empty_desc),
+                style = ShelfTypography.BodyMedium,
+                color = LibDim,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = onFtpClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = LibPanel,
+                    contentColor = LibFg
+                ),
+                shape = RoundedCornerShape(4.dp),
+                elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp),
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.lib_sync_button), fontWeight = FontWeight.Medium)
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = onImportClick,
+                shape = RoundedCornerShape(4.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = LibFg),
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.lib_import_button))
+            }
+        }
+    }
+}
+
+private fun defaultLibraryVmFactory(): androidx.lifecycle.ViewModelProvider.Factory = viewModelFactory {
+    initializer {
+        val app = (this[androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as android.app.Application)
+        val db = com.bookrio.data.local.ShelfDatabase.getInstance(app)
+        val prefs = com.bookrio.data.prefs.UserPreferencesRepository(app)
+        LibraryViewModel(app, prefs)
+    }
+}
+
+object SampleBooks {
+    val books: List<com.bookrio.designsystem.components.BookVisual> = emptyList()
+}

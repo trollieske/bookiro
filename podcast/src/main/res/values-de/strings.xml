@@ -2,13 +2,13 @@
 <resources>
     <string name="pod_nav_title">Podcasts</string>
 
-    <string name="pod_root_header">PODCASTS</string>
+    <string name="pod_root_header">Podcasts</string>
     <string name="pod_root_empty_body">Folge offenen Podcasts. H\u00f6re, wann du willst. Lade herunter, wenn du es brauchst.</string>
     <string name="pod_add_rss">RSS-Feed hinzuf\u00fcgen</string>
     <string name="pod_search_podcasts">Podcasts suchen</string>
     <string name="pod_what_is_rss">Was ist ein RSS-Feed?</string>
     <string name="pod_help_title">Was ist ein RSS-Feed?</string>
-    <string name="pod_help_body">Ein RSS-Feed ist eine offene Adresse, \u00fcber die Shelf neue Folgen direkt von einem Podcast l\u00e4dt, dem du folgst.</string>
+    <string name="pod_help_body">Ein RSS-Feed ist eine offene Adresse, \u00fcber die Bookrio neue Folgen direkt von einem Podcast l\u00e4dt, dem du folgst.</string>
     <string name="pod_following_new">GEFOLGT \u00b7 %1$d NEU</string>
     <string name="pod_following">GEFOLGT</string>
     <string name="pod_refresh">Aktualisieren</string>

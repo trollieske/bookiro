@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shelf.reader.podcast"
+    namespace = "com.bookrio.podcast"
     compileSdk = 35
 
     defaultConfig {

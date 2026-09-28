@@ -2,13 +2,13 @@
 <resources>
     <string name="pod_nav_title">Podcasts</string>
 
-    <string name="pod_root_header">PODCASTS</string>
+    <string name="pod_root_header">Podcasts</string>
     <string name="pod_root_empty_body">F\u00f8lg \u00e5bne podcasts. Lyt n\u00e5r du vil. Download n\u00e5r du har brug for det.</string>
     <string name="pod_add_rss">Tilf\u00f8j RSS-feed</string>
     <string name="pod_search_podcasts">S\u00f8g efter podcasts</string>
     <string name="pod_what_is_rss">Hvad er et RSS-feed?</string>
     <string name="pod_help_title">Hvad er et RSS-feed?</string>
-    <string name="pod_help_body">Et RSS-feed er en \u00e5ben adresse, der lader Shelf hente nye afsnit direkte fra en podcast, du f\u00f8lger.</string>
+    <string name="pod_help_body">Et RSS-feed er en \u00e5ben adresse, der lader Bookrio hente nye afsnit direkte fra en podcast, du f\u00f8lger.</string>
     <string name="pod_following_new">F\u00d8LGER \u00b7 %1$d NYE</string>
     <string name="pod_following">F\u00d8LGER</string>
     <string name="pod_refresh">Opdater</string>
