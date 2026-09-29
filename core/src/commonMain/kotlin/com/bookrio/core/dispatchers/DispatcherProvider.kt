@@ -13,7 +13,7 @@ interface DispatcherProvider {
     val main: CoroutineDispatcher get() = Dispatchers.Main
     val immediate: CoroutineDispatcher get() = Dispatchers.Main.immediate
     val default: CoroutineDispatcher get() = Dispatchers.Default
-    val io: CoroutineDispatcher get() = Dispatchers.IO
+    val io: CoroutineDispatcher get() = platformIoDispatcher
     val unconfined: CoroutineDispatcher get() = Dispatchers.Unconfined
 }
 
