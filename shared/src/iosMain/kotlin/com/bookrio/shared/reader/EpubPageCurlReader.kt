@@ -28,6 +28,7 @@ import platform.UIKit.UIPageViewControllerNavigationOrientationHorizontal
 import platform.UIKit.UIPageViewControllerSpineLocationMid
 import platform.UIKit.UIPageViewControllerSpineLocationMin
 import platform.UIKit.UIPageViewControllerTransitionStylePageCurl
+import platform.UIKit.UIScreen
 import platform.UIKit.UIUserInterfaceSizeClassRegular
 import platform.UIKit.UIViewController
 import platform.darwin.NSObject
@@ -61,7 +62,9 @@ internal class EpubPageCurlReader(
 
     private var pages: List<EpubPage> = emptyList()
     private var currentIndex: Int = startPage.coerceAtLeast(0)
-    private var paginated = false
+    private var gridColumns = 0
+    private var gridRows = 0
+    private var layoutGridApplied = false
 
     private val pageSource = EpubPageSource(
         before = { controller -> selfRef.value?.controllerBefore(controller) },
@@ -77,8 +80,12 @@ internal class EpubPageCurlReader(
     init {
         dataSource = pageSource
         delegate = pageDelegate
-        // Initial controllers are set in viewDidLayoutSubviews, once the page grid
-        // can be computed from the real bounds.
+        // A UIPageViewController must have at least one view controller before it
+        // appears (viewWillAppear queries the spine location and validates the
+        // count). Paginate once against the screen bounds so the first page is
+        // always ready; viewDidLayoutSubviews refines the grid against real bounds.
+        val bounds = UIScreen.mainScreen.bounds
+        applyGrid(CGRectGetWidth(bounds), CGRectGetHeight(bounds))
     }
 
     override fun viewDidLoad() {
@@ -97,22 +104,37 @@ internal class EpubPageCurlReader(
         // UIPageViewController adds each page's view above ours on every turn, so
         // re-assert the close button on top after layout.
         view.bringSubviewToFront(closeButton)
-        if (!paginated) paginateIfPossible()
+        if (!layoutGridApplied) {
+            val width = CGRectGetWidth(view.bounds)
+            val height = CGRectGetHeight(view.bounds)
+            if (width > 0.0 && height > 0.0) {
+                layoutGridApplied = true
+                if (gridFor(width, height) != (gridColumns to gridRows)) {
+                    applyGrid(width, height)
+                }
+            }
+        }
     }
 
-    private fun paginateIfPossible() {
-        val width = CGRectGetWidth(view.bounds)
-        val height = CGRectGetHeight(view.bounds)
-        if (width <= 0.0 || height <= 0.0) return
+    /** Columns x rows the current page grid was built from. */
+    private fun gridFor(width: Double, height: Double): Pair<Int, Int> {
         val columns = ((width - HORIZONTAL_PADDING * 2.0) /
             (pageFont.pointSize * CHARACTER_WIDTH_RATIO)).toInt().coerceIn(MIN_COLUMNS, MAX_GRID)
         val rows = ((height - TOP_RESERVE - BOTTOM_RESERVE) /
             pageFont.lineHeight).toInt().coerceIn(MIN_ROWS, MAX_GRID)
+        return columns to rows
+    }
+
+    /** (Re)paginates for [width] x [height] and shows the current page. */
+    private fun applyGrid(width: Double, height: Double) {
+        if (width <= 0.0 || height <= 0.0) return
+        val (columns, rows) = gridFor(width, height)
         val paginatedPages = EpubPaginator.paginate(book.chapters, columns, rows)
         if (paginatedPages.isEmpty()) return
         pages = paginatedPages
-        paginated = true
-        currentIndex = startPage.coerceIn(0, paginatedPages.size - 1)
+        gridColumns = columns
+        gridRows = rows
+        currentIndex = currentIndex.coerceIn(0, paginatedPages.size - 1)
         showSinglePage(UIPageViewControllerNavigationDirection.UIPageViewControllerNavigationDirectionForward)
         onPageChanged(currentIndex, pages.size)
     }
@@ -150,18 +172,17 @@ internal class EpubPageCurlReader(
         val regularWidth = traitCollection().horizontalSizeClass == UIUserInterfaceSizeClassRegular
         if (!landscape || !regularWidth) {
             doubleSided = false
-            showSinglePage(UIPageViewControllerNavigationDirection.UIPageViewControllerNavigationDirectionForward)
             return UIPageViewControllerSpineLocationMin
         }
-        doubleSided = true
+        // Two-up spread: pair the current page with its right-hand neighbour.
         currentIndex -= currentIndex % 2
         val left = controllerAt(currentIndex)
         val right = controllerAt(currentIndex + 1)
         if (left == null || right == null) {
             doubleSided = false
-            showSinglePage(UIPageViewControllerNavigationDirection.UIPageViewControllerNavigationDirectionForward)
             return UIPageViewControllerSpineLocationMin
         }
+        doubleSided = true
         setViewControllers(
             viewControllers = listOf(left, right),
             direction = UIPageViewControllerNavigationDirection.UIPageViewControllerNavigationDirectionForward,
