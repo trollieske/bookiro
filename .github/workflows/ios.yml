@@ -240,7 +240,7 @@ jobs:
           FEED_PID=$!
           sleep 2
           xcrun simctl terminate "$SIM_UDID" com.bookrio.ios || true
-          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS="http://127.0.0.1:8765/feed.xml" \
+          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS="http://localhost:8765/feed.xml" \
             xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-podcast.log 2>&1 &
           SIMCTL_PID=$!
           sleep 20
@@ -258,6 +258,8 @@ jobs:
             exit 1
           fi
           if ! grep -q "podcastSubscribe=ok" /tmp/app-console-podcast.log; then
+            echo "--- feed server log ---"
+            cat /tmp/bookrio-feed-server.log || true
             echo "::error::Podcast subscribe failed (see console above)"
             exit 1
           fi

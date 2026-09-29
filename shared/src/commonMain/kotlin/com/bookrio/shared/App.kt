@@ -116,8 +116,13 @@ fun App() {
         openDemoPath(db, scope, autoOpenPdfPath()) { text -> message = text }
         openDemoPath(db, scope, autoOpenEpubPath()) { text -> message = text }
         autoSubscribeRssUrl()?.takeIf { it.isNotBlank() }?.let { url ->
-            val feedId = runCatching { PodcastRepository(db).subscribe(url).getOrNull() }.getOrNull()
-            println("[bookrio-smoke] podcastSubscribe=${if (feedId != null) "ok" else "fail"} feedId=$feedId")
+            val outcome: Result<Long> = runCatching { PodcastRepository(db).subscribe(url) }
+                .fold(onSuccess = { it }, onFailure = { Result.failure(it) })
+            val feedId = outcome.getOrNull()
+            println(
+                "[bookrio-smoke] podcastSubscribe=${if (feedId != null) "ok" else "fail"} " +
+                    "feedId=$feedId err=${outcome.exceptionOrNull()?.message}",
+            )
             if (feedId != null) {
                 val count = runCatching { db.podcastEpisodeDao().listIdsByFeed(feedId).size }
                     .getOrDefault(0)
