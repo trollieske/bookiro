@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.shared.platform.appDatabase
+import com.bookrio.shared.platform.autoOpenPdfPath
 import com.bookrio.shared.platform.importBookWithPicker
 import com.bookrio.shared.platform.presentPdfReader
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +89,27 @@ fun App() {
                 }
             }
         }
+    }
+
+    // CI/demo hook: BOOKRIO_AUTO_OPEN_PDF (absolute path) imports and opens a PDF
+    // immediately, so the GitHub Actions simulator smoke test can screenshot the
+    // native page-curl reader. No-op in normal runs.
+    LaunchedEffect(Unit) {
+        val demoPath = autoOpenPdfPath()?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val existing = db.bookDao().getByPath(demoPath)
+        val book = existing ?: run {
+            val id = db.bookDao().insert(
+                BookEntity(
+                    title = "CI sample",
+                    type = BookTypeEntity.EBOOK,
+                    format = formatFromName(demoPath),
+                    filePath = demoPath,
+                    importSource = ImportSourceEntity.SAMPLE,
+                )
+            )
+            db.bookDao().getById(id)
+        } ?: return@LaunchedEffect
+        openBook(scope, db, book) { text -> message = text }
     }
 
     MaterialTheme {

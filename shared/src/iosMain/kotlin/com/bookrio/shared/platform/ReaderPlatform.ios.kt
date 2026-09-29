@@ -6,6 +6,7 @@ import com.bookrio.shared.reader.PdfPageCurlReader
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSHomeDirectory
+import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSURL
 import platform.PDFKit.PDFDocument
 import platform.UIKit.UIApplication
@@ -16,6 +17,10 @@ import platform.UIKit.UIViewController
 import platform.darwin.NSObject
 
 internal actual fun appDatabase(): ShelfDatabase = getShelfDatabase()
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun autoOpenPdfPath(): String? =
+    NSProcessInfo.processInfo.environment["BOOKRIO_AUTO_OPEN_PDF"] as? String
 
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun presentPdfReader(

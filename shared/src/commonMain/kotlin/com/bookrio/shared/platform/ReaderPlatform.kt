@@ -37,3 +37,13 @@ internal expect fun presentPdfReader(
  * (absolutePath, fileName).
  */
 internal expect fun importBookWithPicker(onPicked: (filePath: String, fileName: String) -> Unit)
+
+/**
+ * Automation hook used by the GitHub Actions simulator smoke test.
+ *
+ * When the `BOOKRIO_AUTO_OPEN_PDF` environment variable is set to an absolute
+ * path, the app imports it on launch and immediately opens the native page-curl
+ * reader, so CI can screenshot the reader instead of just the empty library.
+ * Returns null during normal runs.
+ */
+internal expect fun autoOpenPdfPath(): String?
