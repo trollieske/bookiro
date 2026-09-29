@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import kotlin.math.roundToInt
 import com.bookrio.core.time.nowMillis
 import androidx.room.ColumnInfo
 import androidx.room.Entity
@@ -219,7 +220,7 @@ object WorkMatcher {
             return MatchResult(
                 MatchStrengthEntity.MEDIUM_TITLE_AUTHOR,
                 (0.75f + 0.25f * titleSim).coerceIn(0f, 1f),
-                "Tittel=${"%.0f".format(titleSim * 100)}%, forfatter match"
+                "Tittel=${(titleSim * 100).roundToInt()}%, forfatter match"
             )
         }
 
@@ -231,7 +232,7 @@ object WorkMatcher {
                 return MatchResult(
                     MatchStrengthEntity.WEAK_FILENAME,
                     (0.4f + 0.6f * fnSim).coerceIn(0f, 1f),
-                    "Filnavn=${"%.0f".format(fnSim * 100)}%"
+                    "Filnavn=${(fnSim * 100).roundToInt()}%"
                 )
             }
         }
@@ -240,7 +241,7 @@ object WorkMatcher {
             return MatchResult(
                 MatchStrengthEntity.MEDIUM_TITLE_AUTHOR,
                 (0.6f + 0.4f * titleSim).coerceIn(0f, 1f),
-                "Tittel=${"%.0f".format(titleSim * 100)}% (uten forfatter)"
+                "Tittel=${(titleSim * 100).roundToInt()}% (uten forfatter)"
             )
         }
 

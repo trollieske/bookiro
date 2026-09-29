@@ -25,7 +25,6 @@ object NowPlayingOwnership {
 
     enum class Engine { NONE, AUDIOBOOK, PODCAST }
 
-    private val lock = Any()
     private val _owner = MutableStateFlow(Engine.NONE)
     val owner: StateFlow<Engine> = _owner.asStateFlow()
 
@@ -48,7 +47,7 @@ object NowPlayingOwnership {
      */
     fun claim(engine: Engine): Boolean {
         if (engine == Engine.NONE) return false
-        synchronized(lock) {
+        run {
             val current = _owner.value
             if (current == engine) {
                 dismissed.remove(engine)
@@ -73,7 +72,7 @@ object NowPlayingOwnership {
 
     /** User dismissed the bar for [engine]: hide it until that engine plays again. */
     fun dismiss(engine: Engine) {
-        synchronized(lock) {
+        run {
             dismissed.add(engine)
             when (engine) {
                 Engine.AUDIOBOOK -> ActivePlaybackState.retire()
@@ -86,7 +85,7 @@ object NowPlayingOwnership {
 
     /** Clears ownership and dismissal (used when the process/tests reset global state). */
     fun reset() {
-        synchronized(lock) {
+        run {
             ActivePlaybackState.retire()
             PodcastPlaybackState.retire()
             _owner.value = Engine.NONE

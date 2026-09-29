@@ -5,6 +5,7 @@ import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.dao.WorkWithEditions
+import androidx.room.withTransaction
 import com.bookrio.data.local.entity.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
@@ -272,9 +273,9 @@ class HandoffRepository(
         manual: Boolean
     ): EditionLinkResult {
         var result: EditionLinkResult? = null
-        db.runInTransaction {
-            val existingEbook = runBlocking { editionDao.getByBookId(ebook.id) }
-            val existingAudio = runBlocking { editionDao.getByBookId(audiobook.id) }
+        db.withTransaction {
+            val existingEbook = editionDao.getByBookId(ebook.id)
+            val existingAudio = editionDao.getByBookId(audiobook.id)
 
             val workId = when {
                 existingEbook != null -> existingEbook.workId
@@ -282,22 +283,20 @@ class HandoffRepository(
                 else -> {
                     val canonical = WorkMatcher.normalizeTitle(ebook.title).ifBlank { audiobook.title.lowercase() }.trim()
                     val auth = WorkMatcher.normalizeAuthor(ebook.author).ifBlank { audiobook.author }
-                    runBlocking {
-                        workDao.insert(
-                            WorkEntity(
-                                canonicalTitle = canonical.ifBlank { ebook.title },
-                                canonicalAuthor = auth.ifBlank { ebook.author },
-                                isbn = WorkMatcher.normalizeIsbn(ebook.isbn) ?: WorkMatcher.normalizeIsbn(audiobook.isbn),
-                                series = ebook.series ?: audiobook.series,
-                                seriesIndex = ebook.seriesIndex ?: audiobook.seriesIndex
-                            )
+                    workDao.insert(
+                        WorkEntity(
+                            canonicalTitle = canonical.ifBlank { ebook.title },
+                            canonicalAuthor = auth.ifBlank { ebook.author },
+                            isbn = WorkMatcher.normalizeIsbn(ebook.isbn) ?: WorkMatcher.normalizeIsbn(audiobook.isbn),
+                            series = ebook.series ?: audiobook.series,
+                            seriesIndex = ebook.seriesIndex ?: audiobook.seriesIndex
                         )
-                    }
+                    )
                 }
             }
             val created = existingEbook == null && existingAudio == null
-            val eId = runBlocking { editionDao.ensureEditionForBook(workId, ebook.id, EditionTypeEntity.EBOOK, match, manual) }
-            val aId = runBlocking { editionDao.ensureEditionForBook(workId, audiobook.id, EditionTypeEntity.AUDIOBOOK, match, manual) }
+            val eId = editionDao.ensureEditionForBook(workId, ebook.id, EditionTypeEntity.EBOOK, match, manual)
+            val aId = editionDao.ensureEditionForBook(workId, audiobook.id, EditionTypeEntity.AUDIOBOOK, match, manual)
             result = EditionLinkResult(
                 workId = workId,
                 createdNewWork = created,
