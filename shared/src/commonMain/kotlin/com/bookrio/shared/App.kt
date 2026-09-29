@@ -96,20 +96,24 @@ fun App() {
     // native page-curl reader. No-op in normal runs.
     LaunchedEffect(Unit) {
         val demoPath = autoOpenPdfPath()?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        val existing = db.bookDao().getByPath(demoPath)
-        val book = existing ?: run {
-            val id = db.bookDao().insert(
-                BookEntity(
-                    title = "CI sample",
-                    type = BookTypeEntity.EBOOK,
-                    format = formatFromName(demoPath),
-                    filePath = demoPath,
-                    importSource = ImportSourceEntity.SAMPLE,
+        runCatching {
+            val existing = db.bookDao().getByPath(demoPath)
+            val book = existing ?: run {
+                val id = db.bookDao().insert(
+                    BookEntity(
+                        title = "CI sample",
+                        type = BookTypeEntity.EBOOK,
+                        format = formatFromName(demoPath),
+                        filePath = demoPath,
+                        importSource = ImportSourceEntity.SAMPLE,
+                    )
                 )
-            )
-            db.bookDao().getById(id)
-        } ?: return@LaunchedEffect
-        openBook(scope, db, book) { text -> message = text }
+                db.bookDao().getById(id)
+            } ?: return@runCatching
+            openBook(scope, db, book) { text -> message = text }
+        }.onFailure { t ->
+            println("[bookrio-smoke] auto-open failed: ${t.message}")
+        }
     }
 
     MaterialTheme {
@@ -271,6 +275,7 @@ private fun openBook(
         ) { page, totalPages ->
             saveProgress(scope, database, book.id, page, totalPages)
         }
+        println("[bookrio-smoke] presentPdfReader=$presented format=${book.format} path=$path")
         if (!presented) onMessage("Kunne ikke åpne PDF-en.")
     }
 }

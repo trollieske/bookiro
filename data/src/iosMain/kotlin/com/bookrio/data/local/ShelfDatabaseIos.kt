@@ -3,6 +3,7 @@ package com.bookrio.data.local
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlin.concurrent.Volatile
+import platform.Foundation.NSHomeDirectory
 
 @Volatile
 private var INSTANCE: ShelfDatabase? = null
@@ -19,8 +20,14 @@ fun getShelfDatabase(): ShelfDatabase {
     return db
 }
 
+/**
+ * Room's non-Android builder needs a real path, not a bare file name (a relative
+ * name resolves against a read-only cwd and fails with "Unable to open database").
+ */
+private fun databasePath(): String = "${NSHomeDirectory()}/Documents/${ShelfDatabase.DB_NAME}"
+
 private fun build(): ShelfDatabase =
-    Room.databaseBuilder<ShelfDatabase>(name = ShelfDatabase.DB_NAME)
+    Room.databaseBuilder<ShelfDatabase>(name = databasePath())
         .setDriver(BundledSQLiteDriver())
         .addMigrations(*ShelfDatabase.ALL_MIGRATIONS)
         .fallbackToDestructiveMigration(dropAllTables = true)

@@ -122,7 +122,16 @@ jobs:
           fi
           xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-reader.png
           echo "--- app console (tail) ---"
-          tail -60 /tmp/app-console.log
+          tail -80 /tmp/app-console.log
+          if grep -q "Uncaught Kotlin exception" /tmp/app-console.log; then
+            echo "::error::Uncaught Kotlin exception in the app (see console above)"
+            exit 1
+          fi
+          if ! grep -q "presentPdfReader=true" /tmp/app-console.log; then
+            echo "::error::Native page-curl reader was not presented (see console above)"
+            exit 1
+          fi
+          echo "OK: native page-curl reader presented on the simulator"
 
       - name: Upload simulator screenshot
         if: success()
