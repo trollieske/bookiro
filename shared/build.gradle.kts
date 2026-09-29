@@ -18,6 +18,7 @@ kotlin {
             isStatic = true
             // Export the shared core so Swift can see its models too.
             export(project(":core"))
+            export(project(":data"))
         }
     }
 
