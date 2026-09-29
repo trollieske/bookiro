@@ -1,6 +1,7 @@
 package com.bookrio.shared
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,11 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,16 +36,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bookrio.core.time.nowMillis
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.dao.PodcastFeedSummary
 import com.bookrio.data.local.entity.BookEntity
 import com.bookrio.data.local.entity.BookTypeEntity
 import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ImportSourceEntity
+import com.bookrio.data.local.entity.PodcastEpisodeEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.shared.platform.appDatabase
 import com.bookrio.shared.platform.autoOpenEpubPath
@@ -52,6 +60,9 @@ import com.bookrio.shared.platform.presentPdfReader
 import com.bookrio.shared.player.AudioOwner
 import com.bookrio.shared.player.AudioPlayers
 import com.bookrio.shared.player.AudiobookPlayback
+import com.bookrio.shared.podcast.PodcastPlayback
+import com.bookrio.shared.podcast.PodcastRepository
+import com.bookrio.shared.podcast.autoSubscribeRssUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -74,6 +85,7 @@ fun App() {
     val scope = rememberCoroutineScope()
     val books by remember { db.bookDao().observeAll() }.collectAsState(initial = emptyList<BookEntity>())
     var message by remember { mutableStateOf<String?>(null) }
+    var tab by remember { mutableStateOf(0) }
 
     val onImport: () -> Unit = {
         importBookWithPicker { filePath, fileName ->
@@ -97,27 +109,40 @@ fun App() {
         }
     }
 
-    // CI/demo hook: BOOKRIO_AUTO_OPEN_PDF (absolute path) imports and opens a PDF
-    // immediately, so the GitHub Actions simulator smoke test can screenshot the
-    // native page-curl reader. No-op in normal runs.
+    // CI/demo hooks: BOOKRIO_AUTO_OPEN_PDF / BOOKRIO_AUTO_OPEN_EPUB import and
+    // open a document immediately; BOOKRIO_AUTO_SUBSCRIBE_RSS subscribes to a
+    // feed. All are no-ops in normal runs.
     LaunchedEffect(Unit) {
         openDemoPath(db, scope, autoOpenPdfPath()) { text -> message = text }
         openDemoPath(db, scope, autoOpenEpubPath()) { text -> message = text }
+        autoSubscribeRssUrl()?.takeIf { it.isNotBlank() }?.let { url ->
+            val feedId = runCatching { PodcastRepository(db).subscribe(url).getOrNull() }.getOrNull()
+            println("[bookrio-smoke] podcastSubscribe=${if (feedId != null) "ok" else "fail"} feedId=$feedId")
+            if (feedId != null) {
+                val count = runCatching { db.podcastEpisodeDao().listIdsByFeed(feedId).size }
+                    .getOrDefault(0)
+                println("[bookrio-smoke] podcastEpisodes=$count")
+            }
+        }
     }
 
     MaterialTheme {
         Surface(color = Bg, modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Header(count = books.size, onImport = onImport)
+                TabBar(tab = tab, onSelect = { tab = it })
 
-                if (books.isEmpty()) {
-                    EmptyLibrary(onImport = onImport)
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(books, key = { it.id }) { book ->
-                            BookRow(book = book, onClick = {
-                                openBook(scope, db, book) { text -> message = text }
-                            })
+                when (tab) {
+                    1 -> PodcastsScreen(db = db, scope = scope) { text -> message = text }
+                    else -> if (books.isEmpty()) {
+                        EmptyLibrary(onImport = onImport)
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(books, key = { it.id }) { book ->
+                                BookRow(book = book, onClick = {
+                                    openBook(scope, db, book) { text -> message = text }
+                                })
+                            }
                         }
                     }
                 }
@@ -174,6 +199,260 @@ private fun Header(count: Int, onImport: () -> Unit) {
             Text("IMPORTER", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
         }
     }
+}
+
+@Composable
+private fun TabBar(tab: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(Panel).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TabButton("BØKER", selected = tab == 0) { onSelect(0) }
+        TabButton("PODKASTER", selected = tab == 1) { onSelect(1) }
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Hairline))
+}
+
+@Composable
+private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text(
+            label,
+            color = if (selected) Accent else Dim,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+/**
+ * Podcasts inside the same Compose shell: subscriptions, an RSS-URL field,
+ * episode lists and foreground pull-to-refresh. Playback always goes through the
+ * one shared now-playing bar ([PodcastPlayback] -> [AudioPlayers.shared]).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PodcastsScreen(db: ShelfDatabase, scope: CoroutineScope, onMessage: (String) -> Unit) {
+    val repository = remember { PodcastRepository(db) }
+    val feeds by remember { db.podcastFeedDao().observeSummaries() }
+        .collectAsState(initial = emptyList<PodcastFeedSummary>())
+    var selectedFeedId by remember { mutableStateOf<Long?>(null) }
+    var url by remember { mutableStateOf("") }
+    var refreshing by remember { mutableStateOf(false) }
+
+    val feedId = selectedFeedId
+    if (feedId != null) {
+        EpisodesPane(
+            db = db,
+            scope = scope,
+            repository = repository,
+            feedId = feedId,
+            feed = feeds.firstOrNull { it.feedId == feedId },
+            onBack = { selectedFeedId = null },
+            onMessage = onMessage,
+        )
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        RssInput(
+            value = url,
+            onValueChange = { url = it },
+            onSubmit = {
+                val candidate = url.trim()
+                if (candidate.isNotBlank()) {
+                    scope.launch {
+                        refreshing = true
+                        val result = repository.subscribe(candidate)
+                        refreshing = false
+                        if (result.isSuccess) {
+                            url = ""
+                            onMessage("Abonnerte på feeden.")
+                        } else {
+                            onMessage("Kunne ikke abonnere: ${result.exceptionOrNull()?.message ?: "feil"}")
+                        }
+                    }
+                }
+            },
+        )
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                scope.launch {
+                    refreshing = true
+                    val updated = repository.refreshAll()
+                    refreshing = false
+                    onMessage("Oppdaterte $updated feed(er).")
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            if (feeds.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "Ingen podkaster ennå",
+                        color = Fg,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Lim inn en RSS-URL over for å abonnere. Dra ned for å oppdatere.",
+                        color = Dim,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(feeds, key = { it.feedId }) { feed ->
+                        FeedRow(feed = feed, onClick = { selectedFeedId = feed.feedId })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EpisodesPane(
+    db: ShelfDatabase,
+    scope: CoroutineScope,
+    repository: PodcastRepository,
+    feedId: Long,
+    feed: PodcastFeedSummary?,
+    onBack: () -> Unit,
+    onMessage: (String) -> Unit,
+) {
+    val episodes by remember(feedId) { db.podcastEpisodeDao().observeByFeed(feedId) }
+        .collectAsState(initial = emptyList<PodcastEpisodeEntity>())
+    var refreshing by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Panel).padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) {
+                Text("‹ TILBAKE", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            }
+            Text(
+                feed?.title ?: "Podkast",
+                color = Fg,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                scope.launch {
+                    refreshing = true
+                    val result = repository.refresh(feedId)
+                    refreshing = false
+                    if (result.isFailure) onMessage("Kunne ikke oppdatere feeden.")
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(episodes, key = { it.id }) { episode ->
+                    EpisodeRow(episode = episode, onClick = {
+                        scope.launch {
+                            val start = PodcastPlayback.resumePosition(db, episode.id)
+                            PodcastPlayback.play(db, scope, episode, start)
+                        }
+                    })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RssInput(value: String, onValueChange: (String) -> Unit, onSubmit: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.weight(1f)
+                .border(1.dp, Hairline, RoundedCornerShape(6.dp))
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+        ) {
+            if (value.isEmpty()) {
+                Text("RSS-URL", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = TextStyle(color = Fg, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                cursorBrush = SolidColor(Accent),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        TextButton(onClick = onSubmit) {
+            Text("LEGG TIL", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun FeedRow(feed: PodcastFeedSummary, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(width = 34.dp, height = 34.dp)
+                .background(Panel, RoundedCornerShape(17.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("P", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(feed.title, color = Fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2)
+            Text(
+                "${feed.episodeCount} episoder · ${feed.unplayedCount} uavspilte",
+                color = Dim,
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+        }
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Hairline))
+}
+
+@Composable
+private fun EpisodeRow(episode: PodcastEpisodeEntity, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(episode.title, color = Fg, fontSize = 14.sp, maxLines = 2)
+            Text(
+                formatPlaybackTime(episode.durationMs ?: 0L),
+                color = Dim,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+            )
+        }
+        Text("▶", color = Accent, fontSize = 14.sp)
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Hairline))
 }
 
 @Composable

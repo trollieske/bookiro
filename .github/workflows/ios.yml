@@ -203,6 +203,78 @@ jobs:
           path: /tmp/bookrio-epub.png
           if-no-files-found: warn
 
+      # Podcast runtime check: serve the same tiny RSS fixture over local HTTP
+      # (python3 stdlib, no new dependency) and launch the app with
+      # BOOKRIO_AUTO_SUBSCRIBE_RSS so the common parser + Room podcast tables +
+      # podcast_playback path are exercised on the Simulator.
+      - name: Smoke-run app on Simulator (auto-subscribe RSS)
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bookrio-podcast
+          cat > /tmp/bookrio-podcast/feed.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+           <channel>
+            <title>Bookrio CI Podcast</title>
+            <itunes:author>CI</itunes:author>
+            <description>A tiny CI feed.</description>
+            <item>
+             <title>Episode one</title>
+             <guid>bookrio-ci-ep-1</guid>
+             <enclosure url="https://example.com/ep1.mp3" length="123456" type="audio/mpeg"/>
+             <pubDate>Tue, 01 Oct 2024 10:00:00 GMT</pubDate>
+             <itunes:duration>90</itunes:duration>
+            </item>
+            <item>
+             <title>Episode two</title>
+             <guid>bookrio-ci-ep-2</guid>
+             <enclosure url="https://example.com/ep2.mp3" length="223456" type="audio/mpeg"/>
+             <pubDate>Wed, 02 Oct 2024 11:30:00 GMT</pubDate>
+             <itunes:duration>01:30</itunes:duration>
+            </item>
+           </channel>
+          </rss>
+          XML
+          python3 -m http.server 8765 --directory /tmp/bookrio-podcast > /tmp/bookrio-feed-server.log 2>&1 &
+          FEED_PID=$!
+          sleep 2
+          xcrun simctl terminate "$SIM_UDID" com.bookrio.ios || true
+          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS="http://127.0.0.1:8765/feed.xml" \
+            xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-podcast.log 2>&1 &
+          SIMCTL_PID=$!
+          sleep 20
+          kill "$FEED_PID" 2>/dev/null || true
+          if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
+            echo "::error::App exited early during podcast smoke test (likely crashed)"
+            cat /tmp/app-console-podcast.log
+            exit 1
+          fi
+          xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-podcast.png
+          echo "--- app console (tail) ---"
+          tail -80 /tmp/app-console-podcast.log
+          if grep -q "Uncaught Kotlin exception" /tmp/app-console-podcast.log; then
+            echo "::error::Uncaught Kotlin exception in the app (see console above)"
+            exit 1
+          fi
+          if ! grep -q "podcastSubscribe=ok" /tmp/app-console-podcast.log; then
+            echo "::error::Podcast subscribe failed (see console above)"
+            exit 1
+          fi
+          if ! grep -q "podcastEpisodes=2" /tmp/app-console-podcast.log; then
+            echo "::error::Podcast episodes were not stored (see console above)"
+            exit 1
+          fi
+          echo "OK: podcast subscribed and stored on the simulator"
+
+      - name: Upload podcast simulator screenshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bookrio-ios-podcast-screenshot
+          path: /tmp/bookrio-podcast.png
+          if-no-files-found: warn
+
       - name: Upload simulator screenshot
         if: success()
         uses: actions/upload-artifact@v4
