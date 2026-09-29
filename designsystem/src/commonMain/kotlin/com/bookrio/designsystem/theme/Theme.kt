@@ -118,27 +118,7 @@ fun ShelfTheme(
 
     val woodPalette = DarkWoodPalette
 
-    val view = androidx.compose.ui.platform.LocalView.current
-    SideEffect {
-        runCatching {
-            val activity = view.context as? android.app.Activity
-                ?: (view.context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
-            val window = activity?.window ?: return@runCatching
-            if (view.windowToken == null) {
-                view.post {
-                    runCatching {
-                        val ic = androidx.core.view.WindowCompat.getInsetsController(window, view)
-                        ic.isAppearanceLightStatusBars = !darkTheme
-                        ic.isAppearanceLightNavigationBars = !darkTheme
-                    }
-                }
-            } else {
-                val ic = androidx.core.view.WindowCompat.getInsetsController(window, view)
-                ic.isAppearanceLightStatusBars = !darkTheme
-                ic.isAppearanceLightNavigationBars = !darkTheme
-            }
-        }
-    }
+    ApplySystemBarAppearance(darkTheme)
 
     CompositionLocalProvider(
         LocalWoodPalette provides woodPalette,
