@@ -1,7 +1,9 @@
 package com.bookrio.data.local
 
+import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
@@ -40,6 +42,7 @@ import com.bookrio.data.local.entity.*
     version = 11,
     exportSchema = true
 )
+@ConstructedBy(ShelfDatabaseConstructor::class)
 @TypeConverters(Converters::class)
 abstract class ShelfDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
@@ -208,4 +211,13 @@ abstract class ShelfDatabase : RoomDatabase() {
         val ALL_MIGRATIONS: Array<Migration>
             get() = arrayOf(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
     }
+}
+
+/**
+ * Room KMP requires an explicit constructor bridge on non-Android platforms.
+ * Room's KSP processor generates the `actual` for each target.
+ */
+@Suppress("NO_ACTUAL_FOR_EXPECT")
+expect object ShelfDatabaseConstructor : RoomDatabaseConstructor<ShelfDatabase> {
+    override fun initialize(): ShelfDatabase
 }
