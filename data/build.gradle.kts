@@ -27,7 +27,6 @@ kotlin {
         commonMain.dependencies {
             api(project(":core"))
             api(libs.androidx.room.runtime)
-            api(libs.androidx.room.ktx)
             implementation(libs.androidx.sqlite.bundled)
             api(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)

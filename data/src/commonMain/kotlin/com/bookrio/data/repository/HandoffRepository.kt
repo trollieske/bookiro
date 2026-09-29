@@ -5,7 +5,6 @@ import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.dao.WorkWithEditions
-import androidx.room.withTransaction
 import com.bookrio.data.local.entity.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
@@ -273,7 +272,7 @@ class HandoffRepository(
         manual: Boolean
     ): EditionLinkResult {
         var result: EditionLinkResult? = null
-        db.withTransaction {
+        run {
             val existingEbook = editionDao.getByBookId(ebook.id)
             val existingAudio = editionDao.getByBookId(audiobook.id)
 
