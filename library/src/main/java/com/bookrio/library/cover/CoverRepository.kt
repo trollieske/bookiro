@@ -17,6 +17,7 @@ import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.net.MetadataFetcher
 import com.bookrio.library.mapper.DomainMappers
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.BookEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow

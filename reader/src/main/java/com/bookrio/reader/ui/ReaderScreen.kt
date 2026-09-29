@@ -1,5 +1,6 @@
 package com.bookrio.reader.ui
 
+import com.bookrio.data.local.getInstance
 import android.app.Activity
 import android.util.Log
 import android.content.Context

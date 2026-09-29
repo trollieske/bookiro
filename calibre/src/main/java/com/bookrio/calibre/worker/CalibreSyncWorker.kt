@@ -18,6 +18,7 @@ import com.bookrio.calibre.data.CalibreSourceRepository
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.crypto.KeystoreSecretCipher
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.CalibreSourceStateEntity
 import com.bookrio.data.local.entity.DownloadStatusEntity
 import com.bookrio.data.local.entity.ImportSourceEntity

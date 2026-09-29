@@ -1,5 +1,6 @@
 package com.bookrio.app
 
+import com.bookrio.data.local.getInstance
 import android.content.Context
 import android.net.Uri
 import android.os.Build

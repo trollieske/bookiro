@@ -21,6 +21,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.DownloadStatusEntity
 import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.local.entity.RemoteSourceStateEntity

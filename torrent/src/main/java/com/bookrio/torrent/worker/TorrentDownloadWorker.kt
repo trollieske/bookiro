@@ -14,6 +14,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.DownloadStatusEntity
 import com.bookrio.torrent.engine.TorrentEngine
 import kotlinx.coroutines.delay

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.podcast.viewmodel.PodcastDetailViewModel
 import com.bookrio.podcast.viewmodel.PodcastDiscoverViewModel
 import com.bookrio.podcast.viewmodel.PodcastPlayerViewModel

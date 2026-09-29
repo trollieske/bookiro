@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.DownloadStatusEntity
 import com.bookrio.data.local.entity.TorrentDownloadEntity
 import com.bookrio.data.local.entity.TorrentPriorityEntity

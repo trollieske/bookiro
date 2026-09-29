@@ -1,10 +1,11 @@
 package com.bookrio.data.local
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import com.bookrio.data.local.dao.*
 import com.bookrio.data.local.entity.*
 
@@ -66,15 +67,16 @@ abstract class ShelfDatabase : RoomDatabase() {
     abstract fun podcastDownloadDao(): com.bookrio.data.local.dao.PodcastDownloadDao
 
     companion object {
-        private const val DB_NAME = "shelf.db"
+        /** Android keeps this file name so existing installs do not reset. */
+        const val DB_NAME = "shelf.db"
 
         /**
          * v6 -> v7: adds the podcast tables. Purely additive; no ebook/audiobook table is
          * touched. Podcast playback and downloads remain separate from book progress.
          */
-        val MIGRATION_6_7: androidx.room.migration.Migration = object : androidx.room.migration.Migration(6, 7) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL(
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
                     "CREATE TABLE IF NOT EXISTS `podcast_feeds` (" +
                         "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                         "`feed_url` TEXT NOT NULL, `title` TEXT NOT NULL, `author` TEXT, " +
@@ -83,12 +85,11 @@ abstract class ShelfDatabase : RoomDatabase() {
                         "`added_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, " +
                         "`last_synced_at` INTEGER, `last_sync_status` TEXT, `last_sync_error` TEXT)"
                 )
-                db.execSQL(
+                connection.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_podcast_feeds_feed_url` " +
                         "ON `podcast_feeds` (`feed_url`)"
                 )
-
-                db.execSQL(
+                connection.execSQL(
                     "CREATE TABLE IF NOT EXISTS `podcast_episodes` (" +
                         "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `feed_id` INTEGER NOT NULL, " +
                         "`stable_identity` TEXT NOT NULL, `guid` TEXT, `enclosure_url` TEXT NOT NULL, " +
@@ -99,62 +100,52 @@ abstract class ShelfDatabase : RoomDatabase() {
                         "FOREIGN KEY(`feed_id`) REFERENCES `podcast_feeds`(`id`) " +
                         "ON UPDATE NO ACTION ON DELETE NO ACTION)"
                 )
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_episodes_feed_id` ON `podcast_episodes` (`feed_id`)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_episodes_published_at` ON `podcast_episodes` (`published_at`)")
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_podcast_episodes_stable_identity` ON `podcast_episodes` (`stable_identity`)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_episodes_feed_id_published_at` ON `podcast_episodes` (`feed_id`, `published_at`)")
-
-                db.execSQL(
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_episodes_feed_id` ON `podcast_episodes` (`feed_id`)")
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_episodes_published_at` ON `podcast_episodes` (`published_at`)")
+                connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_podcast_episodes_stable_identity` ON `podcast_episodes` (`stable_identity`)")
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_episodes_feed_id_published_at` ON `podcast_episodes` (`feed_id`, `published_at`)")
+                connection.execSQL(
                     "CREATE TABLE IF NOT EXISTS `podcast_playback` (" +
                         "`episode_id` INTEGER NOT NULL, `position_ms` INTEGER NOT NULL, `duration_ms` INTEGER, " +
                         "`last_played_at` INTEGER, `is_completed` INTEGER NOT NULL, `completed_at` INTEGER, " +
                         "`playback_speed` REAL NOT NULL, PRIMARY KEY(`episode_id`))"
                 )
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_playback_last_played_at` ON `podcast_playback` (`last_played_at`)")
-
-                db.execSQL(
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_playback_last_played_at` ON `podcast_playback` (`last_played_at`)")
+                connection.execSQL(
                     "CREATE TABLE IF NOT EXISTS `podcast_downloads` (" +
                         "`episode_id` INTEGER NOT NULL, `download_manager_id` INTEGER, `local_uri` TEXT, " +
                         "`status` TEXT NOT NULL, `requested_at` INTEGER, `completed_at` INTEGER, " +
                         "`downloaded_bytes` INTEGER, `total_bytes` INTEGER, `failure_reason` TEXT, " +
                         "PRIMARY KEY(`episode_id`))"
                 )
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_downloads_status` ON `podcast_downloads` (`status`)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_downloads_episode_id` ON `podcast_downloads` (`episode_id`)")
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_downloads_status` ON `podcast_downloads` (`status`)")
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_podcast_downloads_episode_id` ON `podcast_downloads` (`episode_id`)")
             }
         }
 
         /**
-         * v7 -> v8: makes the FTP/FTPS/SFTP sync engine durable.
-         *
-         * Purely additive columns plus two indices. No existing column is
-         * dropped or renamed, so previously imported books are untouched.
-         * The `download_tasks` unique index is created only after pre-existing
-         * duplicate `(server_id, remote_path)` rows are collapsed.
+         * v7 -> v8: makes the FTP/FTPS/SFTP sync engine durable (additive columns + indices).
          */
-        val MIGRATION_7_8: androidx.room.migration.Migration = object : androidx.room.migration.Migration(7, 8) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `state` TEXT NOT NULL DEFAULT 'ACTIVE'")
-                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `last_error` TEXT")
-                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `concurrency_override` INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `charging_only` INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `last_sync_at` INTEGER")
-
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `remote_mtime` INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `staging_path` TEXT")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `last_progress_at` INTEGER")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `error_kind` TEXT")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `bytes_per_sec` INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `next_attempt_at` INTEGER")
-
-                // Collapse legacy duplicates before the unique index is created.
-                db.execSQL(
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `state` TEXT NOT NULL DEFAULT 'ACTIVE'")
+                connection.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `last_error` TEXT")
+                connection.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `concurrency_override` INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `charging_only` INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE `ftp_servers` ADD COLUMN `last_sync_at` INTEGER")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `remote_mtime` INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `staging_path` TEXT")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `last_progress_at` INTEGER")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `error_kind` TEXT")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `bytes_per_sec` INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `next_attempt_at` INTEGER")
+                connection.execSQL(
                     "DELETE FROM `download_tasks` WHERE `id` NOT IN " +
                         "(SELECT MIN(`id`) FROM `download_tasks` GROUP BY `server_id`, `remote_path`)"
                 )
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_download_tasks_status` ON `download_tasks` (`status`)")
-                db.execSQL(
+                connection.execSQL("CREATE INDEX IF NOT EXISTS `index_download_tasks_status` ON `download_tasks` (`status`)")
+                connection.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_download_tasks_server_id_remote_path` " +
                         "ON `download_tasks` (`server_id`, `remote_path`)"
                 )
@@ -162,31 +153,23 @@ abstract class ShelfDatabase : RoomDatabase() {
         }
 
         /**
-         * v8 -> v9: one shared transfer queue for all remote sources plus the
-         * Calibre Content Server table.
-         *
-         * Purely additive. Existing FTP rows are tagged `FTP:<serverId>`; rows
-         * that already used the queue with a NULL `server_id` are tagged
-         * `LEGACY:<id>` so the new unique index cannot collide. No book row is
-         * touched and no credential is moved.
+         * v8 -> v9: one shared transfer queue for all remote sources plus Calibre.
          */
-        val MIGRATION_8_9: androidx.room.migration.Migration = object : androidx.room.migration.Migration(8, 9) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `source_kind` TEXT")
-                db.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `source_ref` TEXT")
-                db.execSQL("UPDATE `download_tasks` SET `source_kind` = 'FTP', `source_ref` = 'FTP:' || `server_id` WHERE `server_id` IS NOT NULL")
-                db.execSQL("UPDATE `download_tasks` SET `source_kind` = 'LEGACY', `source_ref` = 'LEGACY:' || `id` WHERE `server_id` IS NULL")
-                // Collapse any duplicates the old NULL-tolerant index allowed.
-                db.execSQL(
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `source_kind` TEXT")
+                connection.execSQL("ALTER TABLE `download_tasks` ADD COLUMN `source_ref` TEXT")
+                connection.execSQL("UPDATE `download_tasks` SET `source_kind` = 'FTP', `source_ref` = 'FTP:' || `server_id` WHERE `server_id` IS NOT NULL")
+                connection.execSQL("UPDATE `download_tasks` SET `source_kind` = 'LEGACY', `source_ref` = 'LEGACY:' || `id` WHERE `server_id` IS NULL")
+                connection.execSQL(
                     "DELETE FROM `download_tasks` WHERE `id` NOT IN " +
                         "(SELECT MIN(`id`) FROM `download_tasks` GROUP BY `source_kind`, `source_ref`, `remote_path`)"
                 )
-                db.execSQL(
+                connection.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_download_tasks_source_ref_path` " +
                         "ON `download_tasks` (`source_kind`, `source_ref`, `remote_path`)"
                 )
-
-                db.execSQL(
+                connection.execSQL(
                     "CREATE TABLE IF NOT EXISTS `calibre_servers` (" +
                         "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                         "`display_name` TEXT NOT NULL, `base_url` TEXT NOT NULL, " +
@@ -202,64 +185,27 @@ abstract class ShelfDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * v9 -> v10: user-chosen torrent seeding policy. Purely additive.
-         */
-        val MIGRATION_9_10: androidx.room.migration.Migration = object : androidx.room.migration.Migration(9, 10) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `torrent_downloads` ADD COLUMN `seed_policy` TEXT")
+        /** v9 -> v10: user-chosen torrent seeding policy. Purely additive. */
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE `torrent_downloads` ADD COLUMN `seed_policy` TEXT")
             }
         }
 
-        /**
-         * v10 -> v11: makes SMB and WebDAV durable sources.
-         *
-         * Purely additive columns. Existing rows become ACTIVE with no error;
-         * `is_active`, credentials and sync settings are untouched.
-         */
-        val MIGRATION_10_11: androidx.room.migration.Migration = object : androidx.room.migration.Migration(10, 11) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        /** v10 -> v11: makes SMB and WebDAV durable sources. Purely additive. */
+        val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+            override fun migrate(connection: SQLiteConnection) {
                 for (table in listOf("smb_servers", "webdav_servers")) {
-                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `last_sync_at` INTEGER")
-                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `state` TEXT NOT NULL DEFAULT 'ACTIVE'")
-                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `last_error` TEXT")
-                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `concurrency_override` INTEGER NOT NULL DEFAULT 0")
-                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `charging_only` INTEGER NOT NULL DEFAULT 0")
+                    connection.execSQL("ALTER TABLE `$table` ADD COLUMN `last_sync_at` INTEGER")
+                    connection.execSQL("ALTER TABLE `$table` ADD COLUMN `state` TEXT NOT NULL DEFAULT 'ACTIVE'")
+                    connection.execSQL("ALTER TABLE `$table` ADD COLUMN `last_error` TEXT")
+                    connection.execSQL("ALTER TABLE `$table` ADD COLUMN `concurrency_override` INTEGER NOT NULL DEFAULT 0")
+                    connection.execSQL("ALTER TABLE `$table` ADD COLUMN `charging_only` INTEGER NOT NULL DEFAULT 0")
                 }
             }
         }
 
-        @Volatile
-        private var INSTANCE: ShelfDatabase? = null
-
-        fun getInstance(context: Context): ShelfDatabase =
-            INSTANCE ?: synchronized(this) {
-                INSTANCE ?: build(context).also { INSTANCE = it }
-            }
-
-        private fun build(context: Context): ShelfDatabase {
-            val holder = DbHolder()
-            val base = Room.databaseBuilder(
-                context.applicationContext,
-                ShelfDatabase::class.java,
-                DB_NAME
-            )
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
-                .fallbackToDestructiveMigration()
-            val db = runCatching {
-                base
-                    .addCallback(SeedCallback { holder.db ?: error("DB not assigned during onCreate") })
-                    .build()
-            }.getOrElse { _: Throwable ->
-                runCatching {
-                    context.deleteDatabase(DB_NAME)
-                }
-                base.build()
-            }
-            holder.db = db
-            return db
-        }
+        val ALL_MIGRATIONS: Array<Migration>
+            get() = arrayOf(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
     }
 }
-
-private class DbHolder { @Volatile var db: ShelfDatabase? = null }

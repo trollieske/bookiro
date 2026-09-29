@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.HandoffPrecisionEntity
 import com.bookrio.data.repository.HandoffRepository
 import com.bookrio.data.repository.ResolvedHandoff

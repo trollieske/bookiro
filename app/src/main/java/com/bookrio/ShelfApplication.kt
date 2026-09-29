@@ -17,6 +17,7 @@ import com.bookrio.core.di.AppDependenciesProvider
 import com.bookrio.core.gamification.ReadingTrackerFacade
 import com.bookrio.data.gamification.engine.ReadingTrackerEngine
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.app.workers.MediaScannerWorker
 import com.bookrio.ftp.worker.FtpPeriodicSyncWorker
 import com.bookrio.ftp.worker.FtpSyncCoordinator

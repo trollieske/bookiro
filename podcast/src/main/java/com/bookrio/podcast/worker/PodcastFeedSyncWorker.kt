@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.podcast.data.download.PodcastDownloads
 import com.bookrio.podcast.data.repository.PodcastRepository
 import java.util.concurrent.TimeUnit

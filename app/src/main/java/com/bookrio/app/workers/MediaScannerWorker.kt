@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.work.*
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.library.data.BookImportRepository
 import kotlinx.coroutines.flow.first

@@ -35,6 +35,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.player.AudiobookNowPlaying

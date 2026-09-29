@@ -12,18 +12,6 @@ import java.io.File
 
 data class RemoteEnqueueReport(val added: Int, val alreadyQueued: Int, val skipped: Int)
 
-/** Per-source aggregate used by the source cards. */
-data class SourceCounts(
-    val sourceRef: String,
-    val total: Int = 0,
-    val queued: Int = 0,
-    val running: Int = 0,
-    val completed: Int = 0,
-    val failed: Int = 0,
-    val paused: Int = 0,
-    val retrying: Int = 0
-)
-
 /**
  * The single authoritative transfer queue for a remote source kind.
  *

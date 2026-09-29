@@ -3,6 +3,7 @@ package com.bookrio.torrent.engine
 import android.content.Context
 import android.util.Log
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.DownloadStatusEntity
 import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.local.entity.TorrentDownloadEntity

@@ -27,6 +27,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.bookrio.core.playback.PlaybackArbiter
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.data.repository.PodcastPlaybackState
 import com.bookrio.podcast.R

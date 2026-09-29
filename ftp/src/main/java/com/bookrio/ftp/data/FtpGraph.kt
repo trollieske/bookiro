@@ -2,6 +2,7 @@ package com.bookrio.ftp.data
 
 import android.content.Context
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.ftp.client.FtpClientEngine
 import com.bookrio.ftp.client.RemoteFileClientFactory
 import com.bookrio.ftp.client.SshHostKeyStore

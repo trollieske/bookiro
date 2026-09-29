@@ -15,6 +15,7 @@ import com.bookrio.library.sort.LibrarySorter
 import com.bookrio.library.R
 import com.bookrio.library.sort.ResumeSelector
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.BookEntity
 import com.bookrio.data.local.entity.BookTypeEntity
 import com.bookrio.data.prefs.UserPreferencesRepository

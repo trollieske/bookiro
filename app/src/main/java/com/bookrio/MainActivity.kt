@@ -1,5 +1,6 @@
 package com.bookrio
 
+import com.bookrio.data.local.getInstance
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity

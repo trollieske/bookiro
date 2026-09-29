@@ -3,6 +3,7 @@ package com.bookrio.calibre.data
 import android.content.Context
 import com.bookrio.data.crypto.KeystoreSecretCipher
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import java.io.File
 
 /** Small explicit dependency graph for the Calibre module. */

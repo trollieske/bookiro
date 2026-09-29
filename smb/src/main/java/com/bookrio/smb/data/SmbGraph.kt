@@ -3,6 +3,7 @@ package com.bookrio.smb.data
 import android.content.Context
 import com.bookrio.data.crypto.KeystoreSecretCipher
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.transfer.RemoteTransferRepository
 import java.io.File
 

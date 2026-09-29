@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.library.data.BookImportRepository
 import java.io.File

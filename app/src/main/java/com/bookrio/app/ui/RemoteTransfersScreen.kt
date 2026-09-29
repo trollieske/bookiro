@@ -49,6 +49,7 @@ import com.bookrio.calibre.data.CalibreGraph
 import com.bookrio.calibre.data.CalibreSourceRepository
 import com.bookrio.calibre.worker.CalibreSyncWorker
 import com.bookrio.data.local.ShelfDatabase
+import com.bookrio.data.local.getInstance
 import com.bookrio.data.local.entity.DownloadStatusEntity
 import com.bookrio.data.local.entity.DownloadTaskEntity
 import com.bookrio.data.local.entity.RemoteTaskSource
