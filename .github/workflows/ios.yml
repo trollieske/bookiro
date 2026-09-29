@@ -41,6 +41,9 @@ jobs:
       - name: Build Shared framework (iOS simulator)
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
 
+      - name: Build Shared framework (iOS device)
+        run: ./gradlew :shared:linkDebugFrameworkIosArm64 --stacktrace
+
       - name: Build iosApp for iOS Simulator
         run: |
           set -o pipefail
@@ -56,11 +59,25 @@ jobs:
             ONLY_ACTIVE_ARCH=YES \
             build
 
-      - name: Upload build log
-        if: always()
+      - name: Build iosApp for iOS device
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            build
+
+      - name: Upload simulator app
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build-logs
-          path: |
-            shared/build/reports/**
+          name: Bookrio-ios-simulator-app
+          path: ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug-iphonesimulator/*.app
           if-no-files-found: ignore
