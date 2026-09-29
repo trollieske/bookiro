@@ -1,5 +1,6 @@
 package com.bookrio.data.local.dao
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -69,7 +70,7 @@ interface PodcastFeedDao {
     fun observeFollowedCount(): Flow<Int>
 
     @Query("UPDATE podcast_feeds SET is_followed = :followed, updated_at = :now WHERE id = :id")
-    suspend fun setFollowed(id: Long, followed: Boolean, now: Long = System.currentTimeMillis())
+    suspend fun setFollowed(id: Long, followed: Boolean, now: Long = nowMillis())
 
     @Query(
         "UPDATE podcast_feeds SET last_synced_at = :syncedAt, last_sync_status = :status, " +
@@ -80,7 +81,7 @@ interface PodcastFeedDao {
         syncedAt: Long,
         status: String,
         error: String?,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query(
@@ -164,7 +165,7 @@ interface PodcastPlaybackDao {
     fun observeAll(): Flow<List<PodcastPlaybackEntity>>
 
     @Query("UPDATE podcast_playback SET is_completed = 1, completed_at = :at, position_ms = 0 WHERE episode_id = :episodeId")
-    suspend fun markCompleted(episodeId: Long, at: Long = System.currentTimeMillis())
+    suspend fun markCompleted(episodeId: Long, at: Long = nowMillis())
 
     @Query("DELETE FROM podcast_playback WHERE episode_id = :episodeId")
     suspend fun deleteByEpisode(episodeId: Long)

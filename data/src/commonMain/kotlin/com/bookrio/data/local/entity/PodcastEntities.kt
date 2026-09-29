@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -42,8 +43,8 @@ data class PodcastFeedEntity(
     @ColumnInfo(name = "categories_json") val categoriesJson: String? = null,
     @ColumnInfo(name = "explicit") val explicit: Boolean? = null,
     @ColumnInfo(name = "is_followed") val isFollowed: Boolean = true,
-    @ColumnInfo(name = "added_at") val addedAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "added_at") val addedAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis(),
     @ColumnInfo(name = "last_synced_at") val lastSyncedAt: Long? = null,
     @ColumnInfo(name = "last_sync_status") val lastSyncStatus: String? = null,
     @ColumnInfo(name = "last_sync_error") val lastSyncError: String? = null
@@ -83,8 +84,8 @@ data class PodcastEpisodeEntity(
     @ColumnInfo(name = "episode_number") val episodeNumber: Int? = null,
     @ColumnInfo(name = "explicit") val explicit: Boolean? = null,
     @ColumnInfo(name = "episode_type") val episodeType: String? = null,
-    @ColumnInfo(name = "added_at") val addedAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "added_at") val addedAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )
 
 @Entity(

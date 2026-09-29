@@ -1,5 +1,6 @@
 package com.bookrio.data.repository
 
+import com.bookrio.core.time.nowMillis
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
@@ -246,7 +247,7 @@ class HandoffRepository(
         val toEd = editionDao.getByBookId(toEditionBookId) ?: return@withContext
         val work = workDao.getById(fromEd.workId)
         if (work != null) {
-            workDao.update(work.copy(lastActiveEditionId = toEd.id, lastUpdatedAt = System.currentTimeMillis()))
+            workDao.update(work.copy(lastActiveEditionId = toEd.id, lastUpdatedAt = nowMillis()))
         }
         linkDao.insert(
             HandoffLinkEntity(

@@ -1,5 +1,6 @@
 package com.bookrio.data.local.dao
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 import com.bookrio.data.local.entity.*
 import com.bookrio.data.transfer.SourceCounts
@@ -53,21 +54,21 @@ interface FtpServerDao {
     ): FtpServerEntity?
 
     @Query("UPDATE ftp_servers SET sync_last_check_at = :now WHERE id = :id")
-    suspend fun markSynced(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markSynced(id: Long, now: Long = nowMillis())
 
     @Query("UPDATE ftp_servers SET state = :state, last_error = :error, updated_at = :now WHERE id = :id")
     suspend fun updateState(
         id: Long,
         state: FtpSourceStateEntity,
         error: String?,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query("UPDATE ftp_servers SET last_sync_at = :now, updated_at = :now WHERE id = :id")
-    suspend fun markLastSync(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markLastSync(id: Long, now: Long = nowMillis())
 
     @Query("UPDATE ftp_servers SET base_path = :path, updated_at = :now WHERE id = :id")
-    suspend fun updateBasePath(id: Long, path: String, now: Long = System.currentTimeMillis())
+    suspend fun updateBasePath(id: Long, path: String, now: Long = nowMillis())
 
     @Query("UPDATE ftp_servers SET sync_wifi_only = :wifiOnly, charging_only = :chargingOnly, " +
         "concurrency_override = :concurrency, updated_at = :now WHERE id = :id")
@@ -76,11 +77,11 @@ interface FtpServerDao {
         wifiOnly: Boolean,
         chargingOnly: Boolean,
         concurrency: Int,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query("UPDATE ftp_servers SET sync_enabled = :enabled, updated_at = :now WHERE id = :id")
-    suspend fun setSyncEnabled(id: Long, enabled: Boolean, now: Long = System.currentTimeMillis())
+    suspend fun setSyncEnabled(id: Long, enabled: Boolean, now: Long = nowMillis())
 
     @Query("DELETE FROM ftp_servers WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -146,18 +147,18 @@ interface DownloadTaskDao {
             "status IN ('QUEUED','PENDING') OR (status = 'RETRYING' AND (next_attempt_at IS NULL OR next_attempt_at <= :now))" +
             ") ORDER BY priority DESC, created_at ASC LIMIT 1"
     )
-    suspend fun nextRunnable(serverId: Long, now: Long = System.currentTimeMillis()): DownloadTaskEntity?
+    suspend fun nextRunnable(serverId: Long, now: Long = nowMillis()): DownloadTaskEntity?
 
     /** Atomically claim a queued task. Returns 1 when this caller won the race. */
     @Query(
         "UPDATE download_tasks SET status = 'RUNNING', started_at = :now, updated_at = :now " +
             "WHERE id = :id AND status IN ('QUEUED','PENDING','RETRYING')"
     )
-    suspend fun claim(id: Long, now: Long = System.currentTimeMillis()): Int
+    suspend fun claim(id: Long, now: Long = nowMillis()): Int
 
     @Query("UPDATE download_tasks SET downloaded_bytes = :bytes, bytes_per_sec = :speed, " +
         "last_progress_at = :now, updated_at = :now WHERE id = :id")
-    suspend fun updateProgress(id: Long, bytes: Long, speed: Long, now: Long = System.currentTimeMillis())
+    suspend fun updateProgress(id: Long, bytes: Long, speed: Long, now: Long = nowMillis())
 
     @Query("UPDATE download_tasks SET status = :status, error_message = :error, error_kind = :errorKind, " +
         "updated_at = :now WHERE id = :id")
@@ -166,7 +167,7 @@ interface DownloadTaskDao {
         status: DownloadStatusEntity,
         error: String? = null,
         errorKind: String? = null,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query(
@@ -179,7 +180,7 @@ interface DownloadTaskDao {
         error: String?,
         errorKind: String?,
         nextAttemptAt: Long?,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query(
@@ -187,7 +188,7 @@ interface DownloadTaskDao {
             "bytes_per_sec = 0, error_message = NULL, error_kind = NULL, completed_at = :now, " +
             "updated_at = :now, imported_book_id = :bookId WHERE id = :id"
     )
-    suspend fun markCompleted(id: Long, bookId: Long?, now: Long = System.currentTimeMillis())
+    suspend fun markCompleted(id: Long, bookId: Long?, now: Long = nowMillis())
 
     /** Reset a terminal/failed row so it can be downloaded again. */
     @Query(
@@ -195,7 +196,7 @@ interface DownloadTaskDao {
             "retry_count = 0, error_message = NULL, error_kind = NULL, started_at = NULL, " +
             "completed_at = NULL, next_attempt_at = NULL, updated_at = :now WHERE id = :id"
     )
-    suspend fun requeue(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun requeue(id: Long, now: Long = nowMillis())
 
     /** Keep an existing row's remote metadata fresh without losing progress. */
     @Query("UPDATE download_tasks SET size_bytes = :size, remote_mtime = :mtime, " +
@@ -205,11 +206,11 @@ interface DownloadTaskDao {
         size: Long,
         mtime: Long,
         localPath: String?,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query("UPDATE download_tasks SET staging_path = :staging, updated_at = :now WHERE id = :id")
-    suspend fun setStagingPath(id: Long, staging: String?, now: Long = System.currentTimeMillis())
+    suspend fun setStagingPath(id: Long, staging: String?, now: Long = nowMillis())
 
     /**
      * Process-death recovery: any task that claims to be running but has no
@@ -219,26 +220,26 @@ interface DownloadTaskDao {
         "UPDATE download_tasks SET status = 'QUEUED', error_message = NULL, updated_at = :now " +
             "WHERE server_id = :serverId AND status IN ('RUNNING','VERIFYING','IMPORTING')"
     )
-    suspend fun rehydrateActiveForServer(serverId: Long, now: Long = System.currentTimeMillis()): Int
+    suspend fun rehydrateActiveForServer(serverId: Long, now: Long = nowMillis()): Int
 
     @Query(
         "UPDATE download_tasks SET status = 'QUEUED', error_message = NULL, error_kind = NULL, " +
             "next_attempt_at = NULL, updated_at = :now " +
             "WHERE status IN ('RUNNING','VERIFYING','IMPORTING')"
     )
-    suspend fun rehydrateAllActive(now: Long = System.currentTimeMillis()): Int
+    suspend fun rehydrateAllActive(now: Long = nowMillis()): Int
 
     @Query(
         "UPDATE download_tasks SET status = CASE WHEN :paused = 1 THEN 'PAUSED_BY_USER' ELSE 'QUEUED' END, updated_at = :now " +
             "WHERE server_id = :serverId AND status IN ('QUEUED','PENDING','RUNNING','VERIFYING','IMPORTING','RETRYING','WAITING_FOR_NETWORK','PAUSED','PAUSED_BY_USER')"
     )
-    suspend fun setPausedForServer(serverId: Long, paused: Boolean, now: Long = System.currentTimeMillis())
+    suspend fun setPausedForServer(serverId: Long, paused: Boolean, now: Long = nowMillis())
 
     @Query(
         "UPDATE download_tasks SET status = 'CANCELLED', updated_at = :now " +
             "WHERE server_id = :serverId AND status NOT IN ('COMPLETED','CANCELLED','FAILED')"
     )
-    suspend fun cancelForServer(serverId: Long, now: Long = System.currentTimeMillis())
+    suspend fun cancelForServer(serverId: Long, now: Long = nowMillis())
 
     @Query("UPDATE download_tasks SET status = 'CANCELLED' WHERE id = :id")
     suspend fun cancel(id: Long)
@@ -292,7 +293,7 @@ interface DownloadTaskDao {
             "status IN ('QUEUED','PENDING') OR (status = 'RETRYING' AND (next_attempt_at IS NULL OR next_attempt_at <= :now))" +
             ") ORDER BY priority DESC, created_at ASC LIMIT 1"
     )
-    suspend fun nextRunnableForSource(kind: String, ref: String, now: Long = System.currentTimeMillis()): DownloadTaskEntity?
+    suspend fun nextRunnableForSource(kind: String, ref: String, now: Long = nowMillis()): DownloadTaskEntity?
 
     @Query("SELECT * FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref AND status = 'IMPORTING' ORDER BY created_at ASC")
     suspend fun importingForSource(kind: String, ref: String): List<DownloadTaskEntity>
@@ -307,10 +308,10 @@ interface DownloadTaskDao {
     suspend fun runnableRefsForKind(kind: String): List<String>
 
     @Query("UPDATE download_tasks SET source_kind = :kind, source_ref = :ref, updated_at = :now WHERE id = :id")
-    suspend fun setSource(id: Long, kind: String, ref: String, now: Long = System.currentTimeMillis())
+    suspend fun setSource(id: Long, kind: String, ref: String, now: Long = nowMillis())
 
     @Query("UPDATE download_tasks SET status = 'CANCELLED', updated_at = :now WHERE source_kind = :kind AND source_ref = :ref AND status NOT IN ('COMPLETED','CANCELLED','FAILED')")
-    suspend fun cancelForSource(kind: String, ref: String, now: Long = System.currentTimeMillis())
+    suspend fun cancelForSource(kind: String, ref: String, now: Long = nowMillis())
 
     @Query("DELETE FROM download_tasks WHERE source_kind = :kind AND source_ref = :ref")
     suspend fun deleteForSource(kind: String, ref: String)
@@ -320,14 +321,14 @@ interface DownloadTaskDao {
             "next_attempt_at = NULL, updated_at = :now " +
             "WHERE source_kind = :kind AND source_ref = :ref AND status IN ('RUNNING','VERIFYING','IMPORTING')"
     )
-    suspend fun rehydrateActiveForSource(kind: String, ref: String, now: Long = System.currentTimeMillis()): Int
+    suspend fun rehydrateActiveForSource(kind: String, ref: String, now: Long = nowMillis()): Int
 
     @Query(
         "UPDATE download_tasks SET status = CASE WHEN :paused = 1 THEN 'PAUSED_BY_USER' ELSE 'QUEUED' END, updated_at = :now " +
             "WHERE source_kind = :kind AND source_ref = :ref AND status IN " +
             "('QUEUED','PENDING','RUNNING','VERIFYING','IMPORTING','RETRYING','WAITING_FOR_NETWORK','PAUSED','PAUSED_BY_USER')"
     )
-    suspend fun setPausedForSource(kind: String, ref: String, paused: Boolean, now: Long = System.currentTimeMillis())
+    suspend fun setPausedForSource(kind: String, ref: String, paused: Boolean, now: Long = nowMillis())
 
     @Query(
         "SELECT COUNT(*) AS total, " +

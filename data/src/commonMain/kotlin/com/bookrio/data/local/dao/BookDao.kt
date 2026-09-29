@@ -1,5 +1,6 @@
 package com.bookrio.data.local.dao
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 import com.bookrio.data.local.entity.*
 import kotlinx.coroutines.flow.Flow
@@ -19,7 +20,7 @@ interface BookDao {
     suspend fun delete(book: BookEntity)
 
     @Query("UPDATE books SET is_deleted = 1, last_modified_at = :now WHERE id = :id")
-    suspend fun softDelete(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun softDelete(id: Long, now: Long = nowMillis())
 
     /**
      * Updates ONLY cover_path and spine_color without touching last_modified_at.

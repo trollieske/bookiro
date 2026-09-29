@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 
 @Entity(
@@ -26,5 +27,5 @@ data class ReadingProgressEntity(
 
     @ColumnInfo(name = "scroll_pct") val scrollPct: Float? = null,
 
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )

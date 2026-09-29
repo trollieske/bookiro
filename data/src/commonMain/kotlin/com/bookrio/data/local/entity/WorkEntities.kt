@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -22,8 +23,8 @@ data class WorkEntity(
     @ColumnInfo(name = "series") val series: String? = null,
     @ColumnInfo(name = "series_index") val seriesIndex: Float? = null,
     @ColumnInfo(name = "last_active_edition_id") val lastActiveEditionId: Long? = null,
-    @ColumnInfo(name = "last_updated_at") val lastUpdatedAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "last_updated_at") val lastUpdatedAt: Long = nowMillis(),
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis()
 )
 
 @Entity(
@@ -56,7 +57,7 @@ data class WorkEditionEntity(
     @ColumnInfo(name = "match_strength") val matchStrength: MatchStrengthEntity? = null,
     @ColumnInfo(name = "match_confidence") val matchConfidence: Float = 0f,
     @ColumnInfo(name = "linked_manually") val linkedManually: Boolean = false,
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis()
 )
 
 @Entity(
@@ -93,7 +94,7 @@ data class HandoffLinkEntity(
     @ColumnInfo(name = "precision_used") val precisionUsed: HandoffPrecisionEntity = HandoffPrecisionEntity.SMART,
     @ColumnInfo(name = "mapping_method") val mappingMethod: String = "",
     @ColumnInfo(name = "was_estimate") val wasEstimate: Boolean = false,
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis()
 )
 
 object WorkMatcher {

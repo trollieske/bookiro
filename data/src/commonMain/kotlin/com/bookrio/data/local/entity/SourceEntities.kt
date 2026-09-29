@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 
 enum class SmbVersionEntity { SMB1, SMB2, SMB3, AUTO }
@@ -46,8 +47,8 @@ data class SmbServerEntity(
     @ColumnInfo(name = "concurrency_override") val concurrencyOverride: Int = 0,
     @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )
 
 enum class WebdavAuthTypeEntity { BASIC, DIGEST, BEARER, OAUTH2, NONE }
@@ -93,8 +94,8 @@ data class WebdavServerEntity(
     @ColumnInfo(name = "concurrency_override") val concurrencyOverride: Int = 0,
     @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )
 
 enum class TorrentSourceTypeEntity { MAGNET, TORRENT_FILE, INFO_HASH, HTTP_URL }
@@ -162,7 +163,7 @@ data class TorrentDownloadEntity(
 
     @ColumnInfo(name = "session_id") val sessionId: String? = null,
 
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
     @ColumnInfo(name = "started_at") val startedAt: Long? = null,
     @ColumnInfo(name = "completed_at") val completedAt: Long? = null,
     @ColumnInfo(name = "last_updated_at") val lastUpdatedAt: Long? = null

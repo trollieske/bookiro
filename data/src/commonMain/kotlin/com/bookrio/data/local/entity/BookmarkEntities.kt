@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 
 @Entity(
@@ -26,8 +27,8 @@ data class BookmarkEntity(
 
     @ColumnInfo(name = "position_percent") val positionPercent: Float? = null,
 
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )
 
 enum class BookmarkTypeEntity { GENERIC, HIGHLIGHT, NOTE, CHAPTER }
@@ -55,6 +56,6 @@ data class HighlightEntity(
 
     @ColumnInfo(name = "position_percent") val positionPercent: Float? = null,
 
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )

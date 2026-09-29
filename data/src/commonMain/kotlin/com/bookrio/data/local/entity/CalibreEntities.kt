@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 
 /** Stable kind/ref helpers for the shared transfer queue. */
@@ -44,6 +45,6 @@ data class CalibreServerEntity(
     @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
     @ColumnInfo(name = "is_active") val isActive: Boolean = true,
 
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )

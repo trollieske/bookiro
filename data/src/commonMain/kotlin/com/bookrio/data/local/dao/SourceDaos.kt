@@ -1,5 +1,6 @@
 package com.bookrio.data.local.dao
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 import com.bookrio.data.local.entity.*
 import kotlinx.coroutines.flow.Flow
@@ -31,25 +32,25 @@ interface SmbServerDao {
     suspend fun getSyncEnabledServers(): List<SmbServerEntity>
 
     @Query("UPDATE smb_servers SET sync_last_check_at = :now WHERE id = :id")
-    suspend fun markSynced(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markSynced(id: Long, now: Long = nowMillis())
 
     @Query("SELECT * FROM smb_servers WHERE host = :host AND port = :port AND share_name = :shareName AND username = :username LIMIT 1")
     suspend fun findByNaturalKey(host: String, port: Int, shareName: String, username: String): SmbServerEntity?
 
     @Query("UPDATE smb_servers SET state = :state, last_error = :error, updated_at = :now WHERE id = :id")
-    suspend fun updateState(id: Long, state: RemoteSourceStateEntity, error: String?, now: Long = System.currentTimeMillis())
+    suspend fun updateState(id: Long, state: RemoteSourceStateEntity, error: String?, now: Long = nowMillis())
 
     @Query("UPDATE smb_servers SET last_sync_at = :now, sync_last_check_at = :now, updated_at = :now WHERE id = :id")
-    suspend fun markLastSync(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markLastSync(id: Long, now: Long = nowMillis())
 
     @Query("UPDATE smb_servers SET base_path = :path, updated_at = :now WHERE id = :id")
-    suspend fun updateBasePath(id: Long, path: String, now: Long = System.currentTimeMillis())
+    suspend fun updateBasePath(id: Long, path: String, now: Long = nowMillis())
 
     @Query("UPDATE smb_servers SET sync_enabled = :enabled, updated_at = :now WHERE id = :id")
-    suspend fun setSyncEnabled(id: Long, enabled: Boolean, now: Long = System.currentTimeMillis())
+    suspend fun setSyncEnabled(id: Long, enabled: Boolean, now: Long = nowMillis())
 
     @Query("UPDATE smb_servers SET sync_wifi_only = :wifiOnly, charging_only = :chargingOnly, concurrency_override = :concurrency, updated_at = :now WHERE id = :id")
-    suspend fun updateSyncPolicy(id: Long, wifiOnly: Boolean, chargingOnly: Boolean, concurrency: Int, now: Long = System.currentTimeMillis())
+    suspend fun updateSyncPolicy(id: Long, wifiOnly: Boolean, chargingOnly: Boolean, concurrency: Int, now: Long = nowMillis())
 
     @Query("DELETE FROM smb_servers WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -82,25 +83,25 @@ interface WebdavServerDao {
     suspend fun getSyncEnabledServers(): List<WebdavServerEntity>
 
     @Query("UPDATE webdav_servers SET sync_last_check_at = :now WHERE id = :id")
-    suspend fun markSynced(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markSynced(id: Long, now: Long = nowMillis())
 
     @Query("SELECT * FROM webdav_servers WHERE base_url = :baseUrl AND username = :username LIMIT 1")
     suspend fun findByNaturalKey(baseUrl: String, username: String): WebdavServerEntity?
 
     @Query("UPDATE webdav_servers SET state = :state, last_error = :error, updated_at = :now WHERE id = :id")
-    suspend fun updateState(id: Long, state: RemoteSourceStateEntity, error: String?, now: Long = System.currentTimeMillis())
+    suspend fun updateState(id: Long, state: RemoteSourceStateEntity, error: String?, now: Long = nowMillis())
 
     @Query("UPDATE webdav_servers SET last_sync_at = :now, sync_last_check_at = :now, updated_at = :now WHERE id = :id")
-    suspend fun markLastSync(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markLastSync(id: Long, now: Long = nowMillis())
 
     @Query("UPDATE webdav_servers SET base_path = :path, updated_at = :now WHERE id = :id")
-    suspend fun updateBasePath(id: Long, path: String, now: Long = System.currentTimeMillis())
+    suspend fun updateBasePath(id: Long, path: String, now: Long = nowMillis())
 
     @Query("UPDATE webdav_servers SET sync_enabled = :enabled, updated_at = :now WHERE id = :id")
-    suspend fun setSyncEnabled(id: Long, enabled: Boolean, now: Long = System.currentTimeMillis())
+    suspend fun setSyncEnabled(id: Long, enabled: Boolean, now: Long = nowMillis())
 
     @Query("UPDATE webdav_servers SET sync_wifi_only = :wifiOnly, charging_only = :chargingOnly, concurrency_override = :concurrency, updated_at = :now WHERE id = :id")
-    suspend fun updateSyncPolicy(id: Long, wifiOnly: Boolean, chargingOnly: Boolean, concurrency: Int, now: Long = System.currentTimeMillis())
+    suspend fun updateSyncPolicy(id: Long, wifiOnly: Boolean, chargingOnly: Boolean, concurrency: Int, now: Long = nowMillis())
 
     @Query("DELETE FROM webdav_servers WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -140,11 +141,11 @@ interface CalibreServerDao {
         id: Long,
         state: CalibreSourceStateEntity,
         error: String?,
-        now: Long = System.currentTimeMillis()
+        now: Long = nowMillis()
     )
 
     @Query("UPDATE calibre_servers SET last_sync_at = :now, sync_last_check_at = :now, updated_at = :now WHERE id = :id")
-    suspend fun markLastSync(id: Long, now: Long = System.currentTimeMillis())
+    suspend fun markLastSync(id: Long, now: Long = nowMillis())
 
     @Query("DELETE FROM calibre_servers WHERE id = :id")
     suspend fun deleteById(id: Long)

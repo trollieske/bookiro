@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 import com.bookrio.core.domain.model.*
 
@@ -50,8 +51,8 @@ data class BookEntity(
     @ColumnInfo(name = "server_id") val serverId: Long? = null,
     @ColumnInfo(name = "remote_path") val remotePath: String? = null,
 
-    @ColumnInfo(name = "date_added") val dateAdded: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "last_modified_at") val lastModifiedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "date_added") val dateAdded: Long = nowMillis(),
+    @ColumnInfo(name = "last_modified_at") val lastModifiedAt: Long = nowMillis(),
     @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Long? = null,
     @ColumnInfo(name = "date_finished") val dateFinished: Long? = null,
 

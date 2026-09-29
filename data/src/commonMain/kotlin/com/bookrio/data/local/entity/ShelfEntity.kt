@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 
 enum class ShelfTypeEntity { AUTO, USER }
@@ -14,8 +15,8 @@ data class ShelfEntity(
     @ColumnInfo(name = "cover_color") val coverColor: Int? = null,
     @ColumnInfo(name = "icon") val icon: String? = null,
     @ColumnInfo(name = "position") val position: Int = 0,
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )
 
 @Entity(
@@ -31,7 +32,7 @@ data class ShelfBookCrossRef(
     @ColumnInfo(name = "shelf_id") val shelfId: Long,
     @ColumnInfo(name = "book_id") val bookId: Long,
     @ColumnInfo(name = "position") val position: Int = 0,
-    @ColumnInfo(name = "added_at") val addedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "added_at") val addedAt: Long = nowMillis()
 )
 
 data class ShelfWithBooks(

@@ -9,8 +9,9 @@ import com.bookrio.data.local.entity.DailyReadingEntity
 import com.bookrio.data.local.entity.ReadingProfileEntity
 import com.bookrio.data.local.entity.ReadingSessionEntity
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.minus
 
 @Dao
 interface ReadingRhythmDao {
@@ -83,8 +84,8 @@ interface ReadingRhythmDao {
     @Transaction
     suspend fun updateStreakOnGoalMet(todayDateStr: String) {
         val profile = getProfile() ?: ReadingProfileEntity()
-        val today = LocalDate.parse(todayDateStr, DateTimeFormatter.ISO_LOCAL_DATE)
-        val yesterdayStr = today.minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val today = LocalDate.parse(todayDateStr)
+        val yesterdayStr = today.minus(1, DateTimeUnit.DAY).toString()
 
         val isConsecutive = profile.lastCompletedDate == yesterdayStr
         val isSameDay = profile.lastCompletedDate == todayDateStr

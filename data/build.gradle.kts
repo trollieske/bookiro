@@ -29,6 +29,7 @@ kotlin {
             api(libs.androidx.room.runtime)
             implementation(libs.androidx.sqlite.bundled)
             api(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.datetime)
         }
         androidMain.dependencies {
             api(libs.androidx.core.ktx)

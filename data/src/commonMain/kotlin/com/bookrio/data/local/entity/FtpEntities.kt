@@ -1,5 +1,6 @@
 package com.bookrio.data.local.entity
 
+import com.bookrio.core.time.nowMillis
 import androidx.room.*
 
 enum class ProtocolEntity { FTP, FTPS, SFTP }
@@ -86,8 +87,8 @@ data class FtpServerEntity(
     @ColumnInfo(name = "charging_only") val chargingOnly: Boolean = false,
     @ColumnInfo(name = "last_sync_at") val lastSyncAt: Long? = null,
 
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis()
 )
 
 @Entity(
@@ -121,7 +122,7 @@ data class DownloadTaskEntity(
     @ColumnInfo(name = "error_message") val errorMessage: String? = null,
     @ColumnInfo(name = "retry_count") val retryCount: Int = 0,
 
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "created_at") val createdAt: Long = nowMillis(),
     @ColumnInfo(name = "started_at") val startedAt: Long? = null,
     @ColumnInfo(name = "completed_at") val completedAt: Long? = null,
 
@@ -131,7 +132,7 @@ data class DownloadTaskEntity(
     @ColumnInfo(name = "staging_path") val stagingPath: String? = null,
     /** Last time bytes/status were flushed; drives progress rate limiting. */
     @ColumnInfo(name = "last_progress_at") val lastProgressAt: Long? = null,
-    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = nowMillis(),
     /** Classified failure kind ("auth", "network", "storage", "verify", …). */
     @ColumnInfo(name = "error_kind") val errorKind: String? = null,
     /** Per-file observed speed, bytes/s, flushed with progress. */
@@ -168,7 +169,7 @@ data class CachedPathEntity(
     @ColumnInfo(name = "is_directory") val isDirectory: Boolean,
     @ColumnInfo(name = "size_bytes") val sizeBytes: Long = 0L,
     @ColumnInfo(name = "modified_time") val modifiedTime: Long = 0L,
-    @ColumnInfo(name = "cached_at") val cachedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "cached_at") val cachedAt: Long = nowMillis()
 )
 
 @Entity(tableName = "sync_history")
