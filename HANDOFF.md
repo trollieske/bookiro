@@ -163,14 +163,17 @@ must be 2.5.0 (2.6+/2.7 klibs need Kotlin 2.3.x).
   `NSInvalidArgumentException: The number of provided view controllers (0) does not
   match the number required (1) for the requested spine location`. Paginate once in
   `init` (screen bounds), then refine in `viewDidLayoutSubviews`.
-- **ATS blocks cleartext `http://localhost`/`127.0.0.1`.** The CI podcast smoke
-  serves its RSS fixture over local HTTP, which needs `NSExceptionDomains` for
-  `localhost` + `127.0.0.1` (`NSExceptionAllowsInsecureHTTPLoads`) and/or
-  `NSAllowsLocalNetworking` in `Info.plist`. Also bind the helper server explicitly
-  (`python3 -m http.server --bind 127.0.0.1`) and use `127.0.0.1` in the URL:
-  `python3 -m http.server` defaults to IPv4-only, while macOS resolves `localhost`
-  via `::1` first, so `http://localhost:…` fails with `http_failed` even when ATS
-  is permissive.
+- **CI podcast smoke uses a file, not HTTP.** `python3 -m http.server` on the
+  `macos-15` runner reported as still running, yet loopback connections were refused
+  (`curl: (28) Failed to connect to 127.0.0.1 port 8765 … Couldn't connect to
+  server`) and the app logged `podcastSubscribe=fail … err=http_failed`. ATS
+  exceptions (`NSExceptionDomains` for `localhost`/`127.0.0.1` +
+  `NSAllowsLocalNetworking`) did not help because the server itself was unreachable.
+  The smoke now writes the RSS fixture into the app container and drives
+  `PodcastRepository.subscribeXml(feedUrl, xml)` via `BOOKRIO_AUTO_SUBSCRIBE_RSS_FILE`,
+  which tests the parser + Room persistence deterministically. The real HTTP path
+  (`httpGetText` = `NSData.dataWithContentsOfURL`) is unchanged for production and is
+  covered by the parser's offline `kotlinc-native` harness.
 - **The single audio owner is `AudioPlayers.shared`.** Never construct a second
   AVPlayer/engine for podcasts; start a new item by calling `play()` (it replaces the
   previous one).

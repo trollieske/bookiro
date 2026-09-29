@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
 import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSURL
+import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.dataWithContentsOfURL
 
 /**
@@ -38,3 +39,18 @@ private fun latin1(bytes: ByteArray): String = buildString(bytes.size) {
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun autoSubscribeRssUrl(): String? =
     NSProcessInfo.processInfo.environment["BOOKRIO_AUTO_SUBSCRIBE_RSS"] as? String
+
+/** Reads a local file as UTF-8 text on the IO dispatcher. */
+@OptIn(ExperimentalForeignApi::class)
+internal actual suspend fun readLocalText(path: String): String = withContext(platformIoDispatcher) {
+    val data = NSData.dataWithContentsOfFile(path) ?: throw IllegalStateException("file_read_failed")
+    val length = data.length.toInt()
+    if (length <= 0) throw IllegalStateException("empty_file")
+    val bytes = data.bytes?.readBytes(length) ?: throw IllegalStateException("empty_file")
+    bytes.decodeToString()
+}
+
+/** env `BOOKRIO_AUTO_SUBSCRIBE_RSS_FILE`, used by the CI simulator smoke test. */
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun autoSubscribeRssFile(): String? =
+    NSProcessInfo.processInfo.environment["BOOKRIO_AUTO_SUBSCRIBE_RSS_FILE"] as? String

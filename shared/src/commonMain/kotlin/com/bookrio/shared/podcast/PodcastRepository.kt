@@ -39,7 +39,24 @@ class PodcastRepository(private val db: ShelfDatabase) {
             return Result.success(existing.id)
         }
         return runCatching {
-            val xml = httpGetText(normalized)
+            subscribeXml(normalized, httpGetText(normalized))
+        }.fold(onSuccess = { it }, onFailure = { Result.failure(it) })
+    }
+
+    /**
+     * Network-free core of [subscribe]: parse [xml] and persist the feed + episodes
+     * under [feedUrl]. Used by [subscribe] after the fetch and by the CI smoke test
+     * (which reads a fixture from disk so it does not depend on runner networking).
+     */
+    suspend fun subscribeXml(feedUrl: String, xml: String): Result<Long> {
+        val normalized = PodcastUrls.normalize(feedUrl) ?: feedUrl
+        val feedDao = db.podcastFeedDao()
+        val existing = runCatching { feedDao.getByUrl(normalized) }.getOrNull()
+        if (existing != null) {
+            if (!existing.isFollowed) runCatching { feedDao.setFollowed(existing.id, true) }
+            return Result.success(existing.id)
+        }
+        return runCatching {
             val parsed = PodcastFeedParser.parse(xml, normalized)
             persistFeed(feed = null, parsed = parsed, initial = true).first
         }

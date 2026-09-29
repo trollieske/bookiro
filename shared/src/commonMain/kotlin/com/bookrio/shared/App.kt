@@ -62,7 +62,8 @@ import com.bookrio.shared.player.AudioPlayers
 import com.bookrio.shared.player.AudiobookPlayback
 import com.bookrio.shared.podcast.PodcastPlayback
 import com.bookrio.shared.podcast.PodcastRepository
-import com.bookrio.shared.podcast.autoSubscribeRssUrl
+import com.bookrio.shared.podcast.autoSubscribeRssFile
+import com.bookrio.shared.podcast.readLocalText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -74,6 +75,9 @@ private val Accent = Color(0xFFBEF93F)
 private val Dim = Color(0xFF8C8C8C)
 private val Fg = Color(0xFFF5F5F5)
 private val Hairline = Color(0xFF1F1F1F)
+
+/** Synthetic canonical feed URL used by the CI RSS-file smoke test. */
+private const val CI_FEED_URL = "https://ci.bookrio.local/feed.xml"
 
 /**
  * iOS entry screen. The library UI lives in commonMain (Compose Multiplatform);
@@ -115,9 +119,10 @@ fun App() {
     LaunchedEffect(Unit) {
         openDemoPath(db, scope, autoOpenPdfPath()) { text -> message = text }
         openDemoPath(db, scope, autoOpenEpubPath()) { text -> message = text }
-        autoSubscribeRssUrl()?.takeIf { it.isNotBlank() }?.let { url ->
-            val outcome: Result<Long> = runCatching { PodcastRepository(db).subscribe(url) }
-                .fold(onSuccess = { it }, onFailure = { Result.failure(it) })
+        autoSubscribeRssFile()?.takeIf { it.isNotBlank() }?.let { path ->
+            val outcome: Result<Long> = runCatching {
+                PodcastRepository(db).subscribeXml(CI_FEED_URL, readLocalText(path))
+            }.fold(onSuccess = { it }, onFailure = { Result.failure(it) })
             val feedId = outcome.getOrNull()
             println(
                 "[bookrio-smoke] podcastSubscribe=${if (feedId != null) "ok" else "fail"} " +

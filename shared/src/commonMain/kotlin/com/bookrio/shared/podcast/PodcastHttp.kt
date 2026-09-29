@@ -9,6 +9,9 @@ package com.bookrio.shared.podcast
  */
 internal expect suspend fun httpGetText(url: String): String
 
+/** Reads a local file as UTF-8 text (CI fixture loading). */
+internal expect suspend fun readLocalText(path: String): String
+
 /**
  * Automation hook used by the GitHub Actions simulator smoke test.
  *
@@ -17,3 +20,12 @@ internal expect suspend fun httpGetText(url: String): String
  * Returns null during normal runs.
  */
 internal expect fun autoSubscribeRssUrl(): String?
+
+/**
+ * Automation hook used by the GitHub Actions simulator smoke test.
+ *
+ * When `BOOKRIO_AUTO_SUBSCRIBE_RSS_FILE` is set to a local RSS file, the app
+ * parses it and stores it without any network access, so the smoke test does not
+ * depend on the runner being able to host/serve HTTP. Returns null normally.
+ */
+internal expect fun autoSubscribeRssFile(): String?

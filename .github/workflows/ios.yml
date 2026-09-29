@@ -236,16 +236,16 @@ jobs:
            </channel>
           </rss>
           XML
-          python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/bookrio-podcast > /tmp/bookrio-feed-server.log 2>&1 &
-          FEED_PID=$!
-          sleep 2
-          curl -sSf http://127.0.0.1:8765/feed.xml > /dev/null && echo "OK: local feed server is serving feed.xml"
+          # The macOS runner cannot reliably serve/host local HTTP (the helper
+          # server was up but loopback connections were refused), so drive the
+          # parser + Room persistence from a file inside the app container instead.
+          CONTAINER=$(xcrun simctl get_app_container "$SIM_UDID" com.bookrio.ios data)
+          cp /tmp/bookrio-podcast/feed.xml "$CONTAINER/Documents/ci-feed.xml"
           xcrun simctl terminate "$SIM_UDID" com.bookrio.ios || true
-          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS="http://127.0.0.1:8765/feed.xml" \
+          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS_FILE="$CONTAINER/Documents/ci-feed.xml" \
             xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-podcast.log 2>&1 &
           SIMCTL_PID=$!
           sleep 20
-          kill "$FEED_PID" 2>/dev/null || true
           if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
             echo "::error::App exited early during podcast smoke test (likely crashed)"
             cat /tmp/app-console-podcast.log
@@ -259,8 +259,6 @@ jobs:
             exit 1
           fi
           if ! grep -q "podcastSubscribe=ok" /tmp/app-console-podcast.log; then
-            echo "--- feed server log ---"
-            cat /tmp/bookrio-feed-server.log || true
             echo "::error::Podcast subscribe failed (see console above)"
             exit 1
           fi
