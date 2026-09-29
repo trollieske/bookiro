@@ -44,6 +44,13 @@ jobs:
       - name: Build Shared framework (iOS device)
         run: ./gradlew :shared:linkDebugFrameworkIosArm64 --stacktrace
 
+      - name: Stage frameworks for CI linking
+        run: |
+          mkdir -p shared/build/ci-frameworks/Debug/iphonesimulator
+          mkdir -p shared/build/ci-frameworks/Debug/iphoneos
+          cp -R shared/build/bin/iosSimulatorArm64/debugFramework/Shared.framework shared/build/ci-frameworks/Debug/iphonesimulator/
+          cp -R shared/build/bin/iosArm64/debugFramework/Shared.framework shared/build/ci-frameworks/Debug/iphoneos/
+
       - name: Build iosApp for iOS Simulator
         run: |
           set -o pipefail
