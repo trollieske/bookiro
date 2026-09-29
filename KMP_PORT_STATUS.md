@@ -34,6 +34,8 @@ complete but must be compiled/verified on a Mac.
   reader using `UIPageViewController` with Apple's built-in `.pageCurl` transition +
   PDFKit (`shared/.../reader/PdfPageCurlReader.kt`). Reading progress is written back
   through the shared `ReadingProgressDao`. **No Android `:pagecurl` code is ported.**
+  ✅ **CI-verified** on `macos-15`: `Shared.framework` links PDFKit/UIKit and the
+  iosApp links it for simulator + device (run `36548654298`).
 - **`iosApp`** — complete Xcode project: SwiftUI shell hosting the Compose UI,
   bundle id `com.bookrio.ios`, display name Bookrio, iOS 15+, iPhone **and** iPad
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
