@@ -198,6 +198,13 @@ agent should start at **discovery/downloads**, not playback:
 
 ## Current branches/commits
 
-`kmp-ios` head: `2993cee` (podcast CI fix). EPUB/audio/podcast are all pushed; the
-last verified run was `36638298509` (PDF + EPUB + podcast RSS smoke on the
-Simulator). Earlier verified runs: EPUB/audio `36633471628`.
+`kmp-ios` head after this run: EPUB, audio and podcast phases are all committed and
+pushed. Order: `c08ceaf` (EPUB reader) → `3e48b71` (EPUB viewWillAppear fix) →
+`5a44d96` (single audio owner) → `9c9fdb4` (podcasts) → `2993cee` + `ad826d2` +
+`3b4147f` (podcast CI smoke fixes).
+
+**CI (GitHub Actions `iOS Build`, `macos-15`):**
+- `36633471628` ✅ — audio commit; PDF + EPUB smoke tests pass.
+- `36641917158` ✅ — final: PDF + EPUB + **podcast RSS (file) smoke** all pass.
+- `36630606663`, `36638298509`, `36640121145` ❌ — earlier podcast-smoke attempts;
+  the networking failure and its fix are written up in the pitfalls section above.

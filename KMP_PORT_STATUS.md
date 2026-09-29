@@ -37,7 +37,7 @@ complete but must be compiled/verified on a Mac.
   Reading progress is written back through the shared `ReadingProgressDao`.
   **No Android `:pagecurl` code is ported.**
   ✅ **CI-verified** on `macos-15`: the PDF smoke test and the EPUB smoke test both
-  open the native page-curl reader (runs `36633471628`, `36638298509`).
+  open the native page-curl reader (runs `36633471628`, `36641917158`).
 - **iOS audio** — one `AVPlayer` for the whole app (`AudioPlayers.shared`,
   `shared/.../player/`): audiobook and podcast can never overlap. Local m4b/mp3/…
   play with play/pause/seek/chapters, resume + ~2 s progress writes through
@@ -46,8 +46,9 @@ complete but must be compiled/verified on a Mac.
 - **iOS podcasts** — subscribe by RSS URL, RSS 2.0/Atom parsed in common Kotlin,
   stored via the existing `:data` `podcast_feeds`/`podcast_episodes` DAOs, episodes
   listed in the Compose shell, streamed through the same audio owner and marked in
-  `podcast_playback`. Foreground pull-to-refresh only. ✅ CI smoke subscribes to a
-  local RSS fixture and asserts episodes are stored.
+  `podcast_playback`. Foreground pull-to-refresh only. ✅ Final CI run `36641917158`
+  parses an RSS fixture (filesystem, not HTTP — the runner refused loopback) and
+  asserts the feed + 2 episodes are stored.
 - **`iosApp`** — complete Xcode project: SwiftUI shell hosting the Compose UI,
   bundle id `com.bookrio.ios`, display name Bookrio, iOS 15+, iPhone **and** iPad
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
