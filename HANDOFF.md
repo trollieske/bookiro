@@ -18,12 +18,16 @@ A stale local `main` (shelf's) exists; ignore it — use `bookrio/*`.
 ## TL;DR status
 
 - **Android**: `:app:assembleDebug` and `:app:assembleRelease` (R8) pass; unit tests pass.
-- **iOS**: **verified on macOS GitHub Actions runners** — `Shared.framework`
-  (iosSimulatorArm64 + iosArm64) and the `iosApp` Xcode project link for both the
-  **simulator** and a **real device (arm64)**, for iPhone + iPad.
-- **Not done**: the `:library`/`:reader`/`:player` UI still compiles Android-only, so
-  the iOS app currently shows the Compose stub in `shared/.../App.kt`, not the real
-  library/reader/player. The iOS reader/audio actuals are not written yet.
+- **iOS**: **verified by actually running on a macOS Actions runner** — the iOS
+  Simulator smoke test boots the app, imports `tools/ci/sample.pdf`, opens the native
+  page-curl reader, and uploads a screenshot. `Shared.framework` (iosSimulatorArm64 +
+  iosArm64) and the `iosApp` Xcode project also link for the **simulator** and a
+  **real device (arm64)**, for iPhone + iPad.
+- **Reader slice done (PDF)**: the iOS app shows a Compose-Multiplatform library list,
+  imports via `UIDocumentPicker`, opens PDFs with Apple's built-in
+  `UIPageViewController(.pageCurl)` + PDFKit, and persists progress in the shared Room
+  DB. EPUB/FB2/MOBI/CBZ and audio are not implemented on iOS yet; the Android-only
+  `:library`/`:reader`/`:player` UI is unchanged.
 
 ## How to build / verify
 
@@ -59,6 +63,15 @@ bin/klib dump-metadata \
 ```
 Then still **push and read the Actions log** — only Xcode proves it links/launches.
 Each run is ~8–12 min (usually queued).
+
+The workflow is more than a build: after linking it **boots an iOS Simulator, installs
+the app, copies `tools/ci/sample.pdf` into the app container, launches with
+`BOOKRIO_AUTO_OPEN_PDF`, screenshots the page-curl reader, and fails on
+`Uncaught Kotlin exception` or when the reader was not presented**. Download the
+proof with:
+```bash
+gh -R trollieske/bookrio run download <run-id> -n Bookrio-ios-simulator-screenshot -D /tmp/shots
+```
 
 On a real Mac: `open iosApp/iosApp.xcodeproj`, scheme `iosApp`, Run (it calls
 `:shared:embedAndSignAppleFrameworkForXcode`). Set your team in Signing to run on a
@@ -109,6 +122,11 @@ must be 2.5.0 (2.6+/2.7 klibs need Kotlin 2.3.x).
 - `Dispatchers.IO` is internal on Native → use `platformIoDispatcher`.
 - `System.currentTimeMillis`/`java.time`/`String.format`/`synchronized`/`@Volatile`/`runInTransaction` are JVM-only. Use `nowMillis()`, `kotlinx.datetime`, `roundToInt()`, `run {}`, `kotlin.concurrent.Volatile`, sequential DAO calls.
 - Room KMP: `@ConstructedBy` + `expect object … : RoomDatabaseConstructor<T>`.
+- **Room on iOS needs an absolute path**: `Room.databaseBuilder(name = "shelf.db")`
+  fails with `Unable to open database 'shelf.db'`; use
+  `"${NSHomeDirectory()}/Documents/shelf.db"` (see `ShelfDatabaseIos.kt`).
+- **Compose iOS requires** `<key>CADisableMinimumFrameDurationOnPhone</key><true/>`
+  in `iosApp/Info.plist`, otherwise Compose throws on launch (the smoke test caught this).
 - The Compose Gradle plugin's iOS resource task fails in Xcode → keep `:shared` on plain CMP artifacts.
 - `project.pbxproj` is hand-written; `xlint`/parse errors surface as "Unable to read project". Frameworks for CI are staged into `shared/build/ci-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)` and `OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES` skips the Xcode Gradle phase.
 

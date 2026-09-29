@@ -47,6 +47,12 @@ complete but must be compiled/verified on a Mac.
 - `:shared:linkDebugFrameworkIosSimulatorArm64` and `:shared:linkDebugFrameworkIosArm64` ✅
 - `iosApp` for the **iOS Simulator** (arm64) with the Compose UI linked ✅
 - `iosApp` for **iOS device** (arm64) ✅
+- **Runtime smoke test** ✅ — boots a Simulator, installs the app, seeds
+  `tools/ci/sample.pdf`, launches with `BOOKRIO_AUTO_OPEN_PDF`, opens the native
+  page-curl reader, screenshots it, and fails on an uncaught Kotlin exception. This
+  caught two real launch bugs that build-only CI missed:
+  `CADisableMinimumFrameDurationOnPhone` missing from `Info.plist`, and Room's iOS
+  builder needing an absolute DB path.
 
 The framework therefore compiles/links with Kotlin/Native and the SwiftUI shell links
 the Kotlin Compose UI on a real macOS toolchain for both iPhone and iPad.
