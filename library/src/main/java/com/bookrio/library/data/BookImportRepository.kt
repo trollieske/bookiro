@@ -626,6 +626,7 @@ class BookImportRepository(
                 var totalSize = 0L
                 var currentOffset = 0L
                 var trackIndex = 0
+                var mergedTrackNumber = 1
 
                 for (b in sortedList) {
                     val tracksForB = db.audioTrackDao().getTracksForBook(b.id)
@@ -648,9 +649,16 @@ class BookImportRepository(
                             currentOffset += dur
                             trackIndex++
 
-                            if (b.id != canonicalBook.id) {
-                                db.audioTrackDao().insert(tr.copy(bookId = canonicalBook.id))
-                            }
+                            // Always renumber onto the canonical book in playback order:
+                            // fragments inherit trackNumber 1 from their single-track
+                            // origin, so without this the player would interleave tracks.
+                            db.audioTrackDao().insert(
+                                tr.copy(
+                                    bookId = canonicalBook.id,
+                                    discNumber = 1,
+                                    trackNumber = mergedTrackNumber++
+                                )
+                            )
                         }
                     } else {
                         val dur = b.durationMs ?: (5L * 60L * 1000L)
