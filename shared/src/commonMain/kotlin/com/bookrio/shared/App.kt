@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +49,9 @@ import com.bookrio.shared.platform.autoOpenPdfPath
 import com.bookrio.shared.platform.importBookWithPicker
 import com.bookrio.shared.platform.presentEpubReader
 import com.bookrio.shared.platform.presentPdfReader
+import com.bookrio.shared.player.AudioOwner
+import com.bookrio.shared.player.AudioPlayers
+import com.bookrio.shared.player.AudiobookPlayback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -131,6 +135,10 @@ fun App() {
                             .padding(16.dp),
                     )
                 }
+
+                // One now-playing bar for every sound in the app (audiobook or
+                // podcast): both flow through the single shared audio owner.
+                NowPlayingBar()
             }
         }
     }
@@ -280,8 +288,8 @@ private fun openBook(
         onMessage("Boken mangler en lesbar fil på denne enheten.")
         return
     }
-    when (book.format) {
-        FormatEntity.PDF, FormatEntity.EPUB -> scope.launch {
+    when {
+        book.format == FormatEntity.PDF || book.format == FormatEntity.EPUB -> scope.launch {
             runCatching { database.bookDao().update(book.copy(lastOpenedAt = nowMillis())) }
             val progress = runCatching { database.progressDao().getByBook(book.id) }.getOrNull()
             val startPage = progress?.pageIndex ?: 0
@@ -301,7 +309,15 @@ private fun openBook(
             }
             if (!presented) onMessage("Kunne ikke åpne ${book.format}-en.")
         }
-        else -> onMessage("iOS-leseren støtter PDF og EPUB nå — ${book.format} kommer senere.")
+        isAudioFormat(book.format) -> scope.launch {
+            runCatching { database.bookDao().update(book.copy(lastOpenedAt = nowMillis())) }
+            val tracks = runCatching { database.audioTrackDao().getTracksForBook(book.id) }
+                .getOrDefault(emptyList())
+            val start = AudiobookPlayback.resumePosition(database, book.id)
+            AudiobookPlayback.play(database, scope, book, tracks, start)
+            println("[bookrio-smoke] audioPlay=true format=${book.format} path=$path")
+        }
+        else -> onMessage("iOS-leseren støtter PDF, EPUB og lydbøker nå — ${book.format} kommer senere.")
     }
 }
 
@@ -310,6 +326,100 @@ private fun isAudioFormat(format: FormatEntity): Boolean = when (format) {
     FormatEntity.FLAC, FormatEntity.OGG, FormatEntity.OGG_OPUS, FormatEntity.WAV,
     -> true
     else -> false
+}
+
+/**
+ * The single now-playing bar. Every sound (audiobook or podcast) plays through
+ * [AudioPlayers.shared], so there is never more than one of these.
+ */
+@Composable
+private fun NowPlayingBar() {
+    val player = remember { AudioPlayers.shared }
+    val state by player.state.collectAsState()
+    val request = state.request ?: return
+    val chapters by AudiobookPlayback.chapters.collectAsState()
+    val chapterIndex by AudiobookPlayback.currentChapterIndex.collectAsState()
+    val duration = state.durationMs
+
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val fraction = dragFraction ?: if (duration > 0L) {
+        (state.positionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Panel)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+    ) {
+        val chapter = chapters.getOrNull(chapterIndex)
+        val subtitle = when {
+            request.owner == AudioOwner.AUDIOBOOK && chapter != null -> chapter.title
+            request.artist != null -> request.artist
+            else -> request.owner.name.lowercase()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    request.title,
+                    color = Fg,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Text(
+                    "$subtitle · ${formatPlaybackTime(state.positionMs)} / ${formatPlaybackTime(duration)}",
+                    color = Dim,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+            TextButton(onClick = { player.toggle() }) {
+                Text(
+                    if (state.isPlaying) "PAUSE" else "SPILL",
+                    color = Accent,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                )
+            }
+            TextButton(onClick = { player.stop() }) {
+                Text("LUKK", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            }
+        }
+        if (duration > 0L) {
+            Slider(
+                value = fraction,
+                onValueChange = { dragFraction = it },
+                onValueChangeFinished = {
+                    dragFraction?.let { f -> player.seekTo((f * duration).toLong()) }
+                    dragFraction = null
+                },
+            )
+        }
+        state.error?.let { error ->
+            Text(
+                error,
+                color = Accent,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                maxLines = 1,
+            )
+        }
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Hairline))
+}
+
+private fun formatPlaybackTime(ms: Long): String {
+    val safe = if (ms > 0L) ms else 0L
+    val totalSeconds = safe / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    val mm = if (minutes < 10L) "0$minutes" else "$minutes"
+    val ss = if (seconds < 10L) "0$seconds" else "$seconds"
+    return "$mm:$ss"
 }
 
 private fun saveProgress(
