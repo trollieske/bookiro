@@ -34,7 +34,18 @@ complete but must be compiled/verified on a Mac.
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
   `:shared:embedAndSignAppleFrameworkForXcode`.
 
-## Remaining (needs a Mac)
+## Verified on a real Mac (GitHub Actions `macos-15`, Xcode 16.4)
+
+`.github/workflows/ios.yml` builds, on every push to `kmp-ios`:
+
+- `:shared:linkDebugFrameworkIosSimulatorArm64` and `:shared:linkDebugFrameworkIosArm64` ✅
+- `iosApp` for the **iOS Simulator** (arm64) with the Compose UI linked ✅
+- `iosApp` for **iOS device** (arm64) ✅
+
+The framework therefore compiles/links with Kotlin/Native and the SwiftUI shell links
+the Kotlin Compose UI on a real macOS toolchain for both iPhone and iPad.
+
+## Remaining (UI parity, needs iterative work)
 
 1. Migrate `:library`, `:reader`, `:player` chrome to Compose Multiplatform
    `commonMain`. They currently mix AndroidX Lifecycle/Navigation, Coil 2,
