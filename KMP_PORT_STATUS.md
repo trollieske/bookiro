@@ -29,13 +29,17 @@ complete but must be compiled/verified on a Mac.
   in `androidMain`.
 - **`:shared`** — Compose Multiplatform iOS framework (`Shared.framework`) that
   exports `:core` + `:data` and exposes `MainViewController()`.
+- **iOS reader slice** — a compiling vertical slice in `:shared`: Compose-Multiplatform
+  library list over the shared Room DB, `UIDocumentPicker` import, and a native PDF
+  reader using `UIPageViewController` with Apple's built-in `.pageCurl` transition +
+  PDFKit (`shared/.../reader/PdfPageCurlReader.kt`). Reading progress is written back
+  through the shared `ReadingProgressDao`. **No Android `:pagecurl` code is ported.**
 - **`iosApp`** — complete Xcode project: SwiftUI shell hosting the Compose UI,
   bundle id `com.bookrio.ios`, display name Bookrio, iOS 15+, iPhone **and** iPad
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
   `:shared:embedAndSignAppleFrameworkForXcode`.
 
 ## Verified on a real Mac (GitHub Actions `macos-15`, Xcode 16.4)
-
 `.github/workflows/ios.yml` builds, on every push to `kmp-ios`:
 
 - `:shared:linkDebugFrameworkIosSimulatorArm64` and `:shared:linkDebugFrameworkIosArm64` ✅
@@ -52,14 +56,14 @@ the Kotlin Compose UI on a real macOS toolchain for both iPhone and iPad.
    SAF/`Context` and `android.graphics`, which must be replaced with the JetBrains
    multiplatform artifacts + a KMP image loader. (Extract `BookVisual`/`BookFormat`
    from `:designsystem` `BookComponents` to `commonMain` first.)
-2. iOS reader host: `UIPageViewController(transitionStyle: .pageCurl)` fed by a
-   shared pagination model; PDF via `PDFKit`; delegate writes the settled index
-   back to shared state. Scroll mode = plain `UIScrollView`.
+2. **EPUB on iOS**: WKWebView + a shared pagination model (JS column pagination) feeding
+   page images into the same native page-curl host used for PDF. PDF is already done.
 3. iOS audio actual: `AVPlayer` + `AVAudioSession.playback` +
    `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`, feeding the same progress
    repository as the Android Media3 service.
-4. iOS import: `UIDocumentPickerViewController`, copy into the app documents dir,
-   persist a security-scoped bookmark only when not copied.
+4. iOS import polish: the current slice copies the picked file into
+   `Documents/books` via `UIDocumentPickerModeImport`; later add security-scoped
+   bookmarks for in-place access + a shared importer.
 5. Verify on the Mac: `open iosApp/iosApp.xcodeproj`, run `:shared` framework
    build, then simulate on iPhone + iPad.
 

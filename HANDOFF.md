@@ -33,15 +33,32 @@ Android (works on Linux):
 ./gradlew testDebugUnitTest
 ```
 
-iOS (from this Linux box, via the macOS runner — this is how every iOS fix was verified):
+iOS (verified on a **real macOS toolchain** via GitHub Actions — this is how iOS
+link/run is verified):
 ```bash
 git push bookrio kmp-ios                       # triggers .github/workflows/ios.yml
 gh -R trollieske/bookrio run watch --exit-status   # or: gh -R trollieske/bookrio run list
 gh -R trollieske/bookrio run view <id> --log-failed
 ```
-You cannot compile iOS locally on Linux (no Xcode/Apple SDK). **Always push and
-read the Actions log** — it is the compiler for iOS here. Each run is ~8–12 min
-(usually queued).
+
+### Local iOS compilation (Linux!) — use this before every push
+You cannot **link** iOS on Linux (no Xcode/Apple SDK), but since Kotlin 2.1 the
+apple klibs **can be cross-compiled** here. The Kotlin/Native prebuilt + platform
+klibs are already downloaded under `.konan/`. Run:
+```bash
+./gradlew :shared:compileKotlinIosSimulatorArm64 :shared:compileKotlinIosArm64 \
+  -Pkotlin.native.enableKlibsCrossCompilation=true --console=plain
+```
+This catches unresolved cinterop symbols, wrong enum constant names, expect/actual
+mismatches, and commonMain errors in seconds. To check a generated binding name
+(e.g. whether PDFKit exposes `kPDFDisplayBoxMediaBox` or `PDFDisplayBoxMediaBox`):
+```bash
+bin/klib dump-metadata \
+  .konan/kotlin-native-prebuilt-linux-x86_64-2.1.20/klib/platform/ios_simulator_arm64/org.jetbrains.kotlin.native.platform.PDFKit \
+  | grep -i displaybox
+```
+Then still **push and read the Actions log** — only Xcode proves it links/launches.
+Each run is ~8–12 min (usually queued).
 
 On a real Mac: `open iosApp/iosApp.xcodeproj`, scheme `iosApp`, Run (it calls
 `:shared:embedAndSignAppleFrameworkForXcode`). Set your team in Signing to run on a
@@ -56,6 +73,25 @@ physical iPhone/iPad.
 | `:designsystem` | KMP + CMP | theme in `commonMain`; `ApplySystemBarAppearance` is `expect/actual`; Android renderers (Coil/`android.graphics`) in `androidMain`. |
 | `:shared` | KMP + CMP | iOS framework `Shared`; exports `:core`+`:data`; `MainViewController()`. **Does NOT apply the `org.jetbrains.compose` Gradle plugin** (its `syncComposeResourcesForIos` breaks the Xcode script) — it depends on CMP artifacts directly. |
 | `:library` `:reader` `:player` `:podcast` `:ftp` `:smb` `:webdav` `:calibre` `:torrent` `:pagecurl` | Android-only | no iOS targets; excluded from iOS by construction. |
+
+### iOS reader slice (new)
+
+`:shared` now has a working, compiling iOS vertical slice: a Compose-Multiplatform
+library list (`shared/.../App.kt`) over the shared Room DB, `UIDocumentPicker`
+import, and a native PDF reader.
+
+- `shared/.../platform/ReaderPlatform.kt` (`expect`) + `ReaderPlatform.ios.kt`
+  (`actual`): `appDatabase()`, `presentPdfReader(...)`, `importBookWithPicker(...)`.
+- `shared/.../reader/PdfPageCurlReader.kt`: `UIPageViewController` with
+  `UIPageViewControllerTransitionStylePageCurl` + PDFKit-rendered pages.
+
+**Decision (do not regress):** the iOS page turn uses Apple's built-in
+`UIPageViewController` page-curl transition. Do **not** port the Android
+`:pagecurl`/`ReaderScreen` curl canvas to iOS. `:pagecurl` stays Android-only.
+
+**Scope of the slice:** PDF only (EPUB/FB2/MOBI/CBZ open the OS/native fallback and
+are reported as "not yet supported" on iOS). macOS/AZWiP-async and audio are not
+touched yet.
 
 `iosApp/` is the SwiftUI shell (`ContentView` hosts the Compose UIViewController).
 `store/play_icon_512.png` is the Android/Play icon.
@@ -79,13 +115,14 @@ must be 2.5.0 (2.6+/2.7 klibs need Kotlin 2.3.x).
 ## Next steps (in order)
 
 1. Extract `BookVisual`/`BookFormat` from `:designsystem` `BookComponents` (androidMain)
-   to `commonMain`, so `:library`'s mapper can be shared.
-2. Convert `:library` to KMP+CMP: move `mapper/DomainMappers`, `sort/ResumeSelector` to
-   `commonMain`; keep `LibraryScreen`/`LibraryViewModel`/`BookImportRepository`/`CoverRepository`
-   in `androidMain` until you replace AndroidX lifecycle/navigation + Coil 2 + SAF.
-3. Convert `:player` (AudioPlayer interface + AVPlayer actual) and `:reader` (shared
-   pagination model + `UIPageViewController`/PDFKit host) to KMP.
-4. Add `:library`/`:reader`/`:player` to `:shared` and build the real UI entry point.
+   to `commonMain`, so `:library`'s mapper can be shared. Then replace the minimal
+   iOS library list in `shared/App.kt` with the shared one.
+2. iOS EPUB reader: WKWebView + shared pagination model (JS column pagination), then
+   feed each rendered page into the existing `PdfPageCurlReader` pattern. Keep the
+   native `.pageCurl` host; do not port the Android canvas.
+3. Convert `:player` (AudioPlayer interface + AVPlayer actual) to KMP.
+4. iPad polish: consider `UIPageViewController` spine location `.mid` for two-up
+   spread in landscape.
 5. Update `KMP_PORT_STATUS.md` as phases land.
 
 ## Current branches/commits
