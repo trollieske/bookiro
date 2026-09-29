@@ -23,11 +23,22 @@ A stale local `main` (shelf's) exists; ignore it — use `bookrio/*`.
   page-curl reader, and uploads a screenshot. `Shared.framework` (iosSimulatorArm64 +
   iosArm64) and the `iosApp` Xcode project also link for the **simulator** and a
   **real device (arm64)**, for iPhone + iPad.
-- **Reader slice done (PDF)**: the iOS app shows a Compose-Multiplatform library list,
-  imports via `UIDocumentPicker`, opens PDFs with Apple's built-in
-  `UIPageViewController(.pageCurl)` + PDFKit, and persists progress in the shared Room
-  DB. EPUB/FB2/MOBI/CBZ and audio are not implemented on iOS yet; the Android-only
-  `:library`/`:reader`/`:player` UI is unchanged.
+- **Reader slice done (PDF + EPUB)**: the iOS app shows a Compose-Multiplatform
+  library list, imports via `UIDocumentPicker`, opens PDFs with Apple's built-in
+  `UIPageViewController(.pageCurl)` + PDFKit, and opens EPUBs with the same native
+  `.pageCurl` host over a shared-Kotlin EPUB parser + paginator. Progress is
+  persisted in the shared Room DB (`ReadingProgressDao`). FB2/MOBI/CBZ are still
+  "coming later" on iOS; the Android-only `:library`/`:reader` UI is unchanged.
+- **iOS audio done**: one AVPlayer for the whole app (`AudioPlayers.shared`), so an
+  audiobook and a podcast can never play at the same time. Local m4b/mp3/m4a/… play
+  with play/pause/seek/chapters and persist position through `ReadingProgressDao`.
+  AVAudioSession `.playback`, `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`
+  are wired; `UIBackgroundModes = audio` is set.
+- **iOS podcasts done**: subscribe by RSS URL, feed parsed in common Kotlin, stored
+  in the existing `:data` `podcast_feeds`/`podcast_episodes` tables, episodes listed
+  in the Compose shell and streamed through the same single `AudioPlayer`
+  (`AudioOwner.PODCAST`); position is marked in `podcast_playback`. Pull-to-refresh
+  is foreground-only. No downloads, directory or search.
 
 ## How to build / verify
 
@@ -87,24 +98,42 @@ physical iPhone/iPad.
 | `:shared` | KMP + CMP | iOS framework `Shared`; exports `:core`+`:data`; `MainViewController()`. **Does NOT apply the `org.jetbrains.compose` Gradle plugin** (its `syncComposeResourcesForIos` breaks the Xcode script) — it depends on CMP artifacts directly. |
 | `:library` `:reader` `:player` `:podcast` `:ftp` `:smb` `:webdav` `:calibre` `:torrent` `:pagecurl` | Android-only | no iOS targets; excluded from iOS by construction. |
 
-### iOS reader slice (new)
+### iOS reader slice
 
-`:shared` now has a working, compiling iOS vertical slice: a Compose-Multiplatform
+`:shared` has a working, compiling iOS vertical slice: a Compose-Multiplatform
 library list (`shared/.../App.kt`) over the shared Room DB, `UIDocumentPicker`
-import, and a native PDF reader.
+import, and native page-curl readers.
 
 - `shared/.../platform/ReaderPlatform.kt` (`expect`) + `ReaderPlatform.ios.kt`
-  (`actual`): `appDatabase()`, `presentPdfReader(...)`, `importBookWithPicker(...)`.
+  (`actual`): `appDatabase()`, `presentPdfReader(...)`, `presentEpubReader(...)`,
+  `importBookWithPicker(...)`, and the `BOOKRIO_AUTO_OPEN_PDF` /
+  `BOOKRIO_AUTO_OPEN_EPUB` CI hooks.
 - `shared/.../reader/PdfPageCurlReader.kt`: `UIPageViewController` with
   `UIPageViewControllerTransitionStylePageCurl` + PDFKit-rendered pages.
+- `shared/.../reader/Epub*.kt`: a defensive EPUB 2/3 parser (hand-rolled ZIP reader
+  + `platform.zlib` raw inflate) and a pure-common paginator; `EpubPageCurlReader`
+  feeds those pages into the same `.pageCurl` host (one page view per page, `.min`
+  spine on phone, `.mid` for regular-width landscape iPad).
 
 **Decision (do not regress):** the iOS page turn uses Apple's built-in
 `UIPageViewController` page-curl transition. Do **not** port the Android
 `:pagecurl`/`ReaderScreen` curl canvas to iOS. `:pagecurl` stays Android-only.
 
-**Scope of the slice:** PDF only (EPUB/FB2/MOBI/CBZ open the OS/native fallback and
-are reported as "not yet supported" on iOS). macOS/AZWiP-async and audio are not
-touched yet.
+### iOS audio + podcasts
+
+- `shared/.../player/AudioPlayback.kt`: `AudioPlayer` interface + `AudioRequest`/
+  `AudioPlayerState`, and `AudioPlayers.shared` — **exactly one** audio owner per
+  process. `shared/.../player/AudiobookPlayback.kt` adds track-ordered audiobook
+  playback, chapter parsing (`chaptersJson`, no network lookup), resume and ~2 s
+  progress persistence. `shared/src/iosMain/.../player/IosAudioPlayer.kt` is the
+  actual: AVPlayer + `AVAudioSession.playback` + `MPNowPlayingInfoCenter` +
+  `MPRemoteCommandCenter`.
+- `shared/.../podcast/`: pure-common RSS 2.0/Atom parser + identity, a
+  `PodcastRepository` over the existing `:data` podcast DAOs, `httpGetText`
+  (`NSData` GET off the main thread) and `PodcastPlayback` (streams the enclosure
+  through `AudioPlayers.shared`, owner `PODCAST`, marks `podcast_playback`).
+- `App.kt` now has `BØKER`/`PODKASTER` tabs, one bottom now-playing bar shared by
+  audiobook and podcast, an RSS field, episode lists and pull-to-refresh.
 
 `iosApp/` is the SwiftUI shell (`ContentView` hosts the Compose UIViewController).
 `store/play_icon_512.png` is the Android/Play icon.
@@ -129,20 +158,43 @@ must be 2.5.0 (2.6+/2.7 klibs need Kotlin 2.3.x).
   in `iosApp/Info.plist`, otherwise Compose throws on launch (the smoke test caught this).
 - The Compose Gradle plugin's iOS resource task fails in Xcode → keep `:shared` on plain CMP artifacts.
 - `project.pbxproj` is hand-written; `xlint`/parse errors surface as "Unable to read project". Frameworks for CI are staged into `shared/build/ci-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)` and `OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES` skips the Xcode Gradle phase.
+- **`UIPageViewController` must have a view controller before it appears.** Deferring
+  `setViewControllers` to `viewDidLayoutSubviews` makes `viewWillAppear` throw
+  `NSInvalidArgumentException: The number of provided view controllers (0) does not
+  match the number required (1) for the requested spine location`. Paginate once in
+  `init` (screen bounds), then refine in `viewDidLayoutSubviews`.
+- **ATS blocks cleartext `http://localhost`/`127.0.0.1`.** The CI podcast smoke
+  serves its RSS fixture over local HTTP, which needs `NSExceptionDomains` for
+  `localhost` + `127.0.0.1` (`NSExceptionAllowsInsecureHTTPLoads`) and/or
+  `NSAllowsLocalNetworking` in `Info.plist`. Also bind the helper server explicitly
+  (`python3 -m http.server --bind 127.0.0.1`) and use `127.0.0.1` in the URL:
+  `python3 -m http.server` defaults to IPv4-only, while macOS resolves `localhost`
+  via `::1` first, so `http://localhost:…` fails with `http_failed` even when ATS
+  is permissive.
+- **The single audio owner is `AudioPlayers.shared`.** Never construct a second
+  AVPlayer/engine for podcasts; start a new item by calling `play()` (it replaces the
+  previous one).
 
 ## Next steps (in order)
 
-1. Extract `BookVisual`/`BookFormat` from `:designsystem` `BookComponents` (androidMain)
-   to `commonMain`, so `:library`'s mapper can be shared. Then replace the minimal
-   iOS library list in `shared/App.kt` with the shared one.
-2. iOS EPUB reader: WKWebView + shared pagination model (JS column pagination), then
-   feed each rendered page into the existing `PdfPageCurlReader` pattern. Keep the
-   native `.pageCurl` host; do not port the Android canvas.
-3. Convert `:player` (AudioPlayer interface + AVPlayer actual) to KMP.
-4. iPad polish: consider `UIPageViewController` spine location `.mid` for two-up
-   spread in landscape.
-5. Update `KMP_PORT_STATUS.md` as phases land.
+Playback, EPUB, audio and podcast playback are all done and CI-verified. The next
+agent should start at **discovery/downloads**, not playback:
+
+1. **Podcast discovery/search** (iTunes/`PodcastIndex` search UI) and optional
+   episode downloads (local file wins over the enclosure URL, using the existing
+   `podcast_downloads` table + a foreground/download manager — no WorkManager on iOS).
+2. **Shared importer / metadata**: extract `BookVisual`/`BookFormat` from
+   `:designsystem` `BookComponents` into `commonMain`, then replace the minimal
+   `App.kt` library rows with the shared `:library` UI. Add security-scoped
+   bookmarks so imports are read in place instead of copied.
+3. **Other formats on iOS**: FB2/MOBI/CBZ readers behind the same native host.
+4. **Podcast extras**: artwork in the now-playing bar / lock screen
+   (`MPMediaItemArtwork`), playback speed UI, mark-as-played, per-episode context menu.
+5. **Audiobook multi-track polish**: chapters across separate files, sleep timer.
+6. Update `KMP_PORT_STATUS.md` as phases land.
 
 ## Current branches/commits
 
-`kmp-ios` head: `8f6d0f6` (docs: macOS CI-verified iOS build). Full history there.
+`kmp-ios` head: `2993cee` (podcast CI fix). EPUB/audio/podcast are all pushed; the
+last verified run was `36638298509` (PDF + EPUB + podcast RSS smoke on the
+Simulator). Earlier verified runs: EPUB/audio `36633471628`.

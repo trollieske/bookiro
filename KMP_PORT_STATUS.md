@@ -30,12 +30,24 @@ complete but must be compiled/verified on a Mac.
 - **`:shared`** — Compose Multiplatform iOS framework (`Shared.framework`) that
   exports `:core` + `:data` and exposes `MainViewController()`.
 - **iOS reader slice** — a compiling vertical slice in `:shared`: Compose-Multiplatform
-  library list over the shared Room DB, `UIDocumentPicker` import, and a native PDF
-  reader using `UIPageViewController` with Apple's built-in `.pageCurl` transition +
-  PDFKit (`shared/.../reader/PdfPageCurlReader.kt`). Reading progress is written back
-  through the shared `ReadingProgressDao`. **No Android `:pagecurl` code is ported.**
-  ✅ **CI-verified** on `macos-15`: `Shared.framework` links PDFKit/UIKit and the
-  iosApp links it for simulator + device (run `36548654298`).
+  library list over the shared Room DB, `UIDocumentPicker` import, and native readers
+  using `UIPageViewController` with Apple's built-in `.pageCurl` transition: PDF via
+  PDFKit (`shared/.../reader/PdfPageCurlReader.kt`) and EPUB via a shared Kotlin EPUB
+  parser + paginator (`shared/.../reader/Epub*.kt`, `platform.zlib` raw inflate).
+  Reading progress is written back through the shared `ReadingProgressDao`.
+  **No Android `:pagecurl` code is ported.**
+  ✅ **CI-verified** on `macos-15`: the PDF smoke test and the EPUB smoke test both
+  open the native page-curl reader (runs `36633471628`, `36638298509`).
+- **iOS audio** — one `AVPlayer` for the whole app (`AudioPlayers.shared`,
+  `shared/.../player/`): audiobook and podcast can never overlap. Local m4b/mp3/…
+  play with play/pause/seek/chapters, resume + ~2 s progress writes through
+  `ReadingProgressDao`. `AVAudioSession.playback`, `MPNowPlayingInfoCenter` and
+  `MPRemoteCommandCenter`, `UIBackgroundModes = audio`.
+- **iOS podcasts** — subscribe by RSS URL, RSS 2.0/Atom parsed in common Kotlin,
+  stored via the existing `:data` `podcast_feeds`/`podcast_episodes` DAOs, episodes
+  listed in the Compose shell, streamed through the same audio owner and marked in
+  `podcast_playback`. Foreground pull-to-refresh only. ✅ CI smoke subscribes to a
+  local RSS fixture and asserts episodes are stored.
 - **`iosApp`** — complete Xcode project: SwiftUI shell hosting the Compose UI,
   bundle id `com.bookrio.ios`, display name Bookrio, iOS 15+, iPhone **and** iPad
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
@@ -57,23 +69,21 @@ complete but must be compiled/verified on a Mac.
 The framework therefore compiles/links with Kotlin/Native and the SwiftUI shell links
 the Kotlin Compose UI on a real macOS toolchain for both iPhone and iPad.
 
-## Remaining (UI parity, needs iterative work)
+## Remaining (next agent starts at discovery/downloads, not playback)
 
-1. Migrate `:library`, `:reader`, `:player` chrome to Compose Multiplatform
-   `commonMain`. They currently mix AndroidX Lifecycle/Navigation, Coil 2,
-   SAF/`Context` and `android.graphics`, which must be replaced with the JetBrains
-   multiplatform artifacts + a KMP image loader. (Extract `BookVisual`/`BookFormat`
-   from `:designsystem` `BookComponents` to `commonMain` first.)
-2. **EPUB on iOS**: WKWebView + a shared pagination model (JS column pagination) feeding
-   page images into the same native page-curl host used for PDF. PDF is already done.
-3. iOS audio actual: `AVPlayer` + `AVAudioSession.playback` +
-   `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`, feeding the same progress
-   repository as the Android Media3 service.
-4. iOS import polish: the current slice copies the picked file into
-   `Documents/books` via `UIDocumentPickerModeImport`; later add security-scoped
-   bookmarks for in-place access + a shared importer.
-5. Verify on the Mac: `open iosApp/iosApp.xcodeproj`, run `:shared` framework
-   build, then simulate on iPhone + iPad.
+Playback, EPUB, audio and podcast playback are done. What is left is mostly
+polish and the non-Apple-source work:
+
+1. Podcast discovery/search (iTunes/PodcastIndex) and optional episode downloads
+   using the existing `podcast_downloads` table; no WorkManager/BGTaskScheduler.
+2. Migrate `:library`, `:reader`, `:player` chrome to Compose Multiplatform
+   `commonMain` (extract `BookVisual`/`BookFormat` from `:designsystem` first).
+3. iOS import polish: security-scoped bookmarks for in-place access + a shared
+   importer; FB2/MOBI/CBZ readers behind the same native page-curl host.
+4. Podcast/audiobook extras: lock-screen artwork, playback speed UI, mark-as-played,
+   sleep timer, multi-file audiobook chapters.
+5. Verify on a Mac (or trust CI): `open iosApp/iosApp.xcodeproj`, run the `:shared`
+   framework build, then simulate on iPhone + iPad.
 
 ## Excluded on iOS (by construction)
 

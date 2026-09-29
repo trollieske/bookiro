@@ -236,11 +236,12 @@ jobs:
            </channel>
           </rss>
           XML
-          python3 -m http.server 8765 --directory /tmp/bookrio-podcast > /tmp/bookrio-feed-server.log 2>&1 &
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/bookrio-podcast > /tmp/bookrio-feed-server.log 2>&1 &
           FEED_PID=$!
           sleep 2
+          curl -sSf http://127.0.0.1:8765/feed.xml > /dev/null && echo "OK: local feed server is serving feed.xml"
           xcrun simctl terminate "$SIM_UDID" com.bookrio.ios || true
-          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS="http://localhost:8765/feed.xml" \
+          SIMCTL_CHILD_BOOKRIO_AUTO_SUBSCRIBE_RSS="http://127.0.0.1:8765/feed.xml" \
             xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-podcast.log 2>&1 &
           SIMCTL_PID=$!
           sleep 20
