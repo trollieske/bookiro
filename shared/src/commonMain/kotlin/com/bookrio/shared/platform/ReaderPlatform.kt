@@ -32,6 +32,27 @@ internal expect fun presentPdfReader(
 ): Boolean
 
 /**
+ * Presents the native iOS EPUB reader: the shared Kotlin EPUB parser paginates
+ * the book, then a `UIPageViewController` with Apple's built-in `.pageCurl`
+ * transition shows one paginated page per child view controller (same host
+ * pattern as [presentPdfReader]).
+ *
+ * The reader paginates lazily once it has real view bounds, so this function
+ * only needs the file path.
+ *
+ * @param filePath      absolute path to an EPUB on disk.
+ * @param startPage     zero-based global page to restore.
+ * @param onPageChanged invoked on the main thread after each completed page turn
+ *                      with (zero-based page index, total page count).
+ * @return true if the book could be parsed and presented.
+ */
+internal expect fun presentEpubReader(
+    filePath: String,
+    startPage: Int,
+    onPageChanged: (page: Int, totalPages: Int) -> Unit,
+): Boolean
+
+/**
  * Presents `UIDocumentPickerViewController` and, on pick, copies the file into the
  * app's documents directory. The callback runs on the main thread with
  * (absolutePath, fileName).
@@ -47,3 +68,13 @@ internal expect fun importBookWithPicker(onPicked: (filePath: String, fileName: 
  * Returns null during normal runs.
  */
 internal expect fun autoOpenPdfPath(): String?
+
+/**
+ * Automation hook used by the GitHub Actions simulator smoke test, mirroring
+ * [autoOpenPdfPath].
+ *
+ * When the `BOOKRIO_AUTO_OPEN_EPUB` environment variable is set to an absolute
+ * path, the caller can import it on launch and immediately open the native
+ * page-curl reader. Returns null during normal runs.
+ */
+internal expect fun autoOpenEpubPath(): String?

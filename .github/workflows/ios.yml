@@ -133,6 +133,76 @@ jobs:
           fi
           echo "OK: native page-curl reader presented on the simulator"
 
+      # EPUB runtime check: generate a tiny deflated EPUB (python3 stdlib, no new
+      # dependency), then launch the app with BOOKRIO_AUTO_OPEN_EPUB so the same
+      # native page-curl host renders EPUB pages. This exercises the Kotlin/Native
+      # zlib raw-inflate path that cross-compilation alone cannot prove.
+      - name: Smoke-run app on Simulator (auto-open sample EPUB)
+        if: success()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import zipfile
+          container = ('<?xml version="1.0"?>'
+            '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>')
+          opf = ('<?xml version="1.0" encoding="utf-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:identifier id="bookid">urn:uuid:bookrio-ci</dc:identifier>'
+            '<dc:title>Bookrio CI EPUB</dc:title><dc:creator>CI</dc:creator>'
+            '<dc:language>en</dc:language></metadata>'
+            '<manifest>'
+            '<item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>'
+            '</manifest>'
+            '<spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>')
+          def chapter(n, body):
+              paras = ''.join(f'<p>{body} Setning {i} som fyller ut siden.</p>' for i in range(1, 80))
+              return (f'<?xml version="1.0" encoding="utf-8"?>'
+                      f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Kapittel {n}</title>'
+                      f'</head><body><h1>Kapittel {n}</h1>{paras}</body></html>')
+          with zipfile.ZipFile('/tmp/bookrio-sample.epub', 'w', zipfile.ZIP_DEFLATED) as z:
+              z.writestr('mimetype', 'application/epub+zip')
+              z.writestr('META-INF/container.xml', container)
+              z.writestr('OEBPS/content.opf', opf)
+              z.writestr('OEBPS/chapter1.xhtml', chapter(1, 'Dette er forste kapittel.'))
+              z.writestr('OEBPS/chapter2.xhtml', chapter(2, 'Dette er andre kapittel.'))
+          PY
+          CONTAINER=$(xcrun simctl get_app_container "$SIM_UDID" com.bookrio.ios data)
+          cp /tmp/bookrio-sample.epub "$CONTAINER/Documents/books/sample.epub"
+          xcrun simctl terminate "$SIM_UDID" com.bookrio.ios || true
+          SIMCTL_CHILD_BOOKRIO_AUTO_OPEN_EPUB="$CONTAINER/Documents/books/sample.epub" \
+            xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-epub.log 2>&1 &
+          SIMCTL_PID=$!
+          sleep 20
+          if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
+            echo "::error::App exited early during EPUB smoke test (likely crashed)"
+            cat /tmp/app-console-epub.log
+            exit 1
+          fi
+          xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-epub.png
+          echo "--- app console (tail) ---"
+          tail -80 /tmp/app-console-epub.log
+          if grep -q "Uncaught Kotlin exception" /tmp/app-console-epub.log; then
+            echo "::error::Uncaught Kotlin exception in the app (see console above)"
+            exit 1
+          fi
+          if ! grep -q "presentEpubReader=true" /tmp/app-console-epub.log; then
+            echo "::error::Native EPUB page-curl reader was not presented (see console above)"
+            exit 1
+          fi
+          echo "OK: native EPUB page-curl reader presented on the simulator"
+
+      - name: Upload EPUB simulator screenshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bookrio-ios-epub-screenshot
+          path: /tmp/bookrio-epub.png
+          if-no-files-found: warn
+
       - name: Upload simulator screenshot
         if: success()
         uses: actions/upload-artifact@v4

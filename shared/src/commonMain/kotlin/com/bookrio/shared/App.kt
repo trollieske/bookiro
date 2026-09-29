@@ -43,8 +43,10 @@ import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.shared.platform.appDatabase
+import com.bookrio.shared.platform.autoOpenEpubPath
 import com.bookrio.shared.platform.autoOpenPdfPath
 import com.bookrio.shared.platform.importBookWithPicker
+import com.bookrio.shared.platform.presentEpubReader
 import com.bookrio.shared.platform.presentPdfReader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -79,7 +81,7 @@ fun App() {
                     db.bookDao().insert(
                         BookEntity(
                             title = fileName.substringBeforeLast('.').ifBlank { fileName },
-                            type = BookTypeEntity.EBOOK,
+                            type = if (isAudioFormat(format)) BookTypeEntity.AUDIOBOOK else BookTypeEntity.EBOOK,
                             format = format,
                             filePath = filePath,
                             importSource = ImportSourceEntity.FILE_PICKER,
@@ -95,25 +97,8 @@ fun App() {
     // immediately, so the GitHub Actions simulator smoke test can screenshot the
     // native page-curl reader. No-op in normal runs.
     LaunchedEffect(Unit) {
-        val demoPath = autoOpenPdfPath()?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        runCatching {
-            val existing = db.bookDao().getByPath(demoPath)
-            val book = existing ?: run {
-                val id = db.bookDao().insert(
-                    BookEntity(
-                        title = "CI sample",
-                        type = BookTypeEntity.EBOOK,
-                        format = formatFromName(demoPath),
-                        filePath = demoPath,
-                        importSource = ImportSourceEntity.SAMPLE,
-                    )
-                )
-                db.bookDao().getById(id)
-            } ?: return@runCatching
-            openBook(scope, db, book) { text -> message = text }
-        }.onFailure { t ->
-            println("[bookrio-smoke] auto-open failed: ${t.message}")
-        }
+        openDemoPath(db, scope, autoOpenPdfPath()) { text -> message = text }
+        openDemoPath(db, scope, autoOpenEpubPath()) { text -> message = text }
     }
 
     MaterialTheme {
@@ -251,6 +236,39 @@ private fun BookRow(book: BookEntity, onClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Hairline))
 }
 
+/**
+ * CI/demo helper: if [demoPath] is set, import it (once) and open it, mirroring
+ * BOOKRIO_AUTO_OPEN_PDF / BOOKRIO_AUTO_OPEN_EPUB in the simulator smoke test.
+ */
+private fun openDemoPath(
+    database: ShelfDatabase,
+    scope: CoroutineScope,
+    demoPath: String?,
+    onMessage: (String) -> Unit,
+) {
+    val path = demoPath?.takeIf { it.isNotBlank() } ?: return
+    scope.launch {
+        runCatching {
+            val existing = database.bookDao().getByPath(path)
+            val book = existing ?: run {
+                val id = database.bookDao().insert(
+                    BookEntity(
+                        title = "CI sample",
+                        type = BookTypeEntity.EBOOK,
+                        format = formatFromName(path),
+                        filePath = path,
+                        importSource = ImportSourceEntity.SAMPLE,
+                    )
+                )
+                database.bookDao().getById(id)
+            } ?: return@runCatching
+            openBook(scope, database, book, onMessage)
+        }.onFailure { t ->
+            println("[bookrio-smoke] auto-open failed: ${t.message}")
+        }
+    }
+}
+
 private fun openBook(
     scope: CoroutineScope,
     database: ShelfDatabase,
@@ -258,26 +276,40 @@ private fun openBook(
     onMessage: (String) -> Unit,
 ) {
     val path = book.filePath
-    if (book.format != FormatEntity.PDF) {
-        onMessage("iOS-leseren støtter PDF nå — ${book.format} kommer senere.")
-        return
-    }
     if (path.isNullOrBlank()) {
         onMessage("Boken mangler en lesbar fil på denne enheten.")
         return
     }
-    scope.launch {
-        runCatching { database.bookDao().update(book.copy(lastOpenedAt = nowMillis())) }
-        val progress = runCatching { database.progressDao().getByBook(book.id) }.getOrNull()
-        val presented = presentPdfReader(
-            filePath = path,
-            startPage = progress?.pageIndex ?: 0,
-        ) { page, totalPages ->
-            saveProgress(scope, database, book.id, page, totalPages)
+    when (book.format) {
+        FormatEntity.PDF, FormatEntity.EPUB -> scope.launch {
+            runCatching { database.bookDao().update(book.copy(lastOpenedAt = nowMillis())) }
+            val progress = runCatching { database.progressDao().getByBook(book.id) }.getOrNull()
+            val startPage = progress?.pageIndex ?: 0
+            val presented = if (book.format == FormatEntity.PDF) {
+                presentPdfReader(filePath = path, startPage = startPage) { page, totalPages ->
+                    saveProgress(scope, database, book.id, page, totalPages)
+                }
+            } else {
+                presentEpubReader(filePath = path, startPage = startPage) { page, totalPages ->
+                    saveProgress(scope, database, book.id, page, totalPages)
+                }
+            }
+            if (book.format == FormatEntity.PDF) {
+                println("[bookrio-smoke] presentPdfReader=$presented format=${book.format} path=$path")
+            } else {
+                println("[bookrio-smoke] presentEpubReader=$presented format=${book.format} path=$path")
+            }
+            if (!presented) onMessage("Kunne ikke åpne ${book.format}-en.")
         }
-        println("[bookrio-smoke] presentPdfReader=$presented format=${book.format} path=$path")
-        if (!presented) onMessage("Kunne ikke åpne PDF-en.")
+        else -> onMessage("iOS-leseren støtter PDF og EPUB nå — ${book.format} kommer senere.")
     }
+}
+
+private fun isAudioFormat(format: FormatEntity): Boolean = when (format) {
+    FormatEntity.M4B, FormatEntity.M4A, FormatEntity.MP3, FormatEntity.AAC,
+    FormatEntity.FLAC, FormatEntity.OGG, FormatEntity.OGG_OPUS, FormatEntity.WAV,
+    -> true
+    else -> false
 }
 
 private fun saveProgress(
@@ -306,6 +338,14 @@ private fun formatFromName(name: String): FormatEntity =
     when (name.substringAfterLast('.', "").lowercase()) {
         "epub" -> FormatEntity.EPUB
         "pdf" -> FormatEntity.PDF
+        "m4b" -> FormatEntity.M4B
+        "m4a" -> FormatEntity.M4A
+        "mp3" -> FormatEntity.MP3
+        "aac" -> FormatEntity.AAC
+        "flac" -> FormatEntity.FLAC
+        "ogg" -> FormatEntity.OGG
+        "opus" -> FormatEntity.OGG_OPUS
+        "wav" -> FormatEntity.WAV
         "mobi", "prc" -> FormatEntity.MOBI
         "azw" -> FormatEntity.AZW
         "azw3", "kf8" -> FormatEntity.AZW3

@@ -2,12 +2,17 @@ package com.bookrio.shared.platform
 
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.getShelfDatabase
+import com.bookrio.shared.reader.EpubPageCurlReader
+import com.bookrio.shared.reader.EpubParser
 import com.bookrio.shared.reader.PdfPageCurlReader
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.readBytes
+import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSHomeDirectory
 import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSURL
+import platform.Foundation.dataWithContentsOfFile
 import platform.PDFKit.PDFDocument
 import platform.UIKit.UIApplication
 import platform.UIKit.UIDocumentPickerDelegateProtocol
@@ -23,6 +28,10 @@ internal actual fun autoOpenPdfPath(): String? =
     NSProcessInfo.processInfo.environment["BOOKRIO_AUTO_OPEN_PDF"] as? String
 
 @OptIn(ExperimentalForeignApi::class)
+internal actual fun autoOpenEpubPath(): String? =
+    NSProcessInfo.processInfo.environment["BOOKRIO_AUTO_OPEN_EPUB"] as? String
+
+@OptIn(ExperimentalForeignApi::class)
 internal actual fun presentPdfReader(
     filePath: String,
     startPage: Int,
@@ -32,6 +41,25 @@ internal actual fun presentPdfReader(
     if (document.pageCount.toInt() <= 0) return false
     val presenter = topMostViewController() ?: return false
     val reader = PdfPageCurlReader(document, startPage, onPageChanged)
+    presenter.presentViewController(reader, true, null)
+    return true
+}
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun presentEpubReader(
+    filePath: String,
+    startPage: Int,
+    onPageChanged: (page: Int, totalPages: Int) -> Unit,
+): Boolean {
+    val fileData = NSData.dataWithContentsOfFile(filePath) ?: return false
+    val length = fileData.length.toInt()
+    if (length <= 0) return false
+    val bytes = fileData.bytes?.readBytes(length) ?: return false
+    val book = EpubParser.parse(bytes) ?: return false
+    if (book.chapters.isEmpty()) return false
+    val presenter = topMostViewController() ?: return false
+    // The host paginates itself once it has bounds for its label grid.
+    val reader = EpubPageCurlReader(book, startPage, onPageChanged)
     presenter.presentViewController(reader, true, null)
     return true
 }
