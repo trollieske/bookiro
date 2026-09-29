@@ -27,6 +27,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":core"))
             api(libs.androidx.room.runtime)
+            api(libs.androidx.room.ktx)
             implementation(libs.androidx.sqlite.bundled)
             api(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
@@ -35,7 +36,6 @@ kotlin {
             api(libs.androidx.core.ktx)
             api(libs.androidx.lifecycle.runtime.ktx)
             api(libs.androidx.lifecycle.process)
-            implementation(libs.androidx.room.ktx)
             api(libs.androidx.datastore.preferences)
             api(libs.androidx.security.crypto.ktx)
             api(libs.kotlinx.coroutines.android)
