@@ -336,23 +336,51 @@ class FtpTransferEngine(
         while (!isStopped()) {
             val pending = transferRepository.importing(serverId)
             if (pending.isNotEmpty()) {
-                importPending(source, pending)
-            } else if (downloadsDone.get()) {
-                break
-            } else {
-                delay(IMPORT_POLL_MS)
+                // While downloads are still running, only import a folder once every
+                // sibling download has finished. Otherwise a multi-track audiobook is
+                // imported in several partial batches, and online metadata enrichment
+                // renames the first result so later tracks can no longer merge into it.
+                importPending(source, pending, settle = !downloadsDone.get())
             }
+            if (downloadsDone.get()) {
+                // All lanes have stopped (done, failed or cancelled). Import whatever
+                // is left even when some sibling failed, so no row is left IMPORTING.
+                val remaining = transferRepository.importing(serverId)
+                if (remaining.isNotEmpty()) importPending(source, remaining, settle = false)
+                break
+            }
+            delay(IMPORT_POLL_MS)
         }
-        val remaining = transferRepository.importing(serverId)
-        if (remaining.isNotEmpty()) importPending(source, remaining)
+        // Cancelled/stopped: flush anything already imported but still pending.
+        if (!downloadsDone.get()) {
+            val remaining = transferRepository.importing(serverId)
+            if (remaining.isNotEmpty()) importPending(source, remaining, settle = false)
+        }
     }
 
-    private suspend fun importPending(source: FtpSource, tasks: List<DownloadTaskEntity>) {
+    private suspend fun importPending(
+        source: FtpSource,
+        tasks: List<DownloadTaskEntity>,
+        settle: Boolean
+    ) {
         val groups = tasks
             .filter { it.localPath != null }
             .groupBy { File(it.localPath!!).parentFile?.absolutePath ?: it.localPath!! }
 
-        for ((_, group) in groups) {
+        // Folders that still have downloads coming: importing now would split the
+        // folder into several library entries instead of one audiobook.
+        val busyFolders: Set<String> = if (settle) {
+            transferRepository.tasksForServer(source.id)
+                .asSequence()
+                .filter { it.localPath != null && it.status in IN_FLIGHT_STATUSES }
+                .map { File(it.localPath!!).parentFile?.absolutePath ?: it.localPath!! }
+                .toHashSet()
+        } else {
+            emptySet()
+        }
+
+        for ((folder, group) in groups) {
+            if (folder in busyFolders) continue
             if (!group.first().autoImport) {
                 group.forEach { runCatching { transferRepository.markCompleted(it.id, null) } }
                 continue
@@ -423,5 +451,18 @@ class FtpTransferEngine(
         private const val BASE_BACKOFF_MS = 2_000L
         private const val MAX_BACKOFF_MS = 60_000L
         private const val IMPORT_POLL_MS = 750L
+
+        /**
+         * Statuses that mean a download for a folder is still coming. IMPORTING is
+         * deliberately excluded: it is the state we are about to consume, so it must
+         * not make the folder block itself.
+         */
+        private val IN_FLIGHT_STATUSES = setOf(
+            DownloadStatusEntity.QUEUED,
+            DownloadStatusEntity.PENDING,
+            DownloadStatusEntity.RUNNING,
+            DownloadStatusEntity.RETRYING,
+            DownloadStatusEntity.VERIFYING
+        )
     }
 }

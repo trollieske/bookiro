@@ -10,6 +10,7 @@ import com.bookrio.core.domain.model.SortDirection
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.library.cover.CoverRepository
+import com.bookrio.library.data.BookImportRepository
 import com.bookrio.library.mapper.DomainMappers.toBookVisual
 import com.bookrio.library.sort.LibrarySorter
 import com.bookrio.library.R
@@ -72,6 +73,15 @@ class LibraryViewModel(
     init {
         viewModelScope.launch(dispatchers.io) {
             val app = getApplication<Application>()
+            // Self-heal audiobooks that an older build fragmented into one record per
+            // track (online metadata enrichment used to break the per-batch merge).
+            // Cheap when there is nothing to merge, and idempotent.
+            if (!fragmentedAudiobooksRepaired) {
+                fragmentedAudiobooksRepaired = true
+                runCatching {
+                    BookImportRepository(app, db, dispatchers).consolidateFragmentedAudiobooks()
+                }
+            }
             val coversDir = java.io.File(app.filesDir, "covers")
             val allBooks = runCatching { db.bookDao().getAllOnce() }.getOrElse { emptyList() }
             val missing = allBooks.filter { b ->
@@ -280,5 +290,10 @@ class LibraryViewModel(
         viewModelScope.launch(dispatchers.io) {
             db.bookDao().softDelete(bookId)
         }
+    }
+
+    companion object {
+        @Volatile
+        private var fragmentedAudiobooksRepaired = false
     }
 }

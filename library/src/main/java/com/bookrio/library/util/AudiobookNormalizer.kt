@@ -66,6 +66,19 @@ object AudiobookNormalizer {
         return clean.replace(Regex("\\s+"), " ")
     }
 
+    /**
+     * True when [albumOrTitle] is specific enough and [authorOrArtist] is present,
+     * i.e. [computeGroupKey] would return a `"<title>_by_<author>"` key. Such a key
+     * is a *strong* identity: every fragment of one audiobook shares it even when
+     * the individual fragments have different durations/sizes (single tracks).
+     * Weak folder/hash keys must still be guarded against merging unrelated books.
+     */
+    fun hasStrongIdentity(albumOrTitle: String?, authorOrArtist: String?): Boolean {
+        val t = normalizeString(albumOrTitle)
+        val a = normalizeString(authorOrArtist)
+        return t.isNotBlank() && a.isNotBlank() && !isGenericTitle(t)
+    }
+
     private fun isGenericTitle(normalizedTitle: String): Boolean {
         if (normalizedTitle.isBlank()) return true
         val t = normalizedTitle.trim()

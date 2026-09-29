@@ -582,14 +582,30 @@ class BookImportRepository(
                 if (booksInGroup.size <= 1) continue
 
                 val sortedList = booksInGroup.sortedWith(
-                    compareByDescending<BookEntity> { (it.chapterCount ?: 0) > 1 }
-                        .thenBy { it.id }
+                    Comparator { a, b ->
+                        // Fragment order follows the primary track's natural file order
+                        // (…001, …002, …010) so a healed audiobook plays in order.
+                        val c = naturalCompare(primaryTrackName(a), primaryTrackName(b))
+                        if (c != 0) c else a.id.compareTo(b.id)
+                    }
                 )
                 val canonicalBook = sortedList.first()
 
                 // Safety: do not merge books whose durations or file sizes diverge wildly,
                 // as they are almost certainly different books sharing a weak group key.
-                val safeToMerge = sortedList.all { b ->
+                // EXCEPTION: a strong title+author identity is a reliable same-book
+                // signal. Fragmenting an audiobook into one record per track makes the
+                // per-record duration/size diverge *by construction*, so the divergence
+                // check must not block merging those fragments back together.
+                val strongIdentity =
+                    AudiobookNormalizer.hasStrongIdentity(canonicalBook.title, canonicalBook.author) &&
+                        booksInGroup.all {
+                            AudiobookNormalizer.normalizeString(it.title) ==
+                                AudiobookNormalizer.normalizeString(canonicalBook.title) &&
+                                AudiobookNormalizer.normalizeString(it.author) ==
+                                AudiobookNormalizer.normalizeString(canonicalBook.author)
+                        }
+                val safeToMerge = strongIdentity || sortedList.all { b ->
                     val durOk = canonicalBook.durationMs == null || b.durationMs == null ||
                             kotlin.math.abs((canonicalBook.durationMs ?: 0L) - (b.durationMs ?: 0L))
                                     .toDouble() / (canonicalBook.durationMs ?: 1L).coerceAtLeast(1L) < 1.5
@@ -793,6 +809,47 @@ class BookImportRepository(
             .replace(Regex("""\[[^\]]*\]"""), " ")
             .replace(Regex("[^a-z0-9\u00E6\u00F8\u00E5]+"), " ")
             .trim()
+
+    /** Filename of an audiobook's primary track (first track as stored). */
+    private fun primaryTrackName(book: BookEntity): String =
+        book.filePath?.substringAfterLast('/')?.ifBlank { null }
+            ?: book.title
+
+    /**
+     * Natural ordering used to stitch fragmented audiobook tracks back in order:
+     * digit runs compare numerically, so `…009` < `…010` < `…100`.
+     */
+    private fun naturalCompare(a: String, b: String): Int {
+        val al = a.lowercase()
+        val bl = b.lowercase()
+        var i = 0
+        var j = 0
+        while (i < al.length && j < bl.length) {
+            val ca = al[i]
+            val cb = bl[j]
+            if (ca.isDigit() && cb.isDigit()) {
+                var i2 = i
+                while (i2 < al.length && al[i2].isDigit()) i2++
+                var j2 = j
+                while (j2 < bl.length && bl[j2].isDigit()) j2++
+                val na = al.substring(i, i2).trimStart('0')
+                val nb = bl.substring(j, j2).trimStart('0')
+                val cmp = when {
+                    na.length != nb.length -> na.length - nb.length
+                    else -> na.compareTo(nb)
+                }
+                if (cmp != 0) return cmp
+                i = i2
+                j = j2
+            } else {
+                val cmp = ca.compareTo(cb)
+                if (cmp != 0) return cmp
+                i++
+                j++
+            }
+        }
+        return al.length - bl.length
+    }
 
     /** Import-prioritet: lavest vinner. EPUB > MOBI/AZW (konverteres) > FB2 > PDF > CBZ/CBR > DOCX/RTF/HTML > MD > TXT. */
     private fun formatImportPriority(f: BookFormat): Int = when (f) {

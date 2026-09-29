@@ -10,6 +10,7 @@ import com.bookrio.ftp.domain.LocalStaging
 import com.bookrio.ftp.domain.TransferStateMachine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -43,6 +44,14 @@ class FtpTransferRepository(
 
     suspend fun importing(serverId: Long): List<DownloadTaskEntity> =
         withContext(Dispatchers.IO) { taskDao.importingForServer(serverId) }
+
+    /**
+     * All queue rows for a server (any status). Used by the importer to decide
+     * whether a folder still has downloads in flight before importing it as one
+     * audiobook — avoids fragmenting a multi-track book into one record per track.
+     */
+    suspend fun tasksForServer(serverId: Long): List<DownloadTaskEntity> =
+        withContext(Dispatchers.IO) { taskDao.observeForServer(serverId).first() }
 
     fun downloadRoot(serverId: Long): File = downloadRootForServer(serverId)
 
