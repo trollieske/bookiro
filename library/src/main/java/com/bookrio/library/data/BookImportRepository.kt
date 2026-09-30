@@ -18,6 +18,8 @@ import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.library.util.AudiobookNormalizer
 import com.bookrio.library.util.EbookFilenameParser
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,6 +39,12 @@ class BookImportRepository(
         private const val TAG = "BookImportRepo"
 
         private val LEADING_ARTICLES = listOf("the ", "en ", "et ", "ei ")
+
+        /**
+         * Serialises the two audiobook self-heal passes (fragment consolidation and
+         * one-chapter repair) so they can never interleave their reads/writes.
+         */
+        private val audiobookHealMutex = Mutex()
 
         fun normalizeForSort(value: String): String {
             val trimmed = value.trim()
@@ -568,7 +576,11 @@ class BookImportRepository(
         bookId
     }
 
-    suspend fun consolidateFragmentedAudiobooks(): Int = withContext(dispatchers.io) {
+    suspend fun consolidateFragmentedAudiobooks(): Int = audiobookHealMutex.withLock {
+        consolidateFragmentedAudiobooksLocked()
+    }
+
+    private suspend fun consolidateFragmentedAudiobooksLocked(): Int = withContext(dispatchers.io) {
         var countMerged = 0
         try {
             val allBooks: List<BookEntity> = db.bookDao().getAllOnce()
@@ -715,6 +727,180 @@ class BookImportRepository(
         countMerged
     }
 
+    /**
+     * BUG A repair: rewrite audiobooks whose stored chapter list is the importer's
+     * one-chapter fallback (typically left behind when a torrent was imported while
+     * sibling files were still arriving).
+     *
+     * - multi-track: rebuild one chapter per `audio_tracks` row and renumber the
+     *   rows sequentially (as ecf62df does during consolidation);
+     * - single file: re-parse the real file with the canonical format parser and
+     *   persist ONLY when more than one real embedded chapter is found.
+     *
+     * Only `chapters_json`, `chapter_count` and `last_modified_at` are written:
+     * book id, fileUri/filePath, cover, lastOpenedAt, file associations and the
+     * ReadingProgressEntity row are untouched. Idempotent, and serialised with
+     * consolidation through [audiobookHealMutex].
+     */
+    suspend fun repairOneChapterAudiobooks(): Int = audiobookHealMutex.withLock {
+        withContext(dispatchers.io) {
+            var repaired = 0
+            try {
+                val audiobooks = db.bookDao().getAllOnce()
+                    .filter { it.type == BookTypeEntity.AUDIOBOOK && !it.isDeleted }
+
+                for (book in audiobooks) {
+                    val stored = parseStoredChapterRows(book.chaptersJson)
+                    if (stored.size >= 2) continue
+                    // Never even re-parse a genuine single chapter.
+                    if (stored.size == 1 && !OneChapterRepairPlanner.isOneChapterFallback(
+                            bookTitle = book.title,
+                            fileNameStem = audioFileStem(book),
+                            chapter = stored[0]
+                        )
+                    ) {
+                        continue
+                    }
+
+                    val tracks = runCatching { db.audioTrackDao().getTracksForBook(book.id) }
+                        .getOrDefault(emptyList())
+                    val reparsed = if (tracks.size < 2) reparseEmbeddedChapters(book) else emptyList()
+
+                    val plan = OneChapterRepairPlanner.plan(
+                        bookTitle = book.title,
+                        fileNameStem = audioFileStem(book),
+                        stored = stored,
+                        tracks = tracks.map { t ->
+                            RepairTrackInput(
+                                id = t.id,
+                                trackNumber = t.trackNumber,
+                                discNumber = t.discNumber,
+                                title = t.title,
+                                durationMs = t.durationMs,
+                                filePath = t.filePath,
+                                fileUri = t.fileUri,
+                                fileSizeBytes = t.fileSizeBytes
+                            )
+                        },
+                        reparsed = reparsed,
+                        primaryDurationMs = book.durationMs
+                            ?: tracks.firstOrNull()?.durationMs
+                            ?: 0L
+                    ) ?: continue
+
+                    // Re-read before writing: an import/consolidation pass may have
+                    // healed the book while the file was being parsed.
+                    val current = db.bookDao().getById(book.id) ?: continue
+                    if (current.chaptersJson != book.chaptersJson) continue
+                    if (current.chapterCount != book.chapterCount) continue
+                    if (parseStoredChapterRows(current.chaptersJson).size >= 2) continue
+
+                    db.bookDao().update(
+                        OneChapterRepairPlanner.repairedBook(
+                            book = current,
+                            plan = plan,
+                            chaptersJson = repairChaptersToJson(plan.chapters)
+                        )
+                    )
+
+                    if (plan.trackNumbers.isNotEmpty()) {
+                        val tracksById = tracks.associateBy { it.id }
+                        for ((trackId, number) in plan.trackNumbers) {
+                            val track = tracksById[trackId] ?: continue
+                            if (track.discNumber == 1 && track.trackNumber == number) continue
+                            runCatching {
+                                db.audioTrackDao().insert(
+                                    track.copy(discNumber = 1, trackNumber = number)
+                                )
+                            }
+                        }
+                    }
+
+                    Log.i(
+                        TAG,
+                        "[REPAIR_ONE_CHAPTER] book id=${book.id} " +
+                            "chapters=${plan.chapters.size} renumberedTracks=${plan.trackNumbers.size}"
+                    )
+                    repaired++
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error repairing one-chapter audiobooks", e)
+            }
+            repaired
+        }
+    }
+
+    /** Real file stem (no directory, no extension) used for fallback-title detection. */
+    private fun audioFileStem(book: BookEntity): String? =
+        book.filePath?.substringAfterLast('/')?.substringBeforeLast('.')
+            ?: book.fileUri?.substringAfterLast('/')?.substringBeforeLast('.')
+
+    /** Parses stored chaptersJson into the planner's minimal rows. */
+    private fun parseStoredChapterRows(json: String?): List<RepairChapterInput> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(json)
+            val rows = mutableListOf<RepairChapterInput>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val hasEnd = o.has("endMs") && !o.isNull("endMs")
+                rows.add(
+                    RepairChapterInput(
+                        title = o.optString("title", ""),
+                        startMs = o.optLong("startMs", 0L),
+                        endMs = if (hasEnd) o.optLong("endMs", 0L) else null
+                    )
+                )
+            }
+            rows
+        }.getOrDefault(emptyList())
+    }
+
+    private fun repairChaptersToJson(chapters: List<RepairedChapter>): String {
+        val arr = JSONArray()
+        for (c in chapters) {
+            arr.put(
+                JSONObject().apply {
+                    put("index", c.index)
+                    put("title", c.title)
+                    put("startMs", c.startMs)
+                    put("endMs", c.endMs)
+                    put("mediaUri", c.mediaUri ?: JSONObject.NULL)
+                    put("filePath", c.filePath ?: JSONObject.NULL)
+                    put("durationMs", c.durationMs)
+                }
+            )
+        }
+        return arr.toString()
+    }
+
+    /**
+     * Re-parses a single audio file with the canonical parser and a real filename
+     * (with extension), mirroring `AudiobookEngine.discoverChapters`. Returns the
+     * real embedded chapters found; empty when the container has none.
+     */
+    private suspend fun reparseEmbeddedChapters(book: BookEntity): List<RepairChapterInput> {
+        val fileName = chapterParserFileName(book.filePath, book.fileUri, book.format.name)
+        val format = BookFormat.fromFilename(fileName)
+        if (!format.isAudio) return emptyList()
+
+        val file = book.filePath?.let { File(it) }?.takeIf { it.isFile }
+        val uri = file?.let { Uri.fromFile(it) }
+            ?: book.fileUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
+            ?: return emptyList()
+        val size = file?.length()?.takeIf { it > 0L } ?: book.fileSizeBytes
+        val streamProvider: (suspend () -> java.io.InputStream)? =
+            file?.let { f -> { FileInputStream(f) } }
+
+        val meta = runCatching {
+            getParserFor(format).parse(ctx, uri, fileName, size, streamProvider)
+        }.getOrNull() ?: return emptyList()
+
+        return meta.chapters
+            .filter { it.startMs >= 0L }
+            .map { RepairChapterInput(title = it.title, startMs = it.startMs, endMs = it.endMs) }
+    }
+
     suspend fun importAssetsSamples(): Int = withContext(dispatchers.io) {
         val sampleNames = ctx.assets.list("samples")?.toList().orEmpty()
         val importsDir = File(ctx.filesDir, "imports").apply { mkdirs() }
@@ -827,37 +1013,8 @@ class BookImportRepository(
      * Natural ordering used to stitch fragmented audiobook tracks back in order:
      * digit runs compare numerically, so `…009` < `…010` < `…100`.
      */
-    private fun naturalCompare(a: String, b: String): Int {
-        val al = a.lowercase()
-        val bl = b.lowercase()
-        var i = 0
-        var j = 0
-        while (i < al.length && j < bl.length) {
-            val ca = al[i]
-            val cb = bl[j]
-            if (ca.isDigit() && cb.isDigit()) {
-                var i2 = i
-                while (i2 < al.length && al[i2].isDigit()) i2++
-                var j2 = j
-                while (j2 < bl.length && bl[j2].isDigit()) j2++
-                val na = al.substring(i, i2).trimStart('0')
-                val nb = bl.substring(j, j2).trimStart('0')
-                val cmp = when {
-                    na.length != nb.length -> na.length - nb.length
-                    else -> na.compareTo(nb)
-                }
-                if (cmp != 0) return cmp
-                i = i2
-                j = j2
-            } else {
-                val cmp = ca.compareTo(cb)
-                if (cmp != 0) return cmp
-                i++
-                j++
-            }
-        }
-        return al.length - bl.length
-    }
+    private fun naturalCompare(a: String, b: String): Int =
+        OneChapterRepairPlanner.naturalFileNameCompare(a, b)
 
     /** Import-prioritet: lavest vinner. EPUB > MOBI/AZW (konverteres) > FB2 > PDF > CBZ/CBR > DOCX/RTF/HTML > MD > TXT. */
     private fun formatImportPriority(f: BookFormat): Int = when (f) {

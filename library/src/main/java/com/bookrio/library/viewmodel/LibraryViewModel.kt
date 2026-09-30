@@ -74,12 +74,15 @@ class LibraryViewModel(
         viewModelScope.launch(dispatchers.io) {
             val app = getApplication<Application>()
             // Self-heal audiobooks that an older build fragmented into one record per
-            // track (online metadata enrichment used to break the per-batch merge).
-            // Cheap when there is nothing to merge, and idempotent.
+            // track (online metadata enrichment used to break the per-batch merge),
+            // and one-chapter fallbacks left behind by partially imported torrents
+            // (BUG A). Both are cheap, idempotent and serialised inside the repository.
             if (!fragmentedAudiobooksRepaired) {
                 fragmentedAudiobooksRepaired = true
                 runCatching {
-                    BookImportRepository(app, db, dispatchers).consolidateFragmentedAudiobooks()
+                    val repo = BookImportRepository(app, db, dispatchers)
+                    repo.consolidateFragmentedAudiobooks()
+                    repo.repairOneChapterAudiobooks()
                 }
             }
             val coversDir = java.io.File(app.filesDir, "covers")

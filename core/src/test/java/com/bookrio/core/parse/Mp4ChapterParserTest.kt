@@ -175,6 +175,29 @@ class Mp4ChapterParserTest {
     }
 
     @Test
+    fun `single m4b with N embedded chapters is recoverable after a partial import`() {
+        // BUG A: a torrent-imported M4B that was still downloading had no usable
+        // moov/chpl -> the importer persisted ONE fallback chapter. Re-parsing the
+        // finished single file must recover the real chapter list used by the
+        // one-chapter repair in BookImportRepository.
+        val mvhd = mvhdV0(1000, 3_600_000) // 60 min
+        val starts = (0 until 6).map { it * 600_000L * 10_000L } // ms -> 100-ns ticks
+        val titles = (1..6).map { "Chapter $it" }
+        val chpl = ticksPayload(starts, titles, fourByteCount = false)
+        val moov = atom("moov", mvhd + atom("udta", chpl))
+        val mdat = atom("mdat", ByteArray(4096))
+        val mp4 = atom("ftyp", ByteArray(4)) + mdat + moov
+
+        val (chapters, _) = parseMp4Chapters(ByteArrayInputStream(mp4), mp4.size.toLong())
+
+        assertEquals(6, chapters.size)
+        assertEquals("Chapter 1", chapters[0].title)
+        assertEquals(0L, chapters[0].startMs)
+        assertEquals(3_000_000L, chapters[5].startMs)
+        assertEquals(3_600_000L, chapters[5].endMs)
+    }
+
+    @Test
     fun `audio chapter kind falls back to the uri extension`() {
         assertEquals("m4b", audioChapterExtension("Dungeon Crawler Carl: A LitRPG Adventure", "/x/Book.m4b"))
         assertEquals("mp3", audioChapterExtension("Some Title", "file:///x/Book.mp3"))
