@@ -104,7 +104,10 @@ class PodcastPlayerViewModel(
     }
 
     private fun startPlaybackAndBind() {
-        PodcastPlaybackLauncher.play(getApplication(), initialEpisodeId)
+        // Reaching this screen is always an explicit user gesture (episode tap,
+        // resume card, mini-player tap), so it may take ownership back from the
+        // audiobook instead of silently doing nothing.
+        PodcastPlaybackLauncher.play(getApplication(), initialEpisodeId, force = true)
         bind()
     }
 
@@ -156,7 +159,17 @@ class PodcastPlayerViewModel(
     }
 
     fun playPause() {
-        service?.playPause()
+        val svc = service
+        if (svc == null) {
+            // The service was stopped (e.g. a deferred load called stopSelf) and the
+            // gesture must not be dropped: re-issue the load as an explicit play.
+            PodcastPlaybackLauncher.play(getApplication(), initialEpisodeId, force = true)
+            bind()
+            return
+        }
+        // Pass the episode the UI is showing: the service may have lost its own
+        // request when it was recreated for the binding.
+        svc.playPause(initialEpisodeId)
     }
 
     fun seekTo(ms: Long) {
