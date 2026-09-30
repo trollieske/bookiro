@@ -82,8 +82,8 @@ the KMP branches.
 - **Android application id**: `com.bookrio`
 - **iOS bundle id**: `com.bookrio.ios`
 - **SDK**: `minSdk 26` (Android 8.0) · `targetSdk 35` (Android 15) · iOS 15+
-- **Build**: Kotlin Multiplatform toolchain, Jetpack Compose (Material 3),
-  Room, Media3, WorkManager on Android; Compose Multiplatform + UIKit on iOS.
+- **Build**: Kotlin + Jetpack Compose (Material 3), Room, Media3 and WorkManager on
+  Android; Kotlin Multiplatform + Compose Multiplatform + UIKit for the iOS port.
 
 ## Build & run
 
