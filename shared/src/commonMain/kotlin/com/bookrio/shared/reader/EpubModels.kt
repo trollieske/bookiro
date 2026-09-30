@@ -10,11 +10,20 @@ internal data class EpubBook(
     val chapters: List<EpubChapter>,
 )
 
-/** One spine document (an XHTML file) reduced to readable plain text. */
+/**
+ * One spine document (an XHTML file).
+ *
+ * [text] is the plain-text reduction (kept for compatibility with the line-based
+ * [EpubPaginator]); [html] is the body markup the reader actually renders, with
+ * relative image sources already inlined as `data:` URIs and wrapped in a
+ * `<section>` — the same content shape the Android reader feeds to its WebView.
+ * Never render [text] directly: the iOS reader shows [html].
+ */
 internal data class EpubChapter(
     val index: Int,
     val title: String?,
     val text: String,
+    val html: String = "",
 )
 
 /**

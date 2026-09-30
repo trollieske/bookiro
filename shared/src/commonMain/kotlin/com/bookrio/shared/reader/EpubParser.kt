@@ -10,7 +10,9 @@ import kotlin.text.RegexOption.IGNORE_CASE
  * 2. read `META-INF/container.xml` to locate the OPF,
  * 3. parse the OPF manifest/spine and read every spine document whose media type
  *    is XHTML/HTML relative to the OPF directory,
- * 4. reduce each XHTML document to readable plain text for pagination.
+ * 4. keep each XHTML document as both plain text ([EpubChapter.text], for the
+ *    line-based paginator) and real body HTML ([EpubChapter.html], with images
+ *    inlined as data URIs) for the reader renderer.
  *
  * Malformed input never throws: [parse] returns null instead.
  */
@@ -47,8 +49,16 @@ internal object EpubParser {
             val chapterPath = resolvePath(opfDir, item.href)
             val raw = zip.read(chapterPath)?.decodeText() ?: continue
             val text = xhtmlToPlainText(raw)
-            if (text.isBlank()) continue
-            chapters.add(EpubChapter(index = chapters.size, title = firstHeading(raw), text = text))
+            val html = xhtmlToChapterHtml(raw, zip, chapterPath)
+            if (text.isBlank() && !containsMedia(html)) continue
+            chapters.add(
+                EpubChapter(
+                    index = chapters.size,
+                    title = firstHeading(raw),
+                    text = text,
+                    html = html,
+                ),
+            )
         }
         if (chapters.isEmpty()) return null
         return EpubBook(title = title, author = author, chapters = chapters)
@@ -95,6 +105,9 @@ private fun cleanInline(input: String?): String? {
         .trim()
 }
 
+private fun containsMedia(html: String): Boolean =
+    "<img" in html || "<svg" in html || "<image" in html
+
 /** Reads an attribute from a single tag string, XML-unescaping its value. */
 private fun attribute(tag: String, name: String): String? {
     val regex = Regex("(?:^|\\s)" + Regex.escape(name) + "\\s*=\\s*[\"']([^\"']*)[\"']", IGNORE_CASE)
@@ -102,7 +115,7 @@ private fun attribute(tag: String, name: String): String? {
 }
 
 /** Resolves an OPF-relative href against the OPF directory, dropping a fragment. */
-private fun resolvePath(baseDir: String, href: String): String {
+internal fun resolvePath(baseDir: String, href: String): String {
     val cleaned = href.substringBefore('#').substringBefore('?')
     if (cleaned.isEmpty()) return baseDir
     val segments = ArrayList<String>()
