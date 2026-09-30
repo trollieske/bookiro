@@ -146,6 +146,7 @@ fun App() {
     // CI/demo hooks (unchanged): auto-open PDF/EPUB and auto-subscribe to an RSS
     // file so the GitHub Actions simulator smoke tests keep passing.
     LaunchedEffect(Unit) {
+        println("[bookrio-smoke] app-start")
         openDemoPath(db, scope, autoOpenPdfPath(), openAudio) { text -> message = text }
         openDemoPath(db, scope, autoOpenEpubPath(), openAudio) { text -> message = text }
         autoSubscribeRssFile()?.takeIf { it.isNotBlank() }?.let { path ->

@@ -115,11 +115,18 @@ jobs:
             xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console.log 2>&1 &
           SIMCTL_PID=$!
           sleep 20
-          if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
-            echo "::error::App exited early (likely crashed before the screenshot)"
-            cat /tmp/app-console.log
-            exit 1
-          fi
+          # The shared framework is large; first composition can take a while on a
+          # cold simulator. Wait for the expected log line (~150 s) instead of a
+          # fixed sleep, and fail early if the app dies.
+          for _ in $(seq 1 75); do
+            if grep -q "presentPdfReader=true" /tmp/app-console.log 2>/dev/null; then break; fi
+            if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
+              echo "::error::App exited early (likely crashed before the screenshot)"
+              cat /tmp/app-console.log
+              exit 1
+            fi
+            sleep 2
+          done
           xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-reader.png
           echo "--- app console (tail) ---"
           tail -80 /tmp/app-console.log
@@ -177,11 +184,15 @@ jobs:
             xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-epub.log 2>&1 &
           SIMCTL_PID=$!
           sleep 20
-          if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
-            echo "::error::App exited early during EPUB smoke test (likely crashed)"
-            cat /tmp/app-console-epub.log
-            exit 1
-          fi
+          for _ in $(seq 1 75); do
+            if grep -q "presentEpubReader=true" /tmp/app-console-epub.log 2>/dev/null; then break; fi
+            if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
+              echo "::error::App exited early during EPUB smoke test (likely crashed)"
+              cat /tmp/app-console-epub.log
+              exit 1
+            fi
+            sleep 2
+          done
           xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-epub.png
           echo "--- app console (tail) ---"
           tail -80 /tmp/app-console-epub.log
@@ -246,11 +257,15 @@ jobs:
             xcrun simctl launch --console-pty "$SIM_UDID" com.bookrio.ios > /tmp/app-console-podcast.log 2>&1 &
           SIMCTL_PID=$!
           sleep 20
-          if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
-            echo "::error::App exited early during podcast smoke test (likely crashed)"
-            cat /tmp/app-console-podcast.log
-            exit 1
-          fi
+          for _ in $(seq 1 75); do
+            if grep -q "podcastSubscribe=ok" /tmp/app-console-podcast.log 2>/dev/null; then break; fi
+            if ! kill -0 "$SIMCTL_PID" 2>/dev/null; then
+              echo "::error::App exited early during podcast smoke test (likely crashed)"
+              cat /tmp/app-console-podcast.log
+              exit 1
+            fi
+            sleep 2
+          done
           xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-podcast.png
           echo "--- app console (tail) ---"
           tail -80 /tmp/app-console-podcast.log
