@@ -188,6 +188,31 @@ interface TorrentDownloadDao {
     @Query("UPDATE torrent_downloads SET status = 'CANCELLED' WHERE id = :id")
     suspend fun cancel(id: Long)
 
+    /**
+     * Targeted import-outcome writes. Using @Update with a pre-captured entity
+     * here would revert concurrent setSeedPolicy()/stats writes made while the
+     * importer ran.
+     */
+    @Query("UPDATE torrent_downloads SET import_status = :status WHERE id = :id")
+    suspend fun updateImportStatus(id: Long, status: String)
+
+    @Query("UPDATE torrent_downloads SET import_status = :status, imported_book_ids_json = :bookIds WHERE id = :id")
+    suspend fun updateImportResult(id: Long, status: String, bookIds: String?)
+
+    @Query("UPDATE torrent_downloads SET files_json = :filesJson WHERE id = :id")
+    suspend fun updateFilesJson(id: Long, filesJson: String)
+
+    /**
+     * COMPLETED torrents whose import never produced an IMPORTED* marker, bounded
+     * so an engine start can never scan an unbounded backlog.
+     */
+    @Query(
+        "SELECT * FROM torrent_downloads WHERE status = 'COMPLETED' AND auto_import = 1 " +
+            "AND (import_status IS NULL OR import_status NOT LIKE 'IMPORTED%') " +
+            "ORDER BY completed_at ASC LIMIT :limit"
+    )
+    suspend fun getCompletedForImportRetry(limit: Int): List<TorrentDownloadEntity>
+
     @Query("UPDATE torrent_downloads SET is_paused = :paused WHERE id = :id")
     suspend fun setPaused(id: Long, paused: Boolean)
 

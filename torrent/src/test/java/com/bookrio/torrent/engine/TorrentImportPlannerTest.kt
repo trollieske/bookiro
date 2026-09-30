@@ -129,6 +129,93 @@ class TorrentImportPlannerTest {
     }
 
     @Test
+    fun `exclusive torrent folder keeps the directory scope`() {
+        write("My Book/track 01.mp3", 5)
+        write("My Book/book.cue", 3)
+        write("My Book/cover.jpg", 2)
+        write("My Book/release.nfo", 1)
+
+        val plan = TorrentImportPlanner.plan(
+            tmp.root,
+            listOf(
+                TorrentFileSpec("My Book/track 01.mp3", 5),
+                TorrentFileSpec("My Book/book.cue", 3)
+            )
+        )
+
+        val foreign = TorrentImportPlanner.foreignImportCandidates(plan.target, plan.declaredFiles)
+        assertTrue(foreign.isEmpty())
+        assertEquals(TorrentImportScope.DIRECTORY, TorrentImportPlanner.resolveScope(plan, foreign).scope)
+    }
+
+    @Test
+    fun `folder with a foreign audio sibling falls back to the exact file list`() {
+        write("Shared Name/track 01.mp3", 5)
+        write("Shared Name/book.cue", 3)
+        // A second torrent that happens to use the same subfolder name.
+        write("Shared Name/track 02.mp3", 6)
+
+        val plan = TorrentImportPlanner.plan(
+            tmp.root,
+            listOf(
+                TorrentFileSpec("Shared Name/track 01.mp3", 5),
+                TorrentFileSpec("Shared Name/book.cue", 3)
+            )
+        )
+        assertEquals(TorrentImportScope.DIRECTORY, plan.scope)
+
+        val foreign = TorrentImportPlanner.foreignImportCandidates(plan.target, plan.declaredFiles)
+        assertEquals(
+            listOf(File(tmp.root, "Shared Name/track 02.mp3").absolutePath),
+            foreign.map { it.absolutePath }
+        )
+
+        val resolved = TorrentImportPlanner.resolveScope(plan, foreign)
+        assertEquals(TorrentImportScope.FILE_LIST, resolved.scope)
+        assertEquals(2, resolved.entries.size)
+        assertTrue(resolved.files.all { it.absolutePath.startsWith(tmp.root.absolutePath) })
+    }
+
+    @Test
+    fun `foreign ebook or archive candidate also forces the exact file list`() {
+        write("Shared Name/track 01.mp3", 5)
+        write("Shared Name/book.cue", 3)
+        write("Shared Name/foreign.epub", 9)
+
+        val plan = TorrentImportPlanner.plan(
+            tmp.root,
+            listOf(
+                TorrentFileSpec("Shared Name/track 01.mp3", 5),
+                TorrentFileSpec("Shared Name/book.cue", 3)
+            )
+        )
+        val foreign = TorrentImportPlanner.foreignImportCandidates(plan.target, plan.declaredFiles)
+        assertEquals(1, foreign.size)
+        assertTrue(foreign.single().name.endsWith(".epub"))
+        assertEquals(TorrentImportScope.FILE_LIST, TorrentImportPlanner.resolveScope(plan, foreign).scope)
+    }
+
+    @Test
+    fun `single file target is never treated as a shared folder`() {
+        write("Book.m4b", 9)
+        write("Sibling.m4b", 4)
+        val plan = TorrentImportPlanner.plan(tmp.root, listOf(TorrentFileSpec("Book.m4b", 9)))
+        assertEquals(TorrentImportScope.DIRECTORY, plan.scope)
+        // target is the file itself, so the exclusivity walk cannot see the sibling
+        assertTrue(TorrentImportPlanner.foreignImportCandidates(plan.target, plan.declaredFiles).isEmpty())
+    }
+
+    @Test
+    fun `retry eligibility covers crashed and failed imports only`() {
+        assertTrue(TorrentImportPlanner.shouldRetryImport(autoImport = true, importStatus = null))
+        assertTrue(TorrentImportPlanner.shouldRetryImport(true, TorrentImportPlanner.verifyFailedStatus(1, 0)))
+        assertTrue(TorrentImportPlanner.shouldRetryImport(true, TorrentImportPlanner.STATUS_IMPORT_FAILED))
+        assertTrue(TorrentImportPlanner.shouldRetryImport(true, TorrentImportPlanner.STATUS_METADATA_UNAVAILABLE))
+        assertFalse(TorrentImportPlanner.shouldRetryImport(true, TorrentImportPlanner.importedStatus(2)))
+        assertFalse(TorrentImportPlanner.shouldRetryImport(autoImport = false, importStatus = null))
+    }
+
+    @Test
     fun `empty file list has no import target below the root`() {
         val plan = TorrentImportPlanner.plan(tmp.root, emptyList())
         assertTrue(plan.entries.isEmpty())
