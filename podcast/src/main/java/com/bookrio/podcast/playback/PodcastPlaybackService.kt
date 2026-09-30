@@ -28,6 +28,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.bookrio.core.playback.PlaybackArbiter
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.prefs.UserPreferencesRepository
+import com.bookrio.data.repository.NowPlayingOwnership
 import com.bookrio.data.repository.PodcastPlaybackState
 import com.bookrio.podcast.R
 import com.bookrio.podcast.data.repository.PodcastRepository
@@ -35,6 +36,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -97,6 +99,13 @@ class PodcastPlaybackService : MediaSessionService() {
     private var sleepTimer: android.os.CountDownTimer? = null
     private var sleepTimerEndTimeMs: Long = 0L
     private val binder = LocalBinder()
+
+    /**
+     * Monotonic token for the current load. Retiring playback (arbiter hand-off or
+     * mini-player close) bumps it so an in-flight load can never resurrect a second
+     * timeline/notification after another engine took ownership.
+     */
+    private val loadGeneration = java.util.concurrent.atomic.AtomicLong()
 
     /** Single writer of the engine's now-playing snapshot (UI + mini-player). */
     private val _nowPlaying = MutableStateFlow(PodcastNowPlaying())
@@ -253,11 +262,43 @@ class PodcastPlaybackService : MediaSessionService() {
                 // Hide + suppress first, so the pause callback cannot re-publish the bar
                 // and briefly steal it back from the audiobook that just started.
                 PodcastPlaybackState.dismiss()
-                player?.pause()
-                player?.playWhenReady = false
+                retirePlayback("arbiter hand-off")
             }
         }
     }
+
+    /**
+     * Tears the engine down to a clean IDLE state after playback ownership moved to
+     * the other engine (arbiter hand-off) or the user closed the mini-player.
+     *
+     * Pausing alone is not enough: Media3 keeps a MediaStyle notification (with the
+     * old artwork) alive while the timeline is non-empty, even when paused, so a
+     * paused episode cover would stay in the system controls/lock screen next to a
+     * playing audiobook. Stopping the player, clearing the timeline and cancelling
+     * the notification guarantees exactly one active media session.
+     */
+    private fun retirePlayback(reason: String) = onMain {
+        loadGeneration.incrementAndGet() // invalidate any in-flight load
+        loadWatchdogJob?.cancel()
+        loadWatchdogJob = null
+        sleepTimer?.cancel()
+        sleepTimer = null
+        sleepTimerEndTimeMs = 0L
+        player?.let { p ->
+            p.pause()
+            p.stop()
+            p.clearMediaItems()
+        }
+        currentFeedId = -1L
+        // currentEpisodeId is intentionally kept: an explicit play press re-loads it.
+        _nowPlaying.value = PodcastNowPlaying()
+        Log.i(TAG, "retirePlayback ($reason)")
+        stopForegroundAndSelf()
+    }
+
+    /** True when the other audio engine currently owns playback. */
+    private fun otherEngineIsPlaying(): Boolean =
+        NowPlayingOwnership.otherEngineIsPlaying(NowPlayingOwnership.Engine.PODCAST)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
@@ -268,13 +309,13 @@ class PodcastPlaybackService : MediaSessionService() {
 
         when (action) {
             ACTION_STOP -> {
-                // Mini-player close: pause and hide, without tearing down the service.
+                // Mini-player close: persist + hide, then retire the engine so no
+                // paused notification/timeline survives the close.
                 onMain {
-                    player?.pause()
-                    player?.playWhenReady = false
+                    persistProgress()
                     PodcastPlaybackState.dismiss()
                 }
-                if (player?.mediaItemCount == 0) stopForegroundAndSelf()
+                retirePlayback("stop action")
             }
             ACTION_SKIP_BACK -> player?.let { it.seekTo((it.currentPosition - SEEK_BACK_MS).coerceAtLeast(0L)) }
             ACTION_SKIP_FORWARD -> player?.let {
@@ -284,8 +325,7 @@ class PodcastPlaybackService : MediaSessionService() {
             ACTION_LOAD_EPISODE -> {
                 val episodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
                 if (episodeId > 0L) {
-                    loadEpisode(episodeId, autoPlay = true)
-                    startLoadWatchdog()
+                    if (loadEpisode(episodeId, autoPlay = true)) startLoadWatchdog()
                 } else {
                     stopForegroundAndSelf()
                 }
@@ -319,6 +359,22 @@ class PodcastPlaybackService : MediaSessionService() {
 
     /** Removes the placeholder notification and stops the service. */
     private fun stopForegroundAndSelf() {
+        removeNotificationNow()
+        stopSelf()
+    }
+
+    /**
+     * Removes the "Loading…" placeholder without stopping the (possibly bound)
+     * service. Only ever called when no timeline is prepared, so it can never remove
+     * Media3's live media notification.
+     */
+    private fun hideLoadingNotificationIfIdle() = onMain {
+        val p = player ?: return@onMain
+        if (p.mediaItemCount > 0) return@onMain
+        removeNotificationNow()
+    }
+
+    private fun removeNotificationNow() {
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -329,7 +385,6 @@ class PodcastPlaybackService : MediaSessionService() {
         }
         // Also clear a notification orphaned by a previous process kill.
         runCatching { NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID) }
-        stopSelf()
     }
 
     /**
@@ -348,13 +403,30 @@ class PodcastPlaybackService : MediaSessionService() {
         }
     }
 
-    fun loadEpisode(episodeId: Long, autoPlay: Boolean = true) {
-        val p = player ?: return
-        val repo = repository ?: return
+    /**
+     * Loads [episodeId] into the podcast player.
+     *
+     * @param autoPlay start playback as soon as the episode is prepared.
+     * @param force explicit user action (play press / media-library skip): bypass the
+     *   "other engine owns playback" gate and take ownership back.
+     * @return true when a load was scheduled, false when it was deferred because the
+     *   other engine owns playback. A deferred load prepares nothing, so no second
+     *   paused MediaStyle notification with this episode's artwork is posted.
+     */
+    fun loadEpisode(episodeId: Long, autoPlay: Boolean = true, force: Boolean = false): Boolean {
+        val p = player ?: return false
+        val repo = repository ?: return false
         // NOTE: audio arbitration happens when playback actually starts
         // (onIsPlayingChanged), not on load — opening an episode must not kill an
-        // audiobook that is currently playing.
+        // audiobook that is currently playing. While that audiobook plays, the load
+        // is deferred instead of posting a second paused notification.
         currentEpisodeId = episodeId
+        val generation = loadGeneration.incrementAndGet()
+        if (!force && otherEngineIsPlaying()) {
+            Log.i(TAG, "loadEpisode($episodeId) deferred: other engine owns playback")
+            hideLoadingNotificationIfIdle()
+            return false
+        }
         serviceScope.launch {
             val episode = repo.getEpisode(episodeId)
             if (episode == null) {
@@ -380,11 +452,7 @@ class PodcastPlaybackService : MediaSessionService() {
                 .setAlbumTitle(feed?.title)
                 .setSubtitle(feed?.title)
                 .setIsPlayable(true)
-                .apply {
-                    artwork?.takeIf { it.isNotBlank() }?.let {
-                        runCatching { setArtworkUri(android.net.Uri.parse(it)) }
-                    }
-                }
+                .setArtworkUri(podcastArtworkUri(artwork))
                 .build()
             val item = MediaItem.Builder()
                 .setUri(source.uri)
@@ -394,6 +462,13 @@ class PodcastPlaybackService : MediaSessionService() {
 
             val globalSpeed = runCatching { prefs?.podcastSpeed?.first() }.getOrNull() ?: 1f
             withContext(Dispatchers.Main) {
+                if (generation != loadGeneration.get()) return@withContext
+                if (!force && otherEngineIsPlaying()) {
+                    // The other engine won while this load was in flight: do not set a
+                    // timeline here (that would post a second notification).
+                    hideLoadingNotificationIfIdle()
+                    return@withContext
+                }
                 p.setMediaItem(item)
                 loadWatchdogJob?.cancel()
                 p.setPlaybackSpeed(globalSpeed.coerceIn(0.5f, 3f))
@@ -402,9 +477,26 @@ class PodcastPlaybackService : MediaSessionService() {
                 p.prepare()
                 p.playWhenReady = autoPlay
             }
+            if (generation != loadGeneration.get()) return@launch
             ensureTicker()
             publishState()
         }
+        return true
+    }
+
+    /**
+     * Artwork for the podcast session's MediaMetadata. Episode artwork wins; when the
+     * feed/episode has none the bundled Bookrio mark is published as a deterministic
+     * local fallback (an `android.resource` URI, which Media3's bitmap loader and the
+     * in-app Coil pipeline both resolve). A session must never end up without artwork
+     * of its own: the system UI would otherwise keep showing whatever cover was there
+     * before, e.g. the paused audiobook that just handed over.
+     */
+    private fun podcastArtworkUri(episodeOrFeedArtwork: String?): android.net.Uri {
+        val remote = episodeOrFeedArtwork?.takeIf { it.isNotBlank() }
+        if (remote != null) return android.net.Uri.parse(remote)
+        val resId = com.bookrio.designsystem.R.drawable.bookrio_mark
+        return android.net.Uri.parse("android.resource://$packageName/$resId")
     }
 
     private fun ensureTicker() {
@@ -448,11 +540,18 @@ class PodcastPlaybackService : MediaSessionService() {
         val episodeId = currentEpisodeId
         if (episodeId <= 0L) return
         val p = player ?: return
+        // serviceScope is main-immediate, so reading the player state here is safe;
+        // capture it synchronously so a following retire/clearMediaItems cannot zero
+        // the position before the launched write runs.
         val pos = p.currentPosition
         val dur = p.duration.takeIf { it > 0 }
         val repo = repository ?: return
         serviceScope.launch {
-            if (pos > 0L) repo.savePlayback(episodeId, pos, dur, completed = false)
+            // NonCancellable: retirePlayback() stops the service right after
+            // persisting, and onDestroy cancels serviceScope.
+            if (pos > 0L) withContext(NonCancellable) {
+                repo.savePlayback(episodeId, pos, dur, completed = false)
+            }
         }
     }
 
@@ -460,6 +559,8 @@ class PodcastPlaybackService : MediaSessionService() {
         val episodeId = currentEpisodeId
         if (episodeId <= 0L) return
         val p = player ?: return
+        // A retired engine has no timeline: never publish an empty snapshot.
+        if (p.mediaItemCount == 0 && !p.isPlaying) return
         val pos = p.currentPosition.coerceAtLeast(0L)
         val dur = p.duration.takeIf { it > 0 } ?: 0L
         val meta = p.mediaMetadata
@@ -588,7 +689,16 @@ class PodcastPlaybackService : MediaSessionService() {
 
     fun playPause() {
         onMain {
-            player?.let { it.playWhenReady = !it.playWhenReady }
+            val p = player ?: return@onMain
+            if (p.mediaItemCount == 0) {
+                // The engine was retired by a hand-off, or the last load was deferred
+                // because the other engine owns playback. An explicit play press
+                // re-loads the episode and takes playback ownership with it.
+                val episodeId = currentEpisodeId
+                if (episodeId > 0L) loadEpisode(episodeId, autoPlay = true, force = true)
+                return@onMain
+            }
+            p.playWhenReady = !p.playWhenReady
         }
     }
 
