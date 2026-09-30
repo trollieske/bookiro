@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bookrio</string>
+    <string name="app_name">Bookiro</string>
     <string name="nav_books">Libros</string>
     <string name="nav_settings">Ajustes</string>
     <string name="shelf_audiobooks">Audiolibros</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Tema</string>
     <string name="player_title">Audiolibro</string>
     <string name="settings_title">Ajustes</string>
-    <string name="onboarding_title">Bienvenido a Bookrio</string>
+    <string name="onboarding_title">Bienvenido a Bookiro</string>
     <string name="onboarding_body">Lee y escucha. Local. Sin ruido.</string>
     <string name="onboarding_cta">Abrir la estantería</string>
     <string name="settings_reader">Lector</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Añade libros automáticamente</string>
     <string name="settings_online_cover">Búsqueda de portadas en línea</string>
     <string name="settings_online_cover_sub">Buscar portadas en Internet</string>
-    <string name="settings_about_description">Bookrio: un lector y reproductor de audiolibros privado y sin anuncios</string>
+    <string name="settings_about_description">Bookiro: un lector y reproductor de audiolibros privado y sin anuncios</string>
     <string name="action_continue">Continuar</string>
     <string name="action_save">Guardar</string>
     <string name="action_cancel">Cancelar</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Restante</string>
     <string name="book_details_pages_left">%1$d páginas</string>
     <string name="book_details_delete_title">Eliminar libro</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(vía Bookrio)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(vía Bookiro)</string>
     <string name="book_details_share_snack">Compartir libro: %1$s</string>
     <string name="book_details_pages_label">Páginas</string>
     <string name="book_details_change_cover_snack">Cambiar portada</string>

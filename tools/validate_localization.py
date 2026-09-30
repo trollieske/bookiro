@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Shelf localization validation script.
+Bookiro localization validation script.
 
 Checks:
   1. Every locale has the same string-key set as base English values/.
@@ -163,7 +163,7 @@ if os.path.exists(lcfg):
 else:
     problems.append("locale_config.xml missing")
 
-lang_src = os.path.join(ROOT, "app", "src", "main", "java", "com", "shelf", "reader", "app", "ui", "LanguageSettings.kt")
+lang_src = os.path.join(ROOT, "app", "src", "main", "java", "com", "bookrio", "app", "ui", "LanguageSettings.kt")
 if os.path.exists(lang_src):
     src = open(lang_src, encoding="utf-8").read()
     if "LocaleListCompat.getEmptyLocaleList()" not in src:

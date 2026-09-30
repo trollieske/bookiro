@@ -18,7 +18,7 @@
     <string name="rdr_share">Поділитися</string>
     <string name="rdr_share_progress">Поділитися прогресом читання</string>
     <string name="rdr_share_text">Читаю «%1$s» — %2$s (сторінка %3$d із %4$d, %5$d%%)
-#Bookrio</string>
+#Bookiro</string>
     <string name="rdr_chapter">Розділ %1$d</string>
     <string name="rdr_pages_left">Залишилось сторінок: %1$d · %2$s · %3$d із %4$d</string>
     <string name="rdr_contents">Зміст</string>

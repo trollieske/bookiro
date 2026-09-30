@@ -38,7 +38,7 @@ import androidx.core.os.LocaleListCompat
  * the Android system on API 33+ (see res/xml/locale_config.xml).
  */
 object ShelfLanguages {
-    /** Exact BCP-47 tags supported by Shelf (must mirror res/xml/locale_config.xml). */
+    /** Exact BCP-47 tags supported by Bookiro (must mirror res/xml/locale_config.xml). */
     val tags: List<String> = listOf("en", "nb", "da", "sv", "fr", "de", "es", "ru", "uk")
 
     @StringRes

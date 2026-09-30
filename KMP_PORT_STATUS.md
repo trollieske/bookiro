@@ -1,4 +1,4 @@
-# Bookrio KMP / iOS port — status
+# Bookiro KMP / iOS port — status
 
 Target from the spec in `trollieske/shelf@main` `Whatsnext.md`: a Kotlin
 Multiplatform app that keeps building Android and adds an iOS (iPhone + iPad)
@@ -63,7 +63,7 @@ complete but must be compiled/verified on a Mac.
   `rememberLocalCover` (Skia) image loader. `AppPrefs`/`PrefKeys` (NSUserDefaults)
   persist settings. ✅ CI run `36700991801` (PDF + EPUB + podcast smoke).
 - **`iosApp`** — complete Xcode project: SwiftUI shell hosting the Compose UI,
-  bundle id `com.bookrio.ios`, display name Bookrio, iOS 15+, iPhone **and** iPad
+  bundle id `com.bookrio.ios`, display name Bookiro, iOS 15+, iPhone **and** iPad
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
   `:shared:embedAndSignAppleFrameworkForXcode`.
 

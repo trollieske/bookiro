@@ -1,16 +1,40 @@
-# Bookrio — handoff for the next agent
+# Bookiro — handoff for the next agent
 
 Read this first. It tells you where everything is, what is verified, and how to
 keep going **without re-discovering the KMP/iOS pitfalls**.
+
+## Brand rename (Bookrio → Bookiro)
+
+The public product name is **Bookiro**. `Bookrio` and `Shelf` are legacy names and
+must only survive as internal technical identifiers or historical references.
+
+- **iOS / shared / this branch** (`ios-parity`): Android string resources (all 10
+  locales), shared podcast/help text, `Info.plist` `CFBundleDisplayName`, iOS CI
+  artifact + smoke-fixture titles, README, `settings.gradle.kts`
+  `rootProject.name`, Xcode `ORGANIZATIONNAME`, and the localization validator
+  path are rebranded here.
+- **Android release source**: worktree `/home/ck3k/Work/shelf-rebrand-android`, branch
+  `rebrand/bookiro-android`, **one commit on top of `feat/production-source-overhaul`
+  (`9efd9b0`)**: the same Android-facing strings/share text plus the README,
+  `rootProject.name` and the validator fix. It deliberately **excludes** the two
+  unpushed `fix/audiobook-fragmentation` commits and is ready to merge/cherry-pick
+  into the release line.
+- **Intentionally kept** (stable identifiers): `applicationId`/namespace
+  `com.bookrio`, iOS `com.bookrio.ios`, DB `shelf.db`, preference keys,
+  notification channel IDs, `BOOKRIO_AUTO_*`, resource names like
+  `bookrio_mark.png`, `Shelf*` class names, GitHub repo/remote names.
+- **Remaining legacy names**: `lib_sort_shelf` (= the bookshelf sort word),
+  `Theme.Shelf`, HTTP User-Agent strings, fixture credentials, and the
+  historical “(formerly Bookrio, formerly Shelf)” README line.
 
 ## Repos & branches
 
 - **`github.com/trollieske/bookrio`** — the KMP/iOS port (the active repo).
   - `kmp-ios` — previous active branch (reader + audio + podcast slices), fully pushed.
   - `ios-parity` — **current active branch**: the Android-parity UI, created from `kmp-ios`.
-  - `main` — baseline Bookrio (Android-only) checkout.
+  - `main` — baseline Bookiro (Android-only) checkout.
 - **`github.com/trollieske/shelf`** — the original Android repo.
-  - `feat/production-source-overhaul` — Bookrio Android app + bugfixes.
+  - `feat/production-source-overhaul` — Bookiro Android app + bugfixes.
   - Release **`v1.0.0-rc1`** — signed APKs for phone testing.
 
 Local clone: `/home/ck3k/Work/shelf` (remote `bookrio` → the new repo, `origin` → shelf).
@@ -65,10 +89,10 @@ expose entry composables.
 
 ### Shelf diff result (checked before porting)
 
-`bookrio/main == origin/feat/production-source-overhaul == 9efd9b0` (Bookrio rebrand).
+`bookrio/main == origin/feat/production-source-overhaul == 9efd9b0` (Bookiro rebrand).
 `shelf` `main` (`8fc2520`) is **not** a descendant of `9efd9b0`; its only extra commit
 is `Add Whatsnext.md DeepSeek prompt for the iOS port` (docs only) and it lacks the
-Bookrio code, so **no Android code commits were newer and nothing was cherry-picked**.
+Bookiro code, so **no Android code commits were newer and nothing was cherry-picked**.
 Canonical Android spec for this work is `9efd9b0`.
 
 ### Fixed Android bugs deliberately NOT ported
@@ -132,7 +156,7 @@ the app, copies `tools/ci/sample.pdf` into the app container, launches with
 `Uncaught Kotlin exception` or when the reader was not presented**. Download the
 proof with:
 ```bash
-gh -R trollieske/bookrio run download <run-id> -n Bookrio-ios-simulator-screenshot -D /tmp/shots
+gh -R trollieske/bookrio run download <run-id> -n Bookiro-ios-simulator-screenshot -D /tmp/shots
 ```
 
 On a real Mac: `open iosApp/iosApp.xcodeproj`, scheme `iosApp`, Run (it calls

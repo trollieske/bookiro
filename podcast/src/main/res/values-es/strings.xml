@@ -8,7 +8,7 @@
     <string name="pod_search_podcasts">Buscar pódcast</string>
     <string name="pod_what_is_rss">¿Qué es un feed RSS?</string>
     <string name="pod_help_title">¿Qué es un feed RSS?</string>
-    <string name="pod_help_body">Un feed RSS es una dirección abierta que permite a Bookrio obtener episodios nuevos directamente de un pódcast que sigues.</string>
+    <string name="pod_help_body">Un feed RSS es una dirección abierta que permite a Bookiro obtener episodios nuevos directamente de un pódcast que sigues.</string>
     <string name="pod_following_new">SIGUIENDO · %1$d NUEVOS</string>
     <string name="pod_following">SIGUIENDO</string>
     <string name="pod_refresh">Actualizar</string>

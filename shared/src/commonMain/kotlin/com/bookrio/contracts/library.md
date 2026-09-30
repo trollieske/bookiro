@@ -36,7 +36,7 @@ full remaining height (it fills the size it is given).
    Android DataStore key strings (`sort_mode_books`, …) never collide; but the
     names are not identical, so a later cross-platform settings sync would need a
    mapping decision (`PrefKeys.kt` is outside this agent's allowlist).
-2. **Bookrio mark.** `designsystem` only ships `bookrio_mark.png` in `androidMain`.
+2. **Bookiro mark.** `designsystem` only ships `bookrio_mark.png` in `androidMain`.
    The common screen draws the lime "B" mark in Compose instead. If the real PNG
    mark is required on iOS, `:designsystem` needs a common/iOS asset.
 3. **Sort/view persistence is synchronous** (`AppPrefs`) — no ViewModel needed;

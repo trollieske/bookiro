@@ -85,7 +85,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Bookrio-ios-simulator-app
+          name: Bookiro-ios-simulator-app
           path: ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug-iphonesimulator/*.app
           if-no-files-found: ignore
 
@@ -159,7 +159,7 @@ jobs:
             '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">'
             '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
             '<dc:identifier id="bookid">urn:uuid:bookrio-ci</dc:identifier>'
-            '<dc:title>Bookrio CI EPUB</dc:title><dc:creator>CI</dc:creator>'
+            '<dc:title>Bookiro CI EPUB</dc:title><dc:creator>CI</dc:creator>'
             '<dc:language>en</dc:language></metadata>'
             '<manifest>'
             '<item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>'
@@ -212,7 +212,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Bookrio-ios-epub-screenshot
+          name: Bookiro-ios-epub-screenshot
           path: /tmp/bookrio-epub.png
           if-no-files-found: warn
 
@@ -229,7 +229,7 @@ jobs:
           <?xml version="1.0" encoding="UTF-8"?>
           <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
            <channel>
-            <title>Bookrio CI Podcast</title>
+            <title>Bookiro CI Podcast</title>
             <itunes:author>CI</itunes:author>
             <description>A tiny CI feed.</description>
             <item>
@@ -289,7 +289,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Bookrio-ios-podcast-screenshot
+          name: Bookiro-ios-podcast-screenshot
           path: /tmp/bookrio-podcast.png
           if-no-files-found: warn
 
@@ -297,6 +297,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Bookrio-ios-simulator-screenshot
+          name: Bookiro-ios-simulator-screenshot
           path: /tmp/bookrio-reader.png
           if-no-files-found: warn

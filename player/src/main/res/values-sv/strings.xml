@@ -30,7 +30,7 @@
     <string name="ply_notif_play">Spela</string>
     <string name="ply_notif_skip_forward">Framåt 30 s</string>
     <string name="ply_notif_next">Nästa</string>
-    <string name="ply_library_root">Bookrio-bibliotek</string>
+    <string name="ply_library_root">Bookiro-bibliotek</string>
     <string name="ply_notif_channel">Uppspelning</string>
     <string name="ply_notif_channel_desc">Aviseringar för ljudboksuppspelning</string>
     <string name="ply_prepare_error">Ljudboken kunde inte förberedas</string>

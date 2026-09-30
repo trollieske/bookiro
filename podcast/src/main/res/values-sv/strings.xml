@@ -8,7 +8,7 @@
     <string name="pod_search_podcasts">S\u00f6k poddar</string>
     <string name="pod_what_is_rss">Vad \u00e4r ett RSS-fl\u00f6de?</string>
     <string name="pod_help_title">Vad \u00e4r ett RSS-fl\u00f6de?</string>
-    <string name="pod_help_body">Ett RSS-fl\u00f6de \u00e4r en \u00f6ppen adress som l\u00e5ter Bookrio h\u00e4mta nya avsnitt direkt fr\u00e5n en podd du f\u00f6ljer.</string>
+    <string name="pod_help_body">Ett RSS-fl\u00f6de \u00e4r en \u00f6ppen adress som l\u00e5ter Bookiro h\u00e4mta nya avsnitt direkt fr\u00e5n en podd du f\u00f6ljer.</string>
     <string name="pod_following_new">F\u00d6LJER \u00b7 %1$d NYA</string>
     <string name="pod_following">F\u00d6LJER</string>
     <string name="pod_refresh">Uppdatera</string>

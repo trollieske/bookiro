@@ -30,7 +30,7 @@
     <string name="ply_notif_play">Spill</string>
     <string name="ply_notif_skip_forward">Frem 30 s</string>
     <string name="ply_notif_next">Neste</string>
-    <string name="ply_library_root">Bookrio-bibliotek</string>
+    <string name="ply_library_root">Bookiro-bibliotek</string>
     <string name="ply_notif_channel">Avspilling</string>
     <string name="ply_notif_channel_desc">Lydbok-avspillingsvarsler</string>
     <string name="ply_prepare_error">Lydboken kunne ikke klargjøres</string>

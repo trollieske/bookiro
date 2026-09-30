@@ -274,7 +274,7 @@ private fun PodcastEmptyState(onAddFeed: () -> Unit) {
             title = { Text("What is an RSS feed?", color = OmarchyColors.Fg) },
             text = {
                 Text(
-                    "An RSS feed is an open address that lets Bookrio fetch new episodes " +
+                    "An RSS feed is an open address that lets Bookiro fetch new episodes " +
                         "directly from a podcast you follow.",
                     color = OmarchyColors.Dim,
                     style = ShelfTypography.BodyMedium,

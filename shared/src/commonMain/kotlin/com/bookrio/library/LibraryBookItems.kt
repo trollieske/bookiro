@@ -334,7 +334,7 @@ internal fun EmptyShelfGlyph() {
     }
 }
 
-/** Bookrio mark: the Android drawable is a lime glyph — drawn here in common. */
+/** Bookiro mark: the Android drawable is a lime glyph — drawn here in common. */
 @Composable
 internal fun BookrioMark(size: Dp = 24.dp) {
     Box(

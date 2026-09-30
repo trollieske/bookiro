@@ -8,7 +8,7 @@
     <string name="pod_search_podcasts">Rechercher des podcasts</string>
     <string name="pod_what_is_rss">Qu\u2019est-ce qu\u2019un flux RSS\u00a0?</string>
     <string name="pod_help_title">Qu\u2019est-ce qu\u2019un flux RSS\u00a0?</string>
-    <string name="pod_help_body">Un flux RSS est une adresse ouverte qui permet \u00e0 Bookrio de r\u00e9cup\u00e9rer les nouveaux \u00e9pisodes directement depuis un podcast que vous suivez.</string>
+    <string name="pod_help_body">Un flux RSS est une adresse ouverte qui permet \u00e0 Bookiro de r\u00e9cup\u00e9rer les nouveaux \u00e9pisodes directement depuis un podcast que vous suivez.</string>
     <string name="pod_following_new">SUIVIS \u00b7 %1$d NOUVEAUX</string>
     <string name="pod_following">SUIVIS</string>
     <string name="pod_refresh">Actualiser</string>

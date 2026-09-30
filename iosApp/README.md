@@ -1,6 +1,6 @@
-# Bookrio — iOS app (iPhone + iPad)
+# Bookiro — iOS app (iPhone + iPad)
 
-Kotlin Multiplatform port of Bookrio. The iOS UI is Compose Multiplatform
+Kotlin Multiplatform port of Bookiro. The iOS UI is Compose Multiplatform
 (shared Kotlin) hosted from SwiftUI. This folder is a complete Xcode project.
 
 ## Run on a Mac

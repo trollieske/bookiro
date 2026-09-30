@@ -18,7 +18,7 @@
     <string name="rdr_share">Dela</string>
     <string name="rdr_share_progress">Dela läsframsteg</string>
     <string name="rdr_share_text">Jag läser "%1$s" — %2$s (sida %3$d av %4$d, %5$d%%)
-#Bookrio</string>
+#Bookiro</string>
     <string name="rdr_chapter">Kapitel %1$d</string>
     <string name="rdr_pages_left">%1$d sidor kvar · %2$s · %3$d av %4$d</string>
     <string name="rdr_contents">Innehåll</string>
