@@ -34,10 +34,12 @@ complete but must be compiled/verified on a Mac.
   using `UIPageViewController` with Apple's built-in `.pageCurl` transition: PDF via
   PDFKit (`shared/.../reader/PdfPageCurlReader.kt`) and EPUB via a shared Kotlin EPUB
   parser + paginator (`shared/.../reader/Epub*.kt`, `platform.zlib` raw inflate).
+  EPUB pages now render the chapter **HTML** (Android reader CSS) in one WKWebView
+  per page inside the `.pageCurl` host, with Android-style reader chrome.
   Reading progress is written back through the shared `ReadingProgressDao`.
   **No Android `:pagecurl` code is ported.**
   ✅ **CI-verified** on `macos-15`: the PDF smoke test and the EPUB smoke test both
-  open the native page-curl reader (runs `36633471628`, `36641917158`).
+  open the native page-curl reader (runs `36633471628`, `36641917158`, `36700991801`).
 - **iOS audio** — one `AVPlayer` for the whole app (`AudioPlayers.shared`,
   `shared/.../player/`): audiobook and podcast can never overlap. Local m4b/mp3/…
   play with play/pause/seek/chapters, resume + ~2 s progress writes through
@@ -49,13 +51,24 @@ complete but must be compiled/verified on a Mac.
   `podcast_playback`. Foreground pull-to-refresh only. ✅ Final CI run `36641917158`
   parses an RSS fixture (filesystem, not HTTP — the runner refused loopback) and
   asserts the feed + 2 episodes are stored.
+- **iOS Android parity (`ios-parity`)** — the stub `App.kt` is replaced by a
+  Material 3 shell mirroring Android: 4 bottom tabs (Bøker/Lydbøker/Podkaster/
+  Innstillinger), tab badges, and the one now-playing bar over `AudioPlayers.shared`.
+  Screens in `commonMain`: `library/BookrioLibraryScreen` (grid/list, sort rail,
+  resume strip, search, tab counts), `player/ui/BookrioPlayerScreen`, the podcast
+  root/detail, and `settings/BookrioSettingsScreen`. `designsystem`
+  `BookVisual`/`BookFormat` + `cleanBookTitle/Author` moved to `commonMain`; `:shared`
+  now depends on `:designsystem` (kept off the Compose Gradle plugin) and uses
+  `material-icons-extended:1.7.3` (1.8.2 is unpublished) plus a common
+  `rememberLocalCover` (Skia) image loader. `AppPrefs`/`PrefKeys` (NSUserDefaults)
+  persist settings. ✅ CI run `36700991801` (PDF + EPUB + podcast smoke).
 - **`iosApp`** — complete Xcode project: SwiftUI shell hosting the Compose UI,
   bundle id `com.bookrio.ios`, display name Bookrio, iOS 15+, iPhone **and** iPad
   (`TARGETED_DEVICE_FAMILY = 1,2`). Xcode runs
   `:shared:embedAndSignAppleFrameworkForXcode`.
 
 ## Verified on a real Mac (GitHub Actions `macos-15`, Xcode 16.4)
-`.github/workflows/ios.yml` builds, on every push to `kmp-ios`:
+`.github/workflows/ios.yml` builds, on every push to `kmp-ios` or `ios-parity`:
 
 - `:shared:linkDebugFrameworkIosSimulatorArm64` and `:shared:linkDebugFrameworkIosArm64` ✅
 - `iosApp` for the **iOS Simulator** (arm64) with the Compose UI linked ✅
@@ -70,20 +83,23 @@ complete but must be compiled/verified on a Mac.
 The framework therefore compiles/links with Kotlin/Native and the SwiftUI shell links
 the Kotlin Compose UI on a real macOS toolchain for both iPhone and iPad.
 
-## Remaining (next agent starts at discovery/downloads, not playback)
+## Remaining (next agent: sources, then details/transfers)
 
-Playback, EPUB, audio and podcast playback are done. What is left is mostly
-polish and the non-Apple-source work:
+The Android parity flow is done. What is left:
 
-1. Podcast discovery/search (iTunes/PodcastIndex) and optional episode downloads
-   using the existing `podcast_downloads` table; no WorkManager/BGTaskScheduler.
-2. Migrate `:library`, `:reader`, `:player` chrome to Compose Multiplatform
-   `commonMain` (extract `BookVisual`/`BookFormat` from `:designsystem` first).
-3. iOS import polish: security-scoped bookmarks for in-place access + a shared
-   importer; FB2/MOBI/CBZ readers behind the same native page-curl host.
-4. Podcast/audiobook extras: lock-screen artwork, playback speed UI, mark-as-played,
-   sleep timer, multi-file audiobook chapters.
-5. Verify on a Mac (or trust CI): `open iosApp/iosApp.xcodeproj`, run the `:shared`
+1. Sources (FTP/SFTP/SMB/WebDAV/Calibre) as a later integrator phase — port the
+   current Room transfer queue, not the old screen-scoped ViewModel socket. No
+   torrent, no OPDS.
+2. Book details (long-press) + import progress/transfers; security-scoped bookmarks
+   for in-place imports.
+3. A full-screen podcast player screen (iOS currently uses the bar + detail) and
+   podcast discovery/optional downloads using `podcast_downloads`; no
+   WorkManager/BGTaskScheduler.
+4. FB2/MOBI/CBZ readers behind the same native page-curl host.
+5. Player contract gaps (`shared/.../contracts/player.md`): cross-track whole-book
+   seek + global position on the owner; lock-screen artwork.
+6. Shared strings/localization (shared screens are hard-coded English).
+7. Verify on a Mac (or trust CI): `open iosApp/iosApp.xcodeproj`, run the `:shared`
    framework build, then simulate on iPhone + iPad.
 
 ## Excluded on iOS (by construction)

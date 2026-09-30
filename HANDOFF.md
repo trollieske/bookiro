@@ -6,7 +6,8 @@ keep going **without re-discovering the KMP/iOS pitfalls**.
 ## Repos & branches
 
 - **`github.com/trollieske/bookrio`** — the KMP/iOS port (the active repo).
-  - `kmp-ios` — **active branch**, everything below is here, fully pushed, tree clean.
+  - `kmp-ios` — previous active branch (reader + audio + podcast slices), fully pushed.
+  - `ios-parity` — **current active branch**: the Android-parity UI, created from `kmp-ios`.
   - `main` — baseline Bookrio (Android-only) checkout.
 - **`github.com/trollieske/shelf`** — the original Android repo.
   - `feat/production-source-overhaul` — Bookrio Android app + bugfixes.
@@ -39,6 +40,56 @@ A stale local `main` (shelf's) exists; ignore it — use `bookrio/*`.
   in the Compose shell and streamed through the same single `AudioPlayer`
   (`AudioOwner.PODCAST`); position is marked in `podcast_playback`. Pull-to-refresh
   is foreground-only. No downloads, directory or search.
+- **iOS Android parity (`ios-parity`, CI-verified)**: the stub `App.kt` is replaced by
+  a Material 3 shell that mirrors the Android app — 4 bottom tabs, badges, and one
+  now-playing bar. Screens now shared: library (grid/list, sort rail, resume strip,
+  search, tab counts), audiobook player chrome, reader chrome + real HTML pages, and
+  the podcast root/detail + settings. Apple `.pageCurl` and the one audio owner are
+  preserved. `designsystem` `BookVisual`/`BookFormat` now live in `commonMain`.
+
+## iOS parity (`ios-parity`) — what matches Android
+
+`ios-parity` (from `kmp-ios`) replaces the Compose stub with the Android look:
+
+| iOS (shared) | Android source |
+|---|---|
+| `com.bookrio.library.BookrioLibraryScreen` | `library/ui/LibraryScreen.kt` |
+| `com.bookrio.player.ui.BookrioPlayerScreen` | `player/ui/PlayerScreen.kt` |
+| `EpubPageCurlReader` (WKWebView HTML pages) | `reader/ui/ReaderScreen.kt` + `engine/HtmlPageRenderer.kt` |
+| `com.bookrio.podcast.ui.BookrioPodcastRootScreen`/`DetailScreen` | `podcast/ui/PodcastRootScreen.kt`/`PodcastDetailScreen.kt` |
+| `com.bookrio.settings.BookrioSettingsScreen` | `app/.../app/ui/SettingsScreen.kt` |
+| `App.kt` shell (tabs, badges, now-playing bar) | `MainActivity.kt` `ShelfRoot` + `NowPlayingBar` |
+
+The diagrams in `App.kt` (`BookrioScreen` nav host) are the integrator's; agents only
+expose entry composables.
+
+### Shelf diff result (checked before porting)
+
+`bookrio/main == origin/feat/production-source-overhaul == 9efd9b0` (Bookrio rebrand).
+`shelf` `main` (`8fc2520`) is **not** a descendant of `9efd9b0`; its only extra commit
+is `Add Whatsnext.md DeepSeek prompt for the iOS port` (docs only) and it lacks the
+Bookrio code, so **no Android code commits were newer and nothing was cherry-picked**.
+Canonical Android spec for this work is `9efd9b0`.
+
+### Fixed Android bugs deliberately NOT ported
+
+- Two now-playing engines / one engine clearing the other → iOS keeps the single
+  `AudioPlayers.shared` owner; the bar never constructs a second AVPlayer.
+- Non-unique MediaSession / binder polling / a stuck "Loading podcast…" → no iOS
+  equivalent exists; the shared player is one instance.
+- Persisting "Kapittel N"/"Chapter N" as a real title → generic titles stay
+  render-time only (`localizedChapterTitle` pattern).
+- Online cover lookup by default → `ONLINE_COVER_LOOKUP` stays `false`; iOS renders
+  only local covers (`rememberLocalCover`) and never fetches RSS artwork.
+- Screen-scoped FTP/SMB transfers, qBittorrent UA spoofing / public trackers, OPDS →
+  not ported at all (see "Android-only" below).
+
+### Still Android-only (not shown as fake iOS cards)
+
+FTP / SFTP / SMB / WebDAV / Calibre / torrent, Android Auto + CarPlay, WorkManager,
+SAF folder watching, DB export/import, sync scheduling, handoff, language picker.
+The library header omits the Sources/CloudSync icon and the settings screen omits
+those rows rather than showing disabled stubs.
 
 ## How to build / verify
 
@@ -180,31 +231,34 @@ must be 2.5.0 (2.6+/2.7 klibs need Kotlin 2.3.x).
 
 ## Next steps (in order)
 
-Playback, EPUB, audio and podcast playback are all done and CI-verified. The next
-agent should start at **discovery/downloads**, not playback:
+Android parity for the main flow is done and CI-verified on `ios-parity`. Left to do:
 
-1. **Podcast discovery/search** (iTunes/`PodcastIndex` search UI) and optional
-   episode downloads (local file wins over the enclosure URL, using the existing
-   `podcast_downloads` table + a foreground/download manager — no WorkManager on iOS).
-2. **Shared importer / metadata**: extract `BookVisual`/`BookFormat` from
-   `:designsystem` `BookComponents` into `commonMain`, then replace the minimal
-   `App.kt` library rows with the shared `:library` UI. Add security-scoped
-   bookmarks so imports are read in place instead of copied.
-3. **Other formats on iOS**: FB2/MOBI/CBZ readers behind the same native host.
-4. **Podcast extras**: artwork in the now-playing bar / lock screen
-   (`MPMediaItemArtwork`), playback speed UI, mark-as-played, per-episode context menu.
-5. **Audiobook multi-track polish**: chapters across separate files, sleep timer.
-6. Update `KMP_PORT_STATUS.md` as phases land.
+1. **Sources (later integrator phase)**: FTP/SMB/WebDAV/Calibre. Port the *current*
+   Room transfer queue (never the old screen-scoped ViewModel socket), and only then
+   show a working source card/settings row. No torrent, no OPDS.
+2. **Book details + import progress/transfers** screens (long-press target is currently
+   a no-op) and security-scoped bookmarks so imports are read in place.
+3. **Podcast player screen** (Android has a full-screen player; iOS currently uses the
+   bar + detail) and podcast discovery/optional downloads (`podcast_downloads`, no
+   WorkManager/BGTaskScheduler).
+4. **Other formats on iOS**: FB2/MOBI/CBZ behind the same native `.pageCurl` host.
+5. **Player contract gaps** (`contracts/player.md`): cross-track whole-book seek and a
+   global position API on the audio owner; also lock-screen artwork (`MPMediaItemArtwork`).
+6. **UI/i18n**: `:shared` does not use Compose resources, so shared screens are
+   hard-coded English; wire a common string surface if localization is wanted.
 
 ## Current branches/commits
 
-`kmp-ios` head after this run: EPUB, audio and podcast phases are all committed and
-pushed. Order: `c08ceaf` (EPUB reader) → `3e48b71` (EPUB viewWillAppear fix) →
-`5a44d96` (single audio owner) → `9c9fdb4` (podcasts) → `2993cee` + `ad826d2` +
-`3b4147f` (podcast CI smoke fixes).
+- `kmp-ios` (previous run): `c08ceaf` EPUB reader → `3e48b71` viewWillAppear fix →
+  `5a44d96` single audio owner → `9c9fdb4` podcasts → `2993cee`/`ad826d2`/`3b4147f`
+  podcast CI smoke fixes → `8a430cd` docs.
+- `ios-parity` (this run): `b73d2d1` BookVisual/BookFormat commonMain → `3e5eb4e`
+  designsystem dep + icons + cover loader → `9d6f82e` AppPrefs → `0293ad4` PrefKeys →
+  `4ee5415` parity screens + nav host → `9f707fc` CI on ios-parity → `f70a943`
+  smoke polling + app-start → `a37009c` EPUB measuring-view ghost fix.
 
 **CI (GitHub Actions `iOS Build`, `macos-15`):**
-- `36633471628` ✅ — audio commit; PDF + EPUB smoke tests pass.
-- `36641917158` ✅ — final: PDF + EPUB + **podcast RSS (file) smoke** all pass.
-- `36630606663`, `36638298509`, `36640121145` ❌ — earlier podcast-smoke attempts;
-  the networking failure and its fix are written up in the pitfalls section above.
+- `36696696262` ✅ — parity shell; PDF + EPUB + podcast RSS smoke pass.
+- `36700991801` ✅ — current head; same three smokes pass (ghost column fixed).
+- `36692735019` ❌ — first parity run: PDF smoke failed only because the larger
+  framework needed more than a fixed 20 s; replaced with a log-line poll.
