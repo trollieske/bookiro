@@ -95,7 +95,7 @@ class PlayerViewModel(
     )
     val state: StateFlow<AudiobookState> = _state.asStateFlow()
 
-    fun load(bookId: Long) {
+    fun load(bookId: Long, playIntent: Boolean = false) {
         currentBookId = bookId
         lastIsPlaying = false
         gotNowPlaying = false
@@ -133,6 +133,7 @@ class PlayerViewModel(
         val intent = Intent(getApplication(), AudiobookPlaybackService::class.java).apply {
             action = AudiobookPlaybackService.ACTION_LOAD_BOOK
             putExtra(AudiobookPlaybackService.EXTRA_BOOK_ID, bookId)
+            putExtra(AudiobookPlaybackService.EXTRA_PLAY_INTENT, playIntent)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
@@ -248,7 +249,16 @@ class PlayerViewModel(
     // #endregion
 
     fun playPause() {
-        service?.playPause()
+        val svc = service
+        if (svc == null) {
+            // The service was stopped (e.g. a deferred load called stopSelf) and the
+            // gesture must not be dropped: re-issue the load as an explicit play.
+            if (currentBookId > 0L) load(currentBookId, playIntent = true)
+            return
+        }
+        // Pass the book the UI is showing: the service may have lost its own request
+        // when it was recreated for the binding.
+        svc.playPause(currentBookId)
     }
 
     /**

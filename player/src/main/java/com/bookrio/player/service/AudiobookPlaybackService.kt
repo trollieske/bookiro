@@ -75,6 +75,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
         const val NOTIFICATION_ID = 8888
         const val ACTION_LOAD_BOOK = "com.bookrio.player.LOAD_BOOK"
         const val EXTRA_BOOK_ID = "extra_book_id"
+
+        /**
+         * Explicit play intent: the load may start playback and take ownership back
+         * from the other engine. Used when the UI re-issues a load on a play press
+         * after the service was stopped; a plain screen load stays deferred.
+         */
+        const val EXTRA_PLAY_INTENT = "extra_play_intent"
         const val SEEK_BACK_MS = 30_000L
         const val SEEK_FORWARD_MS = 30_000L
 
@@ -118,11 +125,18 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var lastProgressSaveMs = 0L
 
     /**
-     * Monotonic token for the current load. Retiring playback (arbiter hand-off or
-     * mini-player close) bumps it so an in-flight load can never resurrect a second
-     * timeline/notification after another engine took ownership.
+     * Monotonic arbitration for loads: a token from [LoadGate.begin] may only
+     * commit while it is current and (forced or the other engine is idle), and
+     * retire/hand-off invalidates every in-flight token.
      */
-    private val loadGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val loadGate = com.bookrio.core.playback.LoadGate()
+
+    /**
+     * Id of the book whose MediaItems the player actually holds. Written only in
+     * the main-thread commit of [loadBook], so progress/snapshots can never be
+     * attributed to a book that was merely requested while the old one still plays.
+     */
+    private val loadedTimeline = com.bookrio.core.playback.LoadedTimeline()
 
     inner class LocalBinder : Binder() {
         fun getService(): AudiobookPlaybackService = this@AudiobookPlaybackService
@@ -163,8 +177,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 if (id.startsWith("book_")) {
                     val bookId = runCatching { id.removePrefix("book_").toLong() }.getOrNull() ?: return
                     if (currentBookId != bookId) {
-                        // Media library skip: keep the "was playing" intent, but let the
-                        // generation-guarded load decide whether this engine may start.
+                        // Media library skip: the player now holds the library item, not
+                        // our timeline; the guarded load below decides whether this
+                        // engine may start.
+                        loadedTimeline.cleared()
                         loadBook(bookId, autoPlay = exo.playWhenReady, force = exo.playWhenReady)
                         return
                     }
@@ -179,9 +195,12 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 maybePersistProgress()
                 when (playbackState) {
                     Player.STATE_ENDED -> {
-                        val finishedId = currentBookId
-                        if (finishedId > 0L) serviceScope.launch {
-                            withContext(NonCancellable) { saveProgress(finishedId, 1.0f) }
+                        val finished = loadedTimeline.snapshot()
+                        if (finished.id > 0L) serviceScope.launch {
+                            // Only mark finished if the player still holds that timeline.
+                            if (loadedTimeline.progressTarget(finished) != null) {
+                                withContext(NonCancellable) { saveProgress(finished.id, 1.0f) }
+                            }
                         }
                         maybeAutoPlayNext()
                     }
@@ -384,7 +403,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
         // released before the new engine starts.
         runOnMain {
             runCatching {
-                maybePersistProgress()
                 // Hide + suppress first, so the pause callback cannot re-publish the bar.
                 com.bookrio.data.repository.ActivePlaybackState.dismiss()
                 retirePlayback("arbiter hand-off")
@@ -393,17 +411,34 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     /**
+     * A load refused arbitration: nothing of ours may stay prepared/published while
+     * the other engine owns playback (a second timeline would post a second paused
+     * MediaStyle notification). Retiring also stops the just-started service.
+     */
+    private fun deferLoad(reason: String) = runOnMain {
+        runCatching {
+            com.bookrio.data.repository.ActivePlaybackState.dismiss()
+            retirePlayback(reason)
+        }
+    }
+
+    /**
      * Tears the engine down to a clean IDLE state after playback ownership moved to
-     * the other engine (arbiter hand-off) or the user closed the mini-player.
+     * the other engine (arbiter hand-off), the user closed the mini-player, or a
+     * load was deferred.
      *
      * Pausing alone is not enough: Media3 keeps a MediaStyle notification (with the
      * old artwork) alive while the timeline is non-empty, even when paused, so a
      * paused audiobook cover would stay in the system controls/lock screen next to a
      * playing podcast. Stopping the player, clearing the timeline and cancelling the
-     * notification guarantees exactly one active media session.
+     * notification, plus stopSelf() (safe while bound), guarantees exactly one
+     * active media session and no idle service left running.
      */
     private fun retirePlayback(reason: String) = runOnMain {
-        loadGeneration.incrementAndGet() // invalidate any in-flight load
+        // Final persist keyed to the timeline the player actually holds — captured
+        // here, before we clear it.
+        maybePersistProgress()
+        loadGate.invalidate() // invalidate any in-flight load
         loadWatchdogJob?.cancel()
         loadWatchdogJob = null
         sleepTimer?.cancel()
@@ -416,6 +451,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
         }
         activeChapters = emptyList()
         activeItemSpecs = emptyList()
+        // loadedTimeline keeps its id: it is the last timeline we held, which is
+        // exactly what a late progress write (and a play press) must target.
         // currentBookId is intentionally kept: an explicit play press re-loads it.
         _nowPlaying.value = AudiobookNowPlaying()
         Log.i(TAG, "retirePlayback ($reason)")
@@ -456,7 +493,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 // notification with this book's artwork.
                 val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L)
                 if (bookId > 0L) {
-                    if (loadBook(bookId)) startLoadWatchdog()
+                    // An explicit play intent (play press with a dead service) may
+                    // autoplay and take ownership; a plain screen load defers.
+                    val playIntent = intent.getBooleanExtra(EXTRA_PLAY_INTENT, false)
+                    if (loadBook(bookId, autoPlay = playIntent, force = playIntent)) startLoadWatchdog()
                 } else {
                     stopForegroundAndSelf()
                 }
@@ -496,17 +536,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
         stopSelf()
     }
 
-    /**
-     * Removes the "Loading…" placeholder without stopping the (possibly bound)
-     * service. Only ever called when no timeline is prepared, so it can never remove
-     * Media3's live media notification.
-     */
-    private fun hideLoadingNotificationIfIdle() = runOnMain {
-        val p = player ?: return@runOnMain
-        if (p.mediaItemCount > 0) return@runOnMain
-        removeNotificationNow()
-    }
-
     private fun removeNotificationNow() {
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -544,19 +573,22 @@ class AudiobookPlaybackService : MediaLibraryService() {
      *
      * @param autoPlay start playback as soon as the book is prepared (explicit user
      *   play and auto-play-next). Plain screen loads stay paused.
-     * @param force explicit user action: bypass the "other engine owns playback" gate
-     *   and take ownership back. Screen loads never force.
+     * @param force explicit user action (play/resume or a play-intent screen load):
+     *   bypass the "other engine owns playback" gate and take ownership back. A plain
+     *   screen load never forces.
      * @return true when a load was scheduled, false when it was deferred because the
      *   other engine owns playback. A deferred load prepares nothing, so no second
      *   paused MediaStyle notification with this book's artwork is posted.
      */
     private fun loadBook(bookId: Long, autoPlay: Boolean = false, force: Boolean = false): Boolean {
+        // Requested id (used by the UI / play press). The *loaded* id is only written
+        // once the player actually accepts the new timeline, further down.
         currentBookId = bookId
         val p = player ?: return false
-        val generation = loadGeneration.incrementAndGet()
-        if (!force && otherEngineIsPlaying()) {
+        val token = loadGate.begin()
+        if (loadGate.shouldDefer(force, otherEngineIsPlaying())) {
             Log.i(TAG, "loadBook($bookId) deferred: other engine owns playback")
-            hideLoadingNotificationIfIdle()
+            deferLoad("load deferred: other engine owns playback")
             return false
         }
         serviceScope.launch {
@@ -575,24 +607,24 @@ class AudiobookPlaybackService : MediaLibraryService() {
             }
 
             val cover = withContext(Dispatchers.IO) { coverArtworkFor(book.id, book.coverPath) }
-            if (generation != loadGeneration.get()) return@launch
+            if (token != loadGate.current()) return@launch
 
             // KANONISK oppfriskning: oppdager/persisterer reelle kapitler for
             // eksisterende bøker med utdatert metadata (samme sti som ViewModel).
-            activeChapters = chapterEngine?.ensureFreshChapters(book)
+            val chapters = chapterEngine?.ensureFreshChapters(book)
                 ?: parseChapters(book.chaptersJson ?: "")
 
-            if (activeChapters.isNotEmpty()) {
+            if (chapters.isNotEmpty()) {
                 // Flere kapitler i SAMME fil (M4B/MP3 med innebygde kapitler) får
                 // ClippingConfiguration slik at hvert MediaItem spiller KUN sitt intervall.
                 // Én fil per kapittel (mappe-import) klippes ikke — startMs er kumulativ.
                 val uriCounts = HashMap<String, Int>()
-                activeChapters.forEach { ch ->
+                chapters.forEach { ch ->
                     val u = ch.mediaUri ?: source ?: ""
                     uriCounts[u] = (uriCounts[u] ?: 0) + 1
                 }
                 val uriBases = HashMap<String, Long>()
-                val itemSpecs = activeChapters.map { ch ->
+                val itemSpecs = chapters.map { ch ->
                     val u = ch.mediaUri ?: source ?: ""
                     if ((uriCounts[u] ?: 0) > 1) {
                         val base = uriBases.getOrPut(u) { ch.startMs }
@@ -603,7 +635,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
                         ActiveItemSpec(ch, ch.startMs, null, null)
                     }
                 }
-                activeItemSpecs = itemSpecs
 
                 val mediaItems = itemSpecs.map { spec ->
                     val ch = spec.chapter
@@ -629,7 +660,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                             .setAlbumArtist(book.author)
                             .setAlbumTitle(book.title)
                             .setDisplayTitle(ch.title)
-                            .setSubtitle(getString(R.string.ply_chapter_of, ch.index + 1, activeChapters.size))
+                            .setSubtitle(getString(R.string.ply_chapter_of, ch.index + 1, chapters.size))
                             .apply { cover?.bytes?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
                             .build()
                     )
@@ -637,18 +668,23 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 }
 
                 withContext(Dispatchers.Main) {
-                    if (generation != loadGeneration.get()) return@withContext
-                    if (!force && otherEngineIsPlaying()) {
+                    if (!loadGate.shouldApply(token, force, otherEngineIsPlaying())) {
                         // The other engine won while this load was in flight: do not
                         // set a timeline here (that would post a second notification).
-                        hideLoadingNotificationIfIdle()
+                        deferLoad("load superseded while in flight")
                         return@withContext
                     }
+                    // Swap the chapter/spec caches and the loaded-timeline id *before*
+                    // the player call: any ExoPlayer listener callback fired by
+                    // setMediaItems then sees a consistent (id, caches, player) triple.
+                    activeChapters = chapters
+                    activeItemSpecs = itemSpecs
+                    loadedTimeline.committed(book.id, token)
                     p.setMediaItems(mediaItems)
-                    val totalDur = book.durationMs ?: activeChapters.lastOrNull()?.endMs ?: 0L
+                    val totalDur = book.durationMs ?: chapters.lastOrNull()?.endMs ?: 0L
                     if (prog > 0f && totalDur > 0L) {
                         val targetMs = (prog * totalDur).toLong()
-                        val targetIdx = activeChapters.indexOfLast { it.startMs <= targetMs }.coerceAtLeast(0)
+                        val targetIdx = chapters.indexOfLast { it.startMs <= targetMs }.coerceAtLeast(0)
                         val offsetMs = (targetMs - (itemSpecs.getOrNull(targetIdx)?.globalStartMs ?: 0L)).coerceAtLeast(0L)
                         p.seekTo(targetIdx, offsetMs)
                     }
@@ -677,11 +713,15 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     .build()
                 
                 withContext(Dispatchers.Main) {
-                    if (generation != loadGeneration.get()) return@withContext
-                    if (!force && otherEngineIsPlaying()) {
-                        hideLoadingNotificationIfIdle()
+                    if (!loadGate.shouldApply(token, force, otherEngineIsPlaying())) {
+                        deferLoad("load superseded while in flight")
                         return@withContext
                     }
+                    // No chapters: drop any stale chapter/spec caches, bind the loaded
+                    // id to the timeline we are about to hand the player.
+                    activeChapters = emptyList()
+                    activeItemSpecs = emptyList()
+                    loadedTimeline.committed(book.id, token)
                     p.setMediaItem(item, (prog * (if (dur == C.TIME_UNSET) 0L else dur).toDouble()).toLong().coerceAtLeast(0L))
                     p.prepare()
                     p.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
@@ -695,26 +735,35 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     private fun maybePersistProgress() {
-        // Capture the book id up front: a following retire/new load may change
-        // currentBookId before the launched write actually runs.
-        val bookId = currentBookId
-        if (bookId <= 0L) return
         val p = player ?: return
-        
+
         // Ensure currentPosition is read on Main thread
         if (p.applicationLooper.thread != Thread.currentThread()) {
             serviceScope.launch(Dispatchers.Main) { maybePersistProgress() }
             return
         }
 
+        // Persist for the timeline the player actually holds — never for a merely
+        // requested book that has not been committed yet. Capture id + generation
+        // together so a rapid A -> B -> A switch cannot let a stale write land.
+        val timeline = loadedTimeline.snapshot()
+        if (timeline.id <= 0L) return
+
         val duration = durationMs()
         if (duration <= 0L) return
         val pos = currentPositionMs()
-        val pct = pos.toFloat() / duration
+        val pct = (pos.toFloat() / duration).coerceIn(0f, 1f)
         serviceScope.launch {
             // NonCancellable: retirePlayback() stops the service right after
             // persisting, and onDestroy cancels serviceScope.
-            withContext(NonCancellable) { saveProgress(bookId, pct.coerceIn(0f, 1f)) }
+            withContext(NonCancellable) {
+                // Drop the write when the player has meanwhile committed a different
+                // timeline or a newer generation of the same one (rapid switch). A
+                // just-retired timeline keeps id + token, so the final hand-off
+                // persist still lands.
+                val target = loadedTimeline.progressTarget(timeline) ?: return@withContext
+                saveProgress(target, pct)
+            }
         }
     }
 
@@ -732,7 +781,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private fun maybeAutoPlayNext() {
         fun retire() = com.bookrio.data.repository.ActivePlaybackState.dismiss()
         if (!autoPlayNextInSeries) { retire(); return }
-        val finishedId = currentBookId
+        val finishedId = loadedTimeline.id
         if (finishedId <= 0L) { retire(); return }
         serviceScope.launch {
             val d = db
@@ -764,7 +813,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
      */
     private fun publishNowPlaying() {
         val p = player ?: return
-        if (currentBookId <= 0L) return
+        // Snapshot the timeline the player actually holds.
+        val bookId = loadedTimeline.id
+        if (bookId <= 0L) return
         // A retired engine has no timeline: never publish an empty snapshot.
         if (p.mediaItemCount == 0 && !p.isPlaying) return
         val pos = currentPositionMs().coerceAtLeast(0L)
@@ -772,7 +823,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         val remaining = sleepTimerRemainingMs()
         val meta = p.mediaMetadata
         val snapshot = AudiobookNowPlaying(
-            bookId = currentBookId,
+            bookId = bookId,
             title = meta.title?.toString() ?: "",
             author = meta.artist?.toString() ?: "",
             isPlaying = p.isPlaying,
@@ -946,14 +997,18 @@ class AudiobookPlaybackService : MediaLibraryService() {
         return player?.duration?.takeIf { it > 0L } ?: C.TIME_UNSET
     }
 
-    fun playPause() {
+    /**
+     * Play/pause control. [bookId] is the book the UI is showing, so the gesture
+     * still works after a retire/stopSelf when this service instance no longer
+     * remembers the request.
+     */
+    fun playPause(bookId: Long = currentBookId) {
         runOnMain {
             val p = player ?: return@runOnMain
-            if (p.mediaItemCount == 0) {
+            if (p.mediaItemCount == 0 || loadedTimeline.id != bookId) {
                 // The engine was retired by a hand-off, or the last load was deferred
                 // because the other engine owns playback. An explicit play press
-                // re-loads the current book and takes playback ownership with it.
-                val bookId = currentBookId
+                // re-loads the book and takes playback ownership with it.
                 if (bookId > 0L) loadBook(bookId, autoPlay = true, force = true)
                 return@runOnMain
             }
