@@ -48,7 +48,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.androidx.core.ktx)
-    implementation(project(":pagecurl"))
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
