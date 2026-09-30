@@ -32,6 +32,7 @@ kotlin {
                 implementation("org.jetbrains.compose.animation:animation:${libs.versions.composeMultiplatform.get()}")
                 api(project(":core"))
                 api(project(":data"))
+                api(project(":designsystem"))
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
