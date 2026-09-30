@@ -127,6 +127,7 @@ jobs:
             fi
             sleep 2
           done
+          sleep 4
           xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-reader.png
           echo "--- app console (tail) ---"
           tail -80 /tmp/app-console.log
@@ -193,6 +194,7 @@ jobs:
             fi
             sleep 2
           done
+          sleep 4
           xcrun simctl io "$SIM_UDID" screenshot /tmp/bookrio-epub.png
           echo "--- app console (tail) ---"
           tail -80 /tmp/app-console-epub.log

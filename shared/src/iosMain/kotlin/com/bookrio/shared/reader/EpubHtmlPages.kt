@@ -75,6 +75,11 @@ internal class EpubHtmlPaginator(
         measureView = WKWebView(CGRectMake(0.0, 0.0, 1.0, 1.0), configuration)
         measureView.navigationDelegate = navigationDelegate
         measureView.userInteractionEnabled = false
+        // Invisible, but still laid out and running JS: the page-curl child views
+        // can be inset by a few points, and an opaque measuring view would show
+        // through at the page edges (a ghost column of text).
+        measureView.alpha = 0.0
+        measureView.backgroundColor = UIColor.clearColor
         measureView.scrollView.scrollEnabled = false
         measureView.scrollView.bounces = false
         measureView.scrollView.contentInsetAdjustmentBehavior =
