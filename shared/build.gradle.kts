@@ -33,6 +33,7 @@ kotlin {
                 api(project(":core"))
                 api(project(":data"))
                 api(project(":designsystem"))
+                implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
