@@ -43,6 +43,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -116,6 +117,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var loadWatchdogJob: Job? = null
     private var lastProgressSaveMs = 0L
 
+    /**
+     * Monotonic token for the current load. Retiring playback (arbiter hand-off or
+     * mini-player close) bumps it so an in-flight load can never resurrect a second
+     * timeline/notification after another engine took ownership.
+     */
+    private val loadGeneration = java.util.concurrent.atomic.AtomicLong()
+
     inner class LocalBinder : Binder() {
         fun getService(): AudiobookPlaybackService = this@AudiobookPlaybackService
     }
@@ -155,9 +163,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 if (id.startsWith("book_")) {
                     val bookId = runCatching { id.removePrefix("book_").toLong() }.getOrNull() ?: return
                     if (currentBookId != bookId) {
-                        val startPlaying = exo.playWhenReady
-                        loadBook(bookId)
-                        if (startPlaying) serviceScope.launch(Dispatchers.Main) { player?.playWhenReady = true }
+                        // Media library skip: keep the "was playing" intent, but let the
+                        // generation-guarded load decide whether this engine may start.
+                        loadBook(bookId, autoPlay = exo.playWhenReady, force = exo.playWhenReady)
                         return
                     }
                 }
@@ -171,7 +179,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 maybePersistProgress()
                 when (playbackState) {
                     Player.STATE_ENDED -> {
-                        serviceScope.launch { saveProgress(1.0f) }
+                        val finishedId = currentBookId
+                        if (finishedId > 0L) serviceScope.launch {
+                            withContext(NonCancellable) { saveProgress(finishedId, 1.0f) }
+                        }
                         maybeAutoPlayNext()
                     }
                 }
@@ -376,11 +387,46 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 maybePersistProgress()
                 // Hide + suppress first, so the pause callback cannot re-publish the bar.
                 com.bookrio.data.repository.ActivePlaybackState.dismiss()
-                player?.pause()
-                player?.playWhenReady = false
+                retirePlayback("arbiter hand-off")
             }
         }
     }
+
+    /**
+     * Tears the engine down to a clean IDLE state after playback ownership moved to
+     * the other engine (arbiter hand-off) or the user closed the mini-player.
+     *
+     * Pausing alone is not enough: Media3 keeps a MediaStyle notification (with the
+     * old artwork) alive while the timeline is non-empty, even when paused, so a
+     * paused audiobook cover would stay in the system controls/lock screen next to a
+     * playing podcast. Stopping the player, clearing the timeline and cancelling the
+     * notification guarantees exactly one active media session.
+     */
+    private fun retirePlayback(reason: String) = runOnMain {
+        loadGeneration.incrementAndGet() // invalidate any in-flight load
+        loadWatchdogJob?.cancel()
+        loadWatchdogJob = null
+        sleepTimer?.cancel()
+        sleepTimer = null
+        sleepTimerEndTimeMs = 0L
+        player?.let { p ->
+            p.pause()
+            p.stop()
+            p.clearMediaItems()
+        }
+        activeChapters = emptyList()
+        activeItemSpecs = emptyList()
+        // currentBookId is intentionally kept: an explicit play press re-loads it.
+        _nowPlaying.value = AudiobookNowPlaying()
+        Log.i(TAG, "retirePlayback ($reason)")
+        stopForegroundAndSelf()
+    }
+
+    /** True when the other audio engine currently owns playback. */
+    private fun otherEngineIsPlaying(): Boolean =
+        com.bookrio.data.repository.NowPlayingOwnership.otherEngineIsPlaying(
+            com.bookrio.data.repository.NowPlayingOwnership.Engine.AUDIOBOOK
+        )
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
@@ -392,25 +438,25 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
         when (action) {
             ACTION_STOP -> {
-                // Mini-player close: pause and hide, without tearing down the service.
+                // Mini-player close: persist + hide, then retire the engine so no
+                // paused notification/timeline survives the close.
                 runOnMain {
                     maybePersistProgress()
                     com.bookrio.data.repository.ActivePlaybackState.dismiss()
-                    player?.pause()
-                    player?.playWhenReady = false
                 }
-                if (player?.mediaItemCount == 0) stopForegroundAndSelf()
+                retirePlayback("stop action")
             }
             ACTION_SKIP_BACK -> player?.let { it.seekTo((it.currentPosition - skipBackSec * 1000L).coerceAtLeast(0L)) }
             ACTION_SKIP_FORWARD -> player?.let { it.seekTo((it.currentPosition + skipFwdSec * 1000L).coerceAtMost(it.duration.coerceAtLeast(0L))) }
             ACTION_LOAD_BOOK -> {
                 // NOTE: audio arbitration happens when playback actually starts
                 // (onIsPlayingChanged), not on load — opening the player screen must
-                // not kill a podcast that is currently playing.
+                // not kill a podcast that is currently playing. While that podcast
+                // plays, the load is deferred instead of posting a second paused
+                // notification with this book's artwork.
                 val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L)
                 if (bookId > 0L) {
-                    loadBook(bookId)
-                    startLoadWatchdog()
+                    if (loadBook(bookId)) startLoadWatchdog()
                 } else {
                     stopForegroundAndSelf()
                 }
@@ -446,6 +492,22 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     /** Removes the placeholder notification and stops the service. */
     private fun stopForegroundAndSelf() {
+        removeNotificationNow()
+        stopSelf()
+    }
+
+    /**
+     * Removes the "Loading…" placeholder without stopping the (possibly bound)
+     * service. Only ever called when no timeline is prepared, so it can never remove
+     * Media3's live media notification.
+     */
+    private fun hideLoadingNotificationIfIdle() = runOnMain {
+        val p = player ?: return@runOnMain
+        if (p.mediaItemCount > 0) return@runOnMain
+        removeNotificationNow()
+    }
+
+    private fun removeNotificationNow() {
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -456,7 +518,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
         }
         // Also clear a notification orphaned by a previous process kill.
         runCatching { NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID) }
-        stopSelf()
     }
 
     /**
@@ -478,9 +539,26 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var activeChapters: List<AudiobookChapter> = emptyList()
     private var activeItemSpecs: List<ActiveItemSpec> = emptyList()
 
-    private fun loadBook(bookId: Long) {
+    /**
+     * Loads [bookId] into the player.
+     *
+     * @param autoPlay start playback as soon as the book is prepared (explicit user
+     *   play and auto-play-next). Plain screen loads stay paused.
+     * @param force explicit user action: bypass the "other engine owns playback" gate
+     *   and take ownership back. Screen loads never force.
+     * @return true when a load was scheduled, false when it was deferred because the
+     *   other engine owns playback. A deferred load prepares nothing, so no second
+     *   paused MediaStyle notification with this book's artwork is posted.
+     */
+    private fun loadBook(bookId: Long, autoPlay: Boolean = false, force: Boolean = false): Boolean {
         currentBookId = bookId
-        val p = player ?: return
+        val p = player ?: return false
+        val generation = loadGeneration.incrementAndGet()
+        if (!force && otherEngineIsPlaying()) {
+            Log.i(TAG, "loadBook($bookId) deferred: other engine owns playback")
+            hideLoadingNotificationIfIdle()
+            return false
+        }
         serviceScope.launch {
             val db = db ?: return@launch
             val book = db.bookDao().getById(bookId) ?: return@launch
@@ -497,6 +575,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             }
 
             val cover = withContext(Dispatchers.IO) { coverArtworkFor(book.id, book.coverPath) }
+            if (generation != loadGeneration.get()) return@launch
 
             // KANONISK oppfriskning: oppdager/persisterer reelle kapitler for
             // eksisterende bøker med utdatert metadata (samme sti som ViewModel).
@@ -558,6 +637,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 }
 
                 withContext(Dispatchers.Main) {
+                    if (generation != loadGeneration.get()) return@withContext
+                    if (!force && otherEngineIsPlaying()) {
+                        // The other engine won while this load was in flight: do not
+                        // set a timeline here (that would post a second notification).
+                        hideLoadingNotificationIfIdle()
+                        return@withContext
+                    }
                     p.setMediaItems(mediaItems)
                     val totalDur = book.durationMs ?: activeChapters.lastOrNull()?.endMs ?: 0L
                     if (prog > 0f && totalDur > 0L) {
@@ -569,6 +655,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     p.prepare()
                     p.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
                     loadWatchdogJob?.cancel()
+                    if (autoPlay) p.playWhenReady = true
                     publishNowPlaying()
                 }
             } else if (source != null) {
@@ -590,18 +677,28 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     .build()
                 
                 withContext(Dispatchers.Main) {
+                    if (generation != loadGeneration.get()) return@withContext
+                    if (!force && otherEngineIsPlaying()) {
+                        hideLoadingNotificationIfIdle()
+                        return@withContext
+                    }
                     p.setMediaItem(item, (prog * (if (dur == C.TIME_UNSET) 0L else dur).toDouble()).toLong().coerceAtLeast(0L))
                     p.prepare()
                     p.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
                     loadWatchdogJob?.cancel()
+                    if (autoPlay) p.playWhenReady = true
                     publishNowPlaying()
                 }
             }
         }
+        return true
     }
 
     private fun maybePersistProgress() {
-        if (currentBookId < 0) return
+        // Capture the book id up front: a following retire/new load may change
+        // currentBookId before the launched write actually runs.
+        val bookId = currentBookId
+        if (bookId <= 0L) return
         val p = player ?: return
         
         // Ensure currentPosition is read on Main thread
@@ -614,13 +711,17 @@ class AudiobookPlaybackService : MediaLibraryService() {
         if (duration <= 0L) return
         val pos = currentPositionMs()
         val pct = pos.toFloat() / duration
-        serviceScope.launch { saveProgress(pct.coerceIn(0f, 1f)) }
+        serviceScope.launch {
+            // NonCancellable: retirePlayback() stops the service right after
+            // persisting, and onDestroy cancels serviceScope.
+            withContext(NonCancellable) { saveProgress(bookId, pct.coerceIn(0f, 1f)) }
+        }
     }
 
-    private suspend fun saveProgress(pct: Float) {
-        if (currentBookId < 0) return
+    private suspend fun saveProgress(bookId: Long, pct: Float) {
+        if (bookId <= 0L) return
         db?.progressDao()?.insertOrReplace(
-            ReadingProgressEntity(bookId = currentBookId, progressPercent = pct)
+            ReadingProgressEntity(bookId = bookId, progressPercent = pct)
         )
     }
 
@@ -651,14 +752,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 .minByOrNull { it.seriesIndex ?: Float.MAX_VALUE }
             if (next == null) { retire(); return@launch }
             Log.i(TAG, "Auto-playing next in series id=${next.id} (after $finishedId)")
-            loadBook(next.id)
-            // Wait until the new book's media items are prepared, then start.
-            var waited = 0
-            while ((player?.mediaItemCount ?: 0) == 0 && waited < 5_000) {
-                delay(100)
-                waited += 100
-            }
-            runOnMain { player?.playWhenReady = true }
+            // autoPlay only wins while this engine still owns playback; if the other
+            // engine took over in the meantime the load defers instead of resurrecting.
+            loadBook(next.id, autoPlay = true)
         }
     }
 
@@ -669,6 +765,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private fun publishNowPlaying() {
         val p = player ?: return
         if (currentBookId <= 0L) return
+        // A retired engine has no timeline: never publish an empty snapshot.
+        if (p.mediaItemCount == 0 && !p.isPlaying) return
         val pos = currentPositionMs().coerceAtLeast(0L)
         val dur = durationMs().takeIf { it > 0L } ?: 0L
         val remaining = sleepTimerRemainingMs()
@@ -849,12 +947,17 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     fun playPause() {
-        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-            player?.let { it.playWhenReady = !it.playWhenReady }
-        } else {
-            serviceScope.launch(Dispatchers.Main) {
-                player?.let { it.playWhenReady = !it.playWhenReady }
+        runOnMain {
+            val p = player ?: return@runOnMain
+            if (p.mediaItemCount == 0) {
+                // The engine was retired by a hand-off, or the last load was deferred
+                // because the other engine owns playback. An explicit play press
+                // re-loads the current book and takes playback ownership with it.
+                val bookId = currentBookId
+                if (bookId > 0L) loadBook(bookId, autoPlay = true, force = true)
+                return@runOnMain
             }
+            p.playWhenReady = !p.playWhenReady
         }
     }
 
