@@ -13,6 +13,7 @@ import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.reader.engine.BookLoaderEngine
+import com.bookrio.reader.engine.PageIndexMath
 import com.bookrio.reader.engine.ReaderBookState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,12 +96,12 @@ class ReaderViewModel(
 
     // ── Page-turn engine callbacks ────────────────────────────────────────────
 
-    /** Called by [PageCurlReader] once the renderer knows the total page count. */
+    /** Called by the reader UI once the renderer knows the total page count. */
     fun onPageCountKnown(count: Int) {
         val prior = _state.value
         val pending = prior.pendingRepositionPct
         if (pending != null && count > 0) {
-            val newPage = (pending * count.toFloat()).toInt().coerceIn(0, (count - 1).coerceAtLeast(0))
+            val newPage = PageIndexMath.pageForPercent(pending, count)
             _state.value = prior.copy(
                 totalPages = count,
                 currentPage = newPage,
@@ -109,9 +110,10 @@ class ReaderViewModel(
             )
             persistProgress(pending, newPage)
         } else {
-            // If we just loaded and have a restored currentPage, ensure it's within bounds
-            val safePage = if (count > 0) prior.currentPage.coerceIn(0, count - 1) else 0
-            val pct = if (count > 0) safePage.toFloat() / count.toFloat() else 0f
+            // If we just loaded and have a restored currentPage, ensure it's within bounds.
+            // En lagret indeks utenfor nytt sidetall klemmes til SISTE side — aldri start.
+            val safePage = PageIndexMath.clampPage(prior.currentPage, count)
+            val pct = PageIndexMath.percentForPage(safePage, count)
             _state.value = prior.copy(totalPages = count, currentPage = safePage, percent = pct)
             if (safePage != prior.currentPage) {
                 persistProgress(pct, safePage)
@@ -123,9 +125,7 @@ class ReaderViewModel(
     fun onPageTurned(page: Int) {
         val prior = _state.value
         if (page == prior.currentPage) return
-        val pct = if (prior.totalPages > 0)
-            page.toFloat() / prior.totalPages.toFloat()
-        else 0f
+        val pct = PageIndexMath.percentForPage(page, prior.totalPages)
         _state.value = prior.copy(currentPage = page, percent = pct)
         persistProgress(pct, page)
     }
@@ -140,9 +140,7 @@ class ReaderViewModel(
 
     fun seekToPercent(pct: Float) {
         val prior = _state.value
-        val page = if (prior.totalPages > 0)
-            (pct * prior.totalPages).toInt().coerceIn(0, prior.totalPages - 1)
-        else 0
+        val page = PageIndexMath.pageForPercent(pct, prior.totalPages)
         _state.value = prior.copy(currentPage = page, percent = pct)
         persistProgress(pct, page)
     }
@@ -167,9 +165,9 @@ class ReaderViewModel(
     }
 
     /**
-     * Kapittelbytte utløst av en fullført sidekrøll over kapittelgrensen.
-     * Siden krøllen allerede viser målsidens piksler (sentinel), settes siden
-     * direkte uten pendingRepositionPct — ingen re-mount, ingen svart blink.
+     * Kapittelbytte utløst av et sidekryss over kapittelgrensen i leseren.
+     * Målsiden settes direkte (ingen pendingRepositionPct) — ingen re-mount,
+     * ingen svart blink, og aldri et mellomstopp på side 0 av feil.
      */
     fun jumpToChapterPage(index: Int, page: Int, chapterPct: Float) {
         if (index < 0 || index >= _state.value.chapters.size) return
@@ -230,7 +228,7 @@ class ReaderViewModel(
      * Første trykk = lagre, andre trykk (samme nøkkel) = fjern. Ingen duplikater.
      *
      * Endrer ALDRI sidetilstand: ingen WebView, ingen re-render, ingen cache-tømming,
-     * ingen PageCurl/PageWindow-endring, ingen kapittel-/sidebytte.
+     * ingen sidevindu-/bitmapmaskin-endring, ingen kapittel-/sidebytte.
      */
     fun toggleBookmark() {
         val bookId = _currentBookId.value
