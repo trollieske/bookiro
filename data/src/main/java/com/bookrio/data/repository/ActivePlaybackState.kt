@@ -12,7 +12,10 @@ data class ActiveAudioState(
     val progressPercent: Float = 0f,
     val sleepTimerMinutes: Int? = null,
     val sleepTimerRemainingMs: Long = 0L
-)
+) {
+    /** Deterministic artwork identity of this snapshot — see [NowPlayingPolicy]. */
+    val artworkKey: String get() = NowPlayingPolicy.bookArtworkKey(bookId)
+}
 
 /**
  * Global "now playing" state for the audiobook engine.

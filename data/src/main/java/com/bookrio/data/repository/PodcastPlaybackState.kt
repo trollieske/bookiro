@@ -21,7 +21,10 @@ data class PodcastActiveState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val sleepTimerRemainingMs: Long = 0L
-)
+) {
+    /** Deterministic artwork identity of this snapshot — see [NowPlayingPolicy]. */
+    val artworkKey: String get() = NowPlayingPolicy.episodeArtworkKey(episodeId, artworkUrl)
+}
 
 object PodcastPlaybackState {
 

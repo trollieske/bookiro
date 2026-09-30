@@ -71,6 +71,22 @@ object NowPlayingOwnership {
         if (_owner.value == engine) _owner.value = Engine.NONE
     }
 
+    /**
+     * True when an engine other than [engine] owns the slot *and is playing*.
+     *
+     * The two playback services use this before preparing/starting anything: a
+     * deferring load must not create a second prepared-but-paused timeline while
+     * the other engine is the active audio output, because Media3 would publish a
+     * second MediaStyle notification (with the deferred engine's artwork) next to
+     * the playing one. A *paused* owner does not count — the other engine may load
+     * and claim the slot on an explicit play press.
+     */
+    fun otherEngineIsPlaying(engine: Engine): Boolean {
+        val owner = _owner.value
+        if (owner == Engine.NONE || owner == engine) return false
+        return isPlaying(owner)
+    }
+
     /** User dismissed the bar for [engine]: hide it until that engine plays again. */
     fun dismiss(engine: Engine) {
         synchronized(lock) {
