@@ -1,6 +1,7 @@
 package com.bookrio.torrent.engine
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.DownloadStatusEntity
@@ -750,27 +751,108 @@ class TorrentEngine(
             runCatching { handle.pause() }
         }
         if (dl.autoImport) {
-            importCompleted(final)
+            importCompleted(final, handle)
         }
     }
 
-    private suspend fun importCompleted(entity: TorrentDownloadEntity) {
-        val dir = File(entity.savePath)
-        if (!dir.exists()) return
+    /**
+     * BUG A: import ONLY the completed torrent's own files. The old code scanned
+     * [entity.savePath], which is the SHARED root `filesDir/shelf_torrents`, so a
+     * completion imported every sibling torrent's still-downloading files too.
+     *
+     * The import is idempotent (status marker is written after the hand-off), is
+     * length-verified before hand-off, and records observable failures instead of
+     * silently swallowing them. No paths or torrent file names are logged.
+     */
+    private suspend fun importCompleted(entity: TorrentDownloadEntity, handle: TorrentHandle) {
+        if (TorrentImportPlanner.isAlreadyImported(entity.importStatus)) return
 
-        Log.i(TAG, "Importing from: ${dir.absolutePath}")
-        val imported = importRepo.importDirectoryOrArchive(
-            target = dir,
-            source = ImportSourceEntity.TORRENT_DOWNLOAD
-        )
-        Log.i(TAG, "Imported ${imported.size} books from torrent '${entity.displayName}'")
+        val specs = torrentFileSpecs(handle)
+        if (specs.isNullOrEmpty()) {
+            db.torrentDownloadDao().update(
+                entity.copy(importStatus = TorrentImportPlanner.STATUS_METADATA_UNAVAILABLE)
+            )
+            Log.w(TAG, "Torrent import skipped: no file list available (download id=${entity.id})")
+            return
+        }
 
+        // Prefer the session's real save path: legacy rows can carry an external path
+        // that addToSession() replaced with the app's private torrent directory.
+        val saveRoot = runCatching { handle.savePath() }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it) }
+            ?: File(entity.savePath)
+        val plan = TorrentImportPlanner.plan(saveRoot, specs)
+        val verification = TorrentImportPlanner.verify(plan.entries)
+        if (!verification.complete) {
+            db.torrentDownloadDao().update(
+                entity.copy(
+                    importStatus = TorrentImportPlanner.verifyFailedStatus(
+                        missingCount = verification.missing.size,
+                        wrongSizeCount = verification.wrongSize.size
+                    )
+                )
+            )
+            Log.w(
+                TAG,
+                "Torrent import deferred (download id=${entity.id}): " +
+                    "${verification.missing.size} missing, ${verification.wrongSize.size} size-mismatched file(s)"
+            )
+            return
+        }
+
+        val imported = try {
+            when (plan.scope) {
+                TorrentImportScope.DIRECTORY -> importRepo.importDirectoryOrArchive(
+                    target = plan.target,
+                    source = ImportSourceEntity.TORRENT_DOWNLOAD
+                )
+                TorrentImportScope.FILE_LIST -> importRepo.importUris(
+                    uris = plan.files.map { Uri.fromFile(it) },
+                    source = ImportSourceEntity.TORRENT_DOWNLOAD
+                )
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            db.torrentDownloadDao().update(
+                entity.copy(importStatus = TorrentImportPlanner.STATUS_IMPORT_FAILED)
+            )
+            Log.w(TAG, "Torrent import failed (download id=${entity.id}, ${t.javaClass.simpleName})")
+            return
+        }
+
+        // Status is written only AFTER the importer ran, so a crashed import is retried.
         db.torrentDownloadDao().update(
             entity.copy(
                 importedBookIdsJson = imported.joinToString(","),
-                importStatus = "IMPORTED:${imported.size}"
+                importStatus = TorrentImportPlanner.importedStatus(imported.size)
             )
         )
+        Log.i(
+            TAG,
+            "Torrent import finished (download id=${entity.id}): " +
+                "${plan.entries.size} own file(s) -> ${imported.size} book(s)"
+        )
+    }
+
+    /** The torrent's own file set from its metadata. Null when the session cannot provide it. */
+    private fun torrentFileSpecs(handle: TorrentHandle): List<TorrentFileSpec>? {
+        return runCatching {
+            val info = handle.torrentFile() ?: return@runCatching null
+            val storage = info.files() ?: return@runCatching null
+            val count = info.numFiles()
+            if (count <= 0) return@runCatching null
+            (0 until count).mapNotNull { i ->
+                val path = runCatching { storage.filePath(i) }.getOrNull()
+                if (path.isNullOrBlank()) return@mapNotNull null
+                TorrentFileSpec(
+                    relativePath = path,
+                    sizeBytes = runCatching { storage.fileSize(i) }.getOrDefault(0L),
+                    isPadFile = runCatching { storage.padFileAt(i) }.getOrDefault(false)
+                )
+            }
+        }.getOrNull()
     }
 
     fun defaultSaveDir(): File {
