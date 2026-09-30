@@ -55,7 +55,7 @@ data class ReaderBookState(
     val scrollPct: Float = 0f,
     val fontSizeSp: Int = 18,
     val readerTheme: String = "sepia",
-    /** Global page index within the rendered book (filled by PageCurlReader). */
+    /** Side-indeks innenfor gjeldende kapittel (reader-local, ikke global). */
     val currentPage: Int = 0,
     /** Total page count after off-screen rendering (filled by HtmlPageRenderer). */
     val totalPages: Int = 0,
@@ -355,7 +355,7 @@ class BookLoaderEngine(
      *  - On DRM or conversion failure, return a clear ReaderBookState.error — NEVER fall back
      *    to decoding raw bytes as UTF-8 (that's the exact bug this pipeline was written to fix).
      *  - The cached EPUB is then fed directly into parseEpub() — the exact same pipeline used by
-     *    native EPUBs, so all downstream behavior (pagecurl, fonts/themes, pagination) is identical.
+     *    native EPUBs, so all downstream behavior (fonts/themes, pagination) is identical.
      */
     private suspend fun loadMobiFamilyBook(
         book: BookEntity,
@@ -491,7 +491,7 @@ class BookLoaderEngine(
         }
 
         // --- 4. Parse the converted EPUB using the *existing* EPUB parser pipeline ---
-        //    This means the converted book uses HtmlPageRenderer, pagecurl, theme/typography,
+        //    This means the converted book uses HtmlPageRenderer, theme/typography,
         //    chapter navigation, etc. — 100% identical to native EPUB. No separate MOBI renderer.
         val parsed: ParsedBook? = try {
             parseEpub(ctx, cachedEpub.absolutePath, null)

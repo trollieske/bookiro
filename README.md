@@ -11,7 +11,7 @@ Built with **Kotlin 2.0+**, **Jetpack Compose (Material 3)**, **Room DB**, **And
 ## 1. Features at a Glance
 
 ### 📖 E-Book Reader (Apple Books-inspired)
-* **Tactile Page Curl**: Local fork of **[oleksandrbalan/pagecurl](https://github.com/oleksandrbalan/pagecurl)** (Apache 2.0) — physics-accurate 3D paper-folding with leaf-style turns anchored to the tap location, soft drop shadows, and specular crease highlights. See `:pagecurl` module.
+* **Reliable Page Turns**: A single-surface reader with instant/slide page transitions and the same 28/44/28 tap zones. The legacy 3D page-curl fork lives in the unwired `:pagecurl` directory for rollback only; the reader no longer depends on it.
 * **Minimal Apple Books-style Overlay UI**: Top/bottom bars float **on top** of the page (not in a Column), so the reader keeps 100% of screen width — no squished text. Solid high-contrast Material 3 surfaces with bold book title in the top bar.
 * **28 / 44 / 28 Tap Zones**: Left 28% previous, right 28% next, middle 44% toggles menus. Subtle pulsing edge glow indicates chapter boundaries at the start/end of each chapter.
 * **Color-Coded Text Highlights**: 5–6 color palette. Long-press selection immediately surrounds text with a colored `<span>` (visible even if the OEM copy-menu sits on top). Color toolbar is placed **below** the selection by default (fixes OnePlus/Oppo overlay issues). Highlight mode opens on the **currently visible page**, not page 0.
@@ -55,7 +55,7 @@ shelf/
 ├── designsystem/        # Material 3 theme, color tokens, reusable components
 ├── library/             # Library dashboard, BookImportRepository, CoverRepository, LibraryViewModel
 ├── reader/              # Ebook reader: ReaderScreen (Apple Books overlay), HtmlPageRenderer, BookLoaderEngine
-├── pagecurl/            # Local fork of oleksandrbalan/pagecurl (Apache 2.0) — tactile 3D page curl for Jetpack Compose
+├── pagecurl/            # UNWIRED local fork of oleksandrbalan/pagecurl (Apache 2.0), kept for rollback only — not built or depended on
 ├── player/              # Audiobook player: AudiobookEngine, AudiobookPlaybackService (Media3 / MediaLibrarySession), PlayerScreen
 ├── torrent/             # Torrent Engine, TorrentDownloadWorker, magnet link handling (libtorrent4j)
 ├── ftp/                 # FTP / FTPS / SFTP client engine, server store, FtpSyncWorker
@@ -139,7 +139,7 @@ Shelf would not have been possible without the incredible work of the open-sourc
 ### 📖 Ebook Reader & Page Curl
 | Library | Author / Maintainer | License | Purpose |
 |---|---|---|---|
-| **[PageCurl](https://github.com/oleksandrbalan/pagecurl)** | **Oleksandr Balan** | Apache 2.0 | The beautiful, tactile, and physics-accurate page-curl effect that gives Shelf its signature Apple iBooks-style page-turn feel. 🙏 |
+| **[PageCurl](https://github.com/oleksandrbalan/pagecurl)** | **Oleksandr Balan** | Apache 2.0 | Former page-curl effect (vendored fork, unwired). Kept in-tree for rollback; not built or linked. 🙏 |
 | **[jsoup](https://jsoup.org/)** | Jonathan Hedley | MIT | Sanitization and clean-up of EPUB HTML documents before rendering. |
 | **AndroidX WebView** | Google | Apache 2.0 | Off-screen HTML → Bitmap rendering engine for publication-grade typography (`HtmlPageRenderer`). |
 

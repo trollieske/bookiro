@@ -160,4 +160,33 @@ class PageNavigationTest {
         // Endepunktet (siste side) rund-trip-er til samme side.
         assertEquals(11, PageIndexMath.pageForPercent(PageIndexMath.percentForPage(11, 12), 12))
     }
+
+    // ── Revalidering av utsatt bakover-kryss ───────────────────────────────
+
+    @Test
+    fun `bakover-kryss committer bare når man fortsatt står på samme side`() {
+        assertTrue(
+            PageNavigator.shouldCommitBackwardCross(
+                tapChapterIndex = 3, tapPage = 0, currentChapterIndex = 3, currentPage = 0,
+            )
+        )
+        // Brukeren gikk videre / valgte et annet kapittel mens vi klargjorde.
+        assertTrue(
+            !PageNavigator.shouldCommitBackwardCross(
+                tapChapterIndex = 3, tapPage = 0, currentChapterIndex = 5, currentPage = 2,
+            )
+        )
+        assertTrue(
+            !PageNavigator.shouldCommitBackwardCross(
+                tapChapterIndex = 3, tapPage = 0, currentChapterIndex = 3, currentPage = 1,
+            )
+        )
+    }
+
+    @Test
+    fun `turnBackward klemmer ugyldig indeks og gir None for første kapittel`() {
+        // Intern clamp-sti: currentIndex utenfor sidetallet skal aldri kaste.
+        assertEquals(PageNavAction.TurnTo(1), PageNavigator.turnBackward(500, 3, 1, 4, 5))
+        assertEquals(PageNavAction.None, PageNavigator.turnBackward(0, 10, 0, 4, 5))
+    }
 }

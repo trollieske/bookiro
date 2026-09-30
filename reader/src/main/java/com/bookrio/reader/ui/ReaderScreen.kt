@@ -698,18 +698,33 @@ private fun RealBookSlideReader(
                     // Brukeren blir aldri stående uten respons, og vi lander aldri på
                     // side 0 av en feil.
                     if (page == 0 && chapIdx > 0) {
+                        // Frys navigasjonskonteksten ved tappetidspunktet. Klargjøringen
+                        // kan ta tid, og brukeren kan ha navigert (TOC, framover-tapp,
+                        // fontbytte) innen den er ferdig.
+                        val tapChapter = chapIdx
+                        val tapPage = page
                         scope.launch {
-                            val prevCount = prepareChapter(chapIdx - 1)
+                            val prevCount = prepareChapter(tapChapter - 1)
+                            // Revalider: commit bare når vi fortsatt står på samme side.
+                            // Ellers ville en sen commit rive brukeren tilbake til et
+                            // sted de allerede har forlatt.
+                            if (!PageNavigator.shouldCommitBackwardCross(
+                                    tapChapterIndex = tapChapter,
+                                    tapPage = tapPage,
+                                    currentChapterIndex = updatedUi.currentChapterIndex,
+                                    currentPage = updatedUi.currentPage,
+                                )
+                            ) {
+                                return@launch
+                            }
                             val retry = if (prevCount > 0)
-                                PageNavigator.turnBackward(page, pageCount, chapIdx, chapterCount, prevCount)
+                                PageNavigator.turnBackward(tapPage, pageCount, tapChapter, chapterCount, prevCount)
                             else null
                             if (retry is PageNavAction.JumpToChapter) {
                                 onJumpToChapterPage(retry.chapterIndex, retry.page, retry.chapterPct)
-                            } else {
-                                // Klargjøring feilet: hopp til forrige kapitels side 0 —
-                                // en synlig side er bedre enn en død grense.
-                                onJumpToChapterPage(chapIdx - 1, 0, 0f)
                             }
+                            // Klargjøring feilet: gjør ingenting. Aldri hopp til side 0
+                            // (det ville vært feil landingsside) og aldri gjett en kant.
                         }
                     }
                 }
@@ -722,10 +737,22 @@ private fun RealBookSlideReader(
     val currentBackward by rememberUpdatedState(onTurnBackward)
     val currentToggle by rememberUpdatedState(onToggleControls)
 
+    // ── Vist side: NØYAKTIG én bitmap i én leseflate. Bitmapmen byttes først når den
+    // nye siden er ferdig rendret — ingen fantomside, ingen stale underlay og ingen
+    // bitmap under kontrollene. ──
+    var displayed by remember { mutableStateOf<DisplayedPage?>(null) }
+
     // ── Maks ÉN spesulativ prefetch: neste side, bare når koordinatoren er ledig.
     // På grensen forhåndstegnes nabo-kapittelets landingsside (side 0 / siste side)
     // slik at et grensekryss viser ferdig bitmap uten tom side. ──
-    LaunchedEffect(chapIdx, page, pageCount, fontKey, sizeKey) {
+    // Nøkkelen inkluderer displayed?.key: prefetchen kjøres først NÅR den gjeldende
+    // siden faktisk vises. Ellers ville display-effecten rett etterpaa kalle
+    // renderCurrent(samme kapittel) og kansellere den spekulative side+1-renderingen
+    // (RenderCoordinator.cancelSpeculativeFor), saa forhaandstegning var død.
+    LaunchedEffect(displayed?.key, chapIdx, page, pageCount, fontKey, sizeKey) {
+        // Vent til gjeldende side er paa skjermen; da er renderCurrent ferdig og
+        // kansellerer ikke lenger den spekulative naboen.
+        if (displayed?.key != targetKey) return@LaunchedEffect
         coordinator.cancelSpeculative()
         if (pageCount <= 0) return@LaunchedEffect
         val next = page + 1
@@ -745,10 +772,7 @@ private fun RealBookSlideReader(
         }
     }
 
-    // ── Vist side: NØYAKTIG én bitmap i én leseflate. Bitmapmen byttes først når den
-    // nye siden er ferdig rendret — ingen fantomside, ingen stale underlay og ingen
-    // bitmap under kontrollene. ──
-    var displayed by remember { mutableStateOf<DisplayedPage?>(null) }
+    // ── Vist side: bytt bitmap først når den nye siden er ferdig rendret. ──
     LaunchedEffect(targetKey, fontKey, sizeKey, chapterPages) {
         if (targetKey.isEmpty() || displayed?.key == targetKey) return@LaunchedEffect
         val cached = cache.getSync(targetKey)

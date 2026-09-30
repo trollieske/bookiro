@@ -130,9 +130,10 @@ dependencies {
     implementation(libs.androidx.security.crypto.ktx)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.guava.android)
-    // NOTE: pagecurl is provided by the vendored local module :pagecurl (see reader).
-    // Do NOT also depend on the Maven artifact here — it duplicates eu.wewox.pagecurl
-    // classes and breaks the R8/minified release build.
+    // The reader no longer uses the vendored :pagecurl module (removed in favour of a
+    // simple single-surface page turn). The module is deliberately left unwired for
+    // rollback; do NOT add it (or the Maven artifact) as a dependency here — it
+    // duplicates eu.wewox.pagecurl classes and can break the R8/minified release build.
 
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)

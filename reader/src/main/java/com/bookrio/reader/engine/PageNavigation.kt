@@ -71,6 +71,18 @@ object PageNavigator {
             chapterPct = 1f,
         )
     }
+
+    /**
+     * Revalidering for et utsatt bakover-kryss. Klargjøringen av forrige kapittel
+     * kan ta tid, og brukeren kan ha navigert i mellomtiden. Commit bare når vi
+     * fortsatt står nøyaktig på samme kapittel/side som da tappet skjedde.
+     */
+    fun shouldCommitBackwardCross(
+        tapChapterIndex: Int,
+        tapPage: Int,
+        currentChapterIndex: Int,
+        currentPage: Int,
+    ): Boolean = currentChapterIndex == tapChapterIndex && currentPage == tapPage
 }
 
 /**
