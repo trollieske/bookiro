@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Bookrio brand palette (sampled from the logo mark). -->
+    <!-- Bookiro brand palette (sampled from the logo mark). -->
     <color name="brand_accent">#FFBEF93F</color>
     <color name="brand_bg">#FF000000</color>
     <color name="ic_launcher_background">#FF000000</color>

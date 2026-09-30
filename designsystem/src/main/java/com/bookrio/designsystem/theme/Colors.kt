@@ -96,7 +96,7 @@ object OmarchyColors {
     val Bg = Color(0xFF000000)        // ekte svart
     val HeaderBg = Color(0xFF000000)  // flat toppband
     val Hairline = Color(0xFF262626)  // 1px hårlinjerammer / spor
-    val Accent = Color(0xFFBEF93F)    // Bookrio brand lime (matches the logo mark)
+    val Accent = Color(0xFFBEF93F)    // Bookiro brand lime (matches the logo mark)
     val Dim = Color(0xFF8C8C8C)       // lavkontrast / uvalgt / meta
     val Fg = Color(0xFFF5F5F5)        // primærtekst
     val FgBright = Color(0xFFF5F5F5)  // primærtekst (overskrifter)

@@ -8,7 +8,7 @@
     <string name="pod_search_podcasts">Пошук подкастів</string>
     <string name="pod_what_is_rss">Що таке RSS-канал?</string>
     <string name="pod_help_title">Що таке RSS-канал?</string>
-    <string name="pod_help_body">RSS-канал \u2014 це відкрита адреса, за якою Bookrio отримує нові випуски безпосередньо з подкасту, на який ви підписані.</string>
+    <string name="pod_help_body">RSS-канал \u2014 це відкрита адреса, за якою Bookiro отримує нові випуски безпосередньо з подкасту, на який ви підписані.</string>
     <string name="pod_following_new">ПІДПИСКИ \u00b7 %1$d НОВИХ</string>
     <string name="pod_following">ПІДПИСКИ</string>
     <string name="pod_refresh">Оновити</string>

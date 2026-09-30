@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bookrio</string>
+    <string name="app_name">Bookiro</string>
     <string name="nav_books">Bücher</string>
     <string name="nav_settings">Einstellungen</string>
     <string name="shelf_audiobooks">Hörbücher</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Design</string>
     <string name="player_title">Hörbuch</string>
     <string name="settings_title">Einstellungen</string>
-    <string name="onboarding_title">Willkommen bei Bookrio</string>
+    <string name="onboarding_title">Willkommen bei Bookiro</string>
     <string name="onboarding_body">Lesen und hören. Lokal. Ohne Ablenkung.</string>
     <string name="onboarding_cta">Regal öffnen</string>
     <string name="settings_reader">Reader</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Fügt Bücher automatisch hinzu</string>
     <string name="settings_online_cover">Online-Coversuche</string>
     <string name="settings_online_cover_sub">Covers im Internet suchen</string>
-    <string name="settings_about_description">Bookrio – ein privater, werbefreier Reader und Hörbuch-Player</string>
+    <string name="settings_about_description">Bookiro – ein privater, werbefreier Reader und Hörbuch-Player</string>
     <string name="action_continue">Weiter</string>
     <string name="action_save">Speichern</string>
     <string name="action_cancel">Abbrechen</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Verbleibend</string>
     <string name="book_details_pages_left">%1$d Seiten</string>
     <string name="book_details_delete_title">Buch löschen</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(über Bookrio)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(über Bookiro)</string>
     <string name="book_details_share_snack">Buch teilen: %1$s</string>
     <string name="book_details_pages_label">Seiten</string>
     <string name="book_details_change_cover_snack">Cover ändern</string>

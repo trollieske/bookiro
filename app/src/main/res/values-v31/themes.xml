@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-        Android 12+ system splash: black canvas with the Bookrio mark, so the
+        Android 12+ system splash: black canvas with the Bookiro mark, so the
         cold-start is on-brand instead of the legacy windowBackground.
     -->
     <style name="Theme.Shelf" parent="Theme.Shelf.Base">

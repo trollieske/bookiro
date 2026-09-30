@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bookrio</string>
+    <string name="app_name">Bookiro</string>
     <string name="nav_books">Böcker</string>
     <string name="nav_settings">Inställningar</string>
     <string name="shelf_audiobooks">Ljudböcker</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Tema</string>
     <string name="player_title">Ljudbok</string>
     <string name="settings_title">Inställningar</string>
-    <string name="onboarding_title">Välkommen till Bookrio</string>
+    <string name="onboarding_title">Välkommen till Bookiro</string>
     <string name="onboarding_body">Läs och lyssna. Lokalt. Utan brus.</string>
     <string name="onboarding_cta">Öppna hyllan</string>
     <string name="settings_reader">Läsare</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Lägger till böcker automatiskt</string>
     <string name="settings_online_cover">Omslagssökning online</string>
     <string name="settings_online_cover_sub">Sök efter omslag på internet</string>
-    <string name="settings_about_description">Bookrio – en privat, reklamfri läsare och ljudboksapp</string>
+    <string name="settings_about_description">Bookiro – en privat, reklamfri läsare och ljudboksapp</string>
     <string name="action_continue">Fortsätt</string>
     <string name="action_save">Spara</string>
     <string name="action_cancel">Avbryt</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Återstår</string>
     <string name="book_details_pages_left">%1$d sidor</string>
     <string name="book_details_delete_title">Ta bort bok</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(via Bookrio)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(via Bookiro)</string>
     <string name="book_details_share_snack">Dela bok: %1$s</string>
     <string name="book_details_pages_label">Sidor</string>
     <string name="book_details_change_cover_snack">Ändra omslag</string>

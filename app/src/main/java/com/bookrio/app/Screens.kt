@@ -328,7 +328,7 @@ fun BookDetailsScreen(
                                 putExtra(android.content.Intent.EXTRA_TITLE, title)
                                 putExtra(
                                     android.content.Intent.EXTRA_TEXT,
-                                    "\"$title\" – $author\n(hentet via Shelf-appen)"
+                                    "\"$title\" – $author\n(hentet via Bookiro)"
                                 )
                                 putExtra(android.content.Intent.EXTRA_STREAM, fileUri)
                                 addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)

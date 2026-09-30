@@ -9,7 +9,7 @@
     <string name="pod_search_podcasts">Search Podcasts</string>
     <string name="pod_what_is_rss">What is an RSS feed?</string>
     <string name="pod_help_title">What is an RSS feed?</string>
-    <string name="pod_help_body">An RSS feed is an open address that lets Bookrio fetch new episodes directly from a podcast you follow.</string>
+    <string name="pod_help_body">An RSS feed is an open address that lets Bookiro fetch new episodes directly from a podcast you follow.</string>
     <string name="pod_following_new">FOLLOWING \u00b7 %1$d NEW</string>
     <string name="pod_following">FOLLOWING</string>
     <string name="pod_refresh">Refresh</string>

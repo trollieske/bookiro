@@ -30,7 +30,7 @@
     <string name="ply_notif_play">Abspielen</string>
     <string name="ply_notif_skip_forward">30 s vor</string>
     <string name="ply_notif_next">Weiter</string>
-    <string name="ply_library_root">Bookrio-Bibliothek</string>
+    <string name="ply_library_root">Bookiro-Bibliothek</string>
     <string name="ply_notif_channel">Wiedergabe</string>
     <string name="ply_notif_channel_desc">Benachrichtigungen zur Hörbuch-Wiedergabe</string>
     <string name="ply_prepare_error">Hörbuch konnte nicht vorbereitet werden</string>

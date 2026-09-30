@@ -30,7 +30,7 @@
     <string name="ply_notif_play">Lire</string>
     <string name="ply_notif_skip_forward">30 s en avant</string>
     <string name="ply_notif_next">Suivant</string>
-    <string name="ply_library_root">Bibliothèque Bookrio</string>
+    <string name="ply_library_root">Bibliothèque Bookiro</string>
     <string name="ply_notif_channel">Lecture</string>
     <string name="ply_notif_channel_desc">Notifications de lecture audio</string>
     <string name="ply_prepare_error">Impossible de préparer le livre audio</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bookrio</string>
+    <string name="app_name">Bookiro</string>
     <string name="nav_books">Books</string>
     <string name="nav_settings">Settings</string>
     <string name="shelf_audiobooks">Audiobooks</string>
@@ -36,7 +36,7 @@
     <string name="reader_theme_selector">Theme</string>
     <string name="player_title">Audiobook</string>
     <string name="settings_title">Settings</string>
-    <string name="onboarding_title">Welcome to Bookrio</string>
+    <string name="onboarding_title">Welcome to Bookiro</string>
     <string name="onboarding_body">Read and listen. Local. No noise.</string>
     <string name="onboarding_cta">Open the shelf</string>
     <string name="settings_reader">Reader</string>
@@ -61,7 +61,7 @@
     <string name="settings_watch_folder_sub">Adds books automatically</string>
     <string name="settings_online_cover">Online cover lookup</string>
     <string name="settings_online_cover_sub">Search for covers on the internet</string>
-    <string name="settings_about_description">Bookrio — a private, ad-free reader and audiobook player</string>
+    <string name="settings_about_description">Bookiro — a private, ad-free reader and audiobook player</string>
     <string name="action_continue">Continue</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
@@ -103,7 +103,7 @@
     <string name="book_details_remaining">Remaining</string>
     <string name="book_details_pages_left">%1$d pages</string>
     <string name="book_details_delete_title">Delete book</string>
-    <string name="book_share_body">\"%1$s\" – %2$s\n(via Bookrio)</string>
+    <string name="book_share_body">\"%1$s\" – %2$s\n(via Bookiro)</string>
     <string name="book_details_share_snack">Share book: %1$s</string>
     <string name="book_details_pages_label">Pages</string>
     <string name="book_details_change_cover_snack">Change cover</string>

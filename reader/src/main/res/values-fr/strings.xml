@@ -18,7 +18,7 @@
     <string name="rdr_share">Partager</string>
     <string name="rdr_share_progress">Partager la progression</string>
     <string name="rdr_share_text">Je lis « %1$s » — %2$s (page %3$d sur %4$d, %5$d%%)
-#Bookrio</string>
+#Bookiro</string>
     <string name="rdr_chapter">Chapitre %1$d</string>
     <string name="rdr_pages_left">%1$d pages restantes · %2$s · %3$d sur %4$d</string>
     <string name="rdr_contents">Sommaire</string>
