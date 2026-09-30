@@ -2,7 +2,7 @@ name: iOS Build
 
 on:
   push:
-    branches: [ kmp-ios ]
+    branches: [ kmp-ios, ios-parity ]
   workflow_dispatch:
 
 concurrency:
