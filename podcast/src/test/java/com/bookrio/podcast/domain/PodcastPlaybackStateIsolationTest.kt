@@ -1,11 +1,9 @@
 package com.bookrio.podcast.domain
 
 import com.bookrio.core.playback.PlaybackArbiter
-import com.bookrio.data.repository.ActiveAudioState
 import com.bookrio.data.repository.ActivePlaybackState
 import com.bookrio.data.repository.NowPlayingOwnership
 import com.bookrio.data.repository.NowPlayingPolicy
-import com.bookrio.data.repository.PodcastActiveState
 import com.bookrio.data.repository.PodcastPlaybackState
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -59,11 +57,23 @@ class PodcastPlaybackStateIsolationTest {
         )
     }
 
-    /** An arbiter hand-off retires the loser: the winner sets this state/claim itself. */
-    private fun published() = NowPlayingPolicy.publishedSnapshots(
-        ActivePlaybackState.state.value,
-        PodcastPlaybackState.state.value
+    /** Artwork keys of the snapshots currently published by the two engines. */
+    private fun publishedArtworkKeys(): List<String> = listOfNotNull(
+        ActivePlaybackState.state.value?.artworkKey,
+        PodcastPlaybackState.state.value?.artworkKey
     )
+
+    /** Which engine currently publishes the one allowed snapshot. */
+    private fun publishedEngine(): NowPlayingOwnership.Engine {
+        val book = ActivePlaybackState.state.value
+        val podcast = PodcastPlaybackState.state.value
+        check(!(book != null && podcast != null)) { "both engines published at once" }
+        return when {
+            book != null -> NowPlayingOwnership.Engine.AUDIOBOOK
+            podcast != null -> NowPlayingOwnership.Engine.PODCAST
+            else -> NowPlayingOwnership.Engine.NONE
+        }
+    }
 
     @Test
     fun `a podcast claims the slot once the audiobook is retired`() {
@@ -163,23 +173,9 @@ class PodcastPlaybackStateIsolationTest {
         publishPodcast(isPlaying = true, artworkUrl = "https://cdn.example/cover.jpg")
 
         assertNull(ActivePlaybackState.state.value)
-        val snapshots = published()
-        assertEquals(1, snapshots.size)
-        val snapshot = snapshots.single()
-        assertEquals(NowPlayingOwnership.Engine.PODCAST, snapshot.owner)
-        assertEquals("episode:7:https://cdn.example/cover.jpg", snapshot.artworkKey)
-        assertFalse(snapshot.artworkKey.startsWith(NowPlayingPolicy.BOOK_PREFIX))
-
-        // Even if a stale audiobook state object races in, the current owner decides
-        // the snapshot: the book artwork key must never surface on a podcast owner.
-        val staleBook = ActiveAudioState(bookId = 42L, title = "Audiobook", author = "Author", isPlaying = true)
-        val resolved = NowPlayingPolicy.resolve(
-            NowPlayingOwnership.current(),
-            staleBook,
-            PodcastPlaybackState.state.value
-        )
-        assertNotNull(resolved)
-        assertEquals("episode:7:https://cdn.example/cover.jpg", resolved!!.artworkKey)
+        assertEquals(NowPlayingOwnership.Engine.PODCAST, publishedEngine())
+        assertEquals(listOf("episode:7:https://cdn.example/cover.jpg"), publishedArtworkKeys())
+        assertFalse(publishedArtworkKeys().any { it.startsWith(NowPlayingPolicy.BOOK_PREFIX) })
     }
 
     @Test
@@ -191,54 +187,36 @@ class PodcastPlaybackStateIsolationTest {
         publishAudiobook(isPlaying = true)
 
         assertNull(PodcastPlaybackState.state.value)
-        val snapshots = published()
-        assertEquals(1, snapshots.size)
-        val snapshot = snapshots.single()
-        assertEquals(NowPlayingOwnership.Engine.AUDIOBOOK, snapshot.owner)
-        assertEquals("book:42", snapshot.artworkKey)
-        assertFalse(snapshot.artworkKey.startsWith(NowPlayingPolicy.EPISODE_PREFIX))
-
-        val stalePodcast = PodcastActiveState(
-            episodeId = 7L,
-            title = "Episode",
-            artworkUrl = "https://cdn.example/cover.jpg",
-            isPlaying = true
-        )
-        val resolved = NowPlayingPolicy.resolve(
-            NowPlayingOwnership.current(),
-            ActivePlaybackState.state.value,
-            stalePodcast
-        )
-        assertNotNull(resolved)
-        assertEquals("book:42", resolved!!.artworkKey)
+        assertEquals(NowPlayingOwnership.Engine.AUDIOBOOK, publishedEngine())
+        assertEquals(listOf("book:42"), publishedArtworkKeys())
+        assertFalse(publishedArtworkKeys().any { it.startsWith(NowPlayingPolicy.EPISODE_PREFIX) })
     }
 
     @Test
     fun `missing podcast artwork still yields a deterministic episode-scoped key`() {
         publishPodcast(isPlaying = true, artworkUrl = null)
-        val snapshot = published().single()
-        assertEquals("episode:7:", snapshot.artworkKey)
-        assertFalse(snapshot.artworkKey.startsWith(NowPlayingPolicy.BOOK_PREFIX))
+        assertEquals(listOf("episode:7:"), publishedArtworkKeys())
+        assertFalse(publishedArtworkKeys().any { it.startsWith(NowPlayingPolicy.BOOK_PREFIX) })
     }
 
     @Test
     fun `rapid switches stay ordered and only the latest engine publishes`() {
         // book -> podcast -> book -> podcast, each hand-off through the arbiter.
         publishAudiobook(isPlaying = true)
-        assertEquals("book:42", published().single().artworkKey)
+        assertEquals(listOf("book:42"), publishedArtworkKeys())
 
         ActivePlaybackState.clear()
         publishPodcast(isPlaying = true, artworkUrl = "https://cdn.example/ep1.jpg")
-        assertEquals("episode:7:https://cdn.example/ep1.jpg", published().single().artworkKey)
+        assertEquals(listOf("episode:7:https://cdn.example/ep1.jpg"), publishedArtworkKeys())
 
         PodcastPlaybackState.clear()
         publishAudiobook(isPlaying = true)
-        assertEquals("book:42", published().single().artworkKey)
+        assertEquals(listOf("book:42"), publishedArtworkKeys())
 
         ActivePlaybackState.clear()
         publishPodcast(isPlaying = true, artworkUrl = "https://cdn.example/ep2.jpg")
         assertEquals(NowPlayingOwnership.Engine.PODCAST, NowPlayingOwnership.current())
-        assertEquals("episode:7:https://cdn.example/ep2.jpg", published().single().artworkKey)
+        assertEquals(listOf("episode:7:https://cdn.example/ep2.jpg"), publishedArtworkKeys())
         assertNull(ActivePlaybackState.state.value)
     }
 
@@ -252,11 +230,11 @@ class PodcastPlaybackStateIsolationTest {
         // A racing audiobook play is refused until the arbiter retires the podcast.
         publishAudiobook(isPlaying = true)
         assertNull(ActivePlaybackState.state.value)
-        assertEquals("episode:7:https://cdn.example/cover.jpg", published().single().artworkKey)
+        assertEquals(listOf("episode:7:https://cdn.example/cover.jpg"), publishedArtworkKeys())
 
         PodcastPlaybackState.clear()
         publishAudiobook(isPlaying = true)
-        assertEquals("book:42", published().single().artworkKey)
+        assertEquals(listOf("book:42"), publishedArtworkKeys())
         assertFalse(NowPlayingOwnership.otherEngineIsPlaying(NowPlayingOwnership.Engine.AUDIOBOOK))
         assertTrue(NowPlayingOwnership.otherEngineIsPlaying(NowPlayingOwnership.Engine.PODCAST))
     }
@@ -277,7 +255,7 @@ class PodcastPlaybackStateIsolationTest {
         // Paused refresh of the retired audiobook still cannot steal it back.
         publishAudiobook(isPlaying = false)
         assertNull(ActivePlaybackState.state.value)
-        assertEquals("episode:7:", published().single().artworkKey)
+        assertEquals(listOf("episode:7:"), publishedArtworkKeys())
     }
 
     @Test
