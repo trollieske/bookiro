@@ -13,11 +13,14 @@ import com.bookrio.library.util.AudiobookNormalizer
  * Invariants:
  *  - a stored list with >= 2 entries is NEVER replaced;
  *  - a single stored entry is only replaced when it is recognisably the
- *    importer fallback (blank title, or title equal to the book title / file
+ *    importer fallback (blank title, or title matching the book title / file
  *    name, and start at 0);
  *  - the rebuilt list always has >= 2 entries, so a valid list can never be
  *    replaced by a one-chapter fallback;
- *  - no chapters are ever synthesised at fixed intervals from nothing.
+ *  - no chapters are ever synthesised at fixed intervals from nothing;
+ *  - the repair also refreshes a stale fallback `durationMs` (see
+ *    [OneChapterRepairPlan.durationMs]) so seek math and the library duration
+ *    stop using the importer's 5-minute placeholder.
  */
 
 /** Minimal read-only chapter row used by the planner. */
@@ -35,8 +38,7 @@ data class RepairTrackInput(
     val title: String,
     val durationMs: Long,
     val filePath: String?,
-    val fileUri: String?,
-    val fileSizeBytes: Long = 0L
+    val fileUri: String?
 )
 
 /** A rebuilt chapter, ready to be serialised to `chapters_json`. */
@@ -54,11 +56,13 @@ data class RepairedChapter(
  * What to persist for a book whose stored chapter list is a one-chapter
  * fallback. [trackNumbers] maps existing track row ids (in playback order) to
  * the sequential 1..N numbering ecf62df introduced; it is empty for the
- * single-file path.
+ * single-file path. [durationMs] is the rebuilt timeline end (or fresh metadata
+ * duration when longer) and replaces a stale fallback `book.durationMs`.
  */
 data class OneChapterRepairPlan(
     val chapters: List<RepairedChapter>,
-    val trackNumbers: List<Pair<Long, Int>>
+    val trackNumbers: List<Pair<Long, Int>>,
+    val durationMs: Long?
 )
 
 object OneChapterRepairPlanner {
@@ -70,7 +74,10 @@ object OneChapterRepairPlanner {
      * @param stored            parsed `chapters_json` (empty when blank/malformed)
      * @param tracks            `audio_tracks` rows for the book
      * @param reparsed          embedded chapters freshly parsed from a single audio file
-     * @param primaryDurationMs book/track duration, used as the last chapter's end
+     * @param primaryDurationMs fresh file duration (from the repair re-parse), used as
+     *                          the last chapter's end and as a timeline floor
+     * @param fallbackMediaUri  book-level uri used when there are no track rows
+     * @param fallbackFilePath  book-level path used when there are no track rows
      * @return null when the book must be left untouched.
      */
     fun plan(
@@ -79,7 +86,9 @@ object OneChapterRepairPlanner {
         stored: List<RepairChapterInput>,
         tracks: List<RepairTrackInput>,
         reparsed: List<RepairChapterInput> = emptyList(),
-        primaryDurationMs: Long = 0L
+        primaryDurationMs: Long = 0L,
+        fallbackMediaUri: String? = null,
+        fallbackFilePath: String? = null
     ): OneChapterRepairPlan? {
         if (stored.size >= 2) return null
         if (stored.size == 1 && !isOneChapterFallback(bookTitle, fileNameStem, stored[0])) return null
@@ -105,7 +114,8 @@ object OneChapterRepairPlanner {
             }
             return OneChapterRepairPlan(
                 chapters = chapters,
-                trackNumbers = ordered.mapIndexed { idx, track -> track.id to idx + 1 }
+                trackNumbers = ordered.mapIndexed { idx, track -> track.id to idx + 1 },
+                durationMs = offset.takeIf { it > 0L }
             )
         }
 
@@ -114,7 +124,12 @@ object OneChapterRepairPlanner {
         // list is ignored, so the fallback survives.
         if (reparsed.size <= 1) return null
         val primary = tracks.firstOrNull()
-        val primaryUri = primary?.fileUri?.takeIf { it.isNotBlank() } ?: primary?.filePath
+        // MINOR 5: keep the book-level file reference when there is no track row.
+        val primaryUri = primary?.fileUri?.takeIf { it.isNotBlank() }
+            ?: primary?.filePath
+            ?: fallbackMediaUri?.takeIf { it.isNotBlank() }
+            ?: fallbackFilePath
+        val primaryPath = primary?.filePath ?: fallbackFilePath ?: fallbackMediaUri
         val sorted = reparsed.sortedBy { it.startMs }
         val chapters = sorted.mapIndexed { idx, chapter ->
             val start = chapter.startMs.coerceAtLeast(0L)
@@ -128,29 +143,61 @@ object OneChapterRepairPlanner {
                 startMs = start,
                 endMs = end,
                 mediaUri = primaryUri,
-                filePath = primary?.filePath,
+                filePath = primaryPath,
                 durationMs = (end - start).coerceAtLeast(1L)
             )
         }
-        return OneChapterRepairPlan(chapters = chapters, trackNumbers = emptyList())
+        val timelineEnd = chapters.last().endMs
+        val duration = maxOf(timelineEnd, primaryDurationMs.takeIf { it > 0L } ?: 0L)
+        return OneChapterRepairPlan(
+            chapters = chapters,
+            trackNumbers = emptyList(),
+            durationMs = duration.takeIf { it > 0L }
+        )
     }
 
     /**
-     * Applies a regeneration plan to a book row. ONLY the chapter fields change
-     * (`chapters_json`, `chapter_count`, `last_modified_at`); everything that
+     * Applies a regeneration plan to a book row. Only the chapter fields plus the
+     * repaired duration/size change (`chapters_json`, `chapter_count`,
+     * `duration_ms`, `file_size_bytes`, `last_modified_at`); everything that
      * identifies the book or its reading state keeps the same value, so a repair
      * can never orphan the ReadingProgressEntity or the audio-track rows.
+     *
+     * [knownFileSizeBytes] must come from the actual source files on disk
+     * (`File.length()`); it is ignored when absent/zero.
+     *
+     * `durationMs` replaces the stored value only when it is strictly greater, so
+     * a stale shorter fallback duration is fixed without shrinking a valid one.
      */
     fun repairedBook(
         book: BookEntity,
         plan: OneChapterRepairPlan,
         chaptersJson: String,
+        knownFileSizeBytes: Long? = null,
         repairedAt: Long = System.currentTimeMillis()
-    ): BookEntity = book.copy(
-        chaptersJson = chaptersJson,
-        chapterCount = plan.chapters.size,
-        lastModifiedAt = repairedAt
-    )
+    ): BookEntity {
+        val rebuiltDuration = plan.durationMs?.takeIf { it > 0L }
+        val duration = if (rebuiltDuration != null && rebuiltDuration > (book.durationMs ?: 0L)) {
+            rebuiltDuration
+        } else {
+            book.durationMs
+        }
+        return book.copy(
+            chaptersJson = chaptersJson,
+            chapterCount = plan.chapters.size,
+            durationMs = duration,
+            fileSizeBytes = knownFileSizeBytes?.takeIf { it > 0L } ?: book.fileSizeBytes,
+            lastModifiedAt = repairedAt
+        )
+    }
+
+    /**
+     * MINOR 4: identity of a single-file re-parse attempt. The repository stores
+     * this per book so a file whose re-parse found no embedded chapters is not
+     * re-parsed on every cold start; a size/mtime change invalidates it.
+     */
+    fun reparseAttemptKey(bookId: Long, fileSizeBytes: Long, lastModified: Long): String =
+        "$bookId:$fileSizeBytes:$lastModified"
 
     /**
      * True when a single stored entry is the importer's synthetic/fallback entry

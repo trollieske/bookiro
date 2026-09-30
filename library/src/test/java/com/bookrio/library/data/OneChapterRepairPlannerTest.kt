@@ -6,6 +6,7 @@ import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -62,6 +63,7 @@ class OneChapterRepairPlannerTest {
         assertEquals(600_000L, result.chapters[4].startMs)
         assertEquals(900_000L, result.chapters[4].endMs)
         assertEquals("file:///torrents/Book/track 01.mp3", result.chapters[0].mediaUri)
+        assertEquals(900_000L, result.durationMs)
     }
 
     @Test
@@ -128,7 +130,111 @@ class OneChapterRepairPlannerTest {
         assertEquals(2_500L, result.chapters[2].startMs)
         assertEquals(3_000L, result.chapters[2].endMs)
         assertEquals("file:///torrents/book.m4b", result.chapters[0].mediaUri)
+        assertEquals(3_000L, result.durationMs)
         assertTrue(result.trackNumbers.isEmpty())
+    }
+
+    @Test
+    fun `single file without tracks keeps the book-level file reference`() {
+        val reparsed = listOf(
+            RepairChapterInput("Chapter 1", 0L, 1_000L),
+            RepairChapterInput("Chapter 2", 1_000L, 2_000L),
+            RepairChapterInput("Chapter 3", 2_000L, 3_000L)
+        )
+        val result = OneChapterRepairPlanner.plan(
+            bookTitle = "Book",
+            fileNameStem = "book",
+            stored = listOf(RepairChapterInput("Book", 0L, 300_000L)),
+            tracks = emptyList(),
+            reparsed = reparsed,
+            primaryDurationMs = 3_000L,
+            fallbackMediaUri = "file:///torrents/book.m4b",
+            fallbackFilePath = "/torrents/book.m4b"
+        )!!
+
+        assertEquals(3, result.chapters.size)
+        assertEquals("file:///torrents/book.m4b", result.chapters[0].mediaUri)
+        assertEquals("/torrents/book.m4b", result.chapters[0].filePath)
+        assertEquals(3_000L, result.durationMs)
+    }
+
+    @Test
+    fun `repair replaces the stale fallback duration and partial size, keeping id and progress`() {
+        val book = BookEntity(
+            id = 77L,
+            title = "Book",
+            author = "Author",
+            type = BookTypeEntity.AUDIOBOOK,
+            format = FormatEntity.M4B,
+            filePath = "/torrents/book.m4b",
+            fileUri = "file:///torrents/book.m4b",
+            fileSizeBytes = 5_000_000L, // partial write size
+            importSource = ImportSourceEntity.TORRENT_DOWNLOAD,
+            coverPath = "/data/covers/book_77.webp",
+            lastOpenedAt = 1_700_000_000_000L,
+            durationMs = 300_000L, // importer's 5-minute fallback
+            chapterCount = 1,
+            chaptersJson = "[{\"index\":0,\"title\":\"Book\",\"startMs\":0,\"endMs\":300000}]"
+        )
+        val progress = ReadingProgressEntity(
+            bookId = 77L,
+            progressPercent = 0.9f,
+            positionMs = 3_240_000L,
+            chapterIndex = 0,
+            chapterPositionMs = 3_240_000L
+        )
+
+        val reparsed = listOf(
+            RepairChapterInput("Chapter 1", 0L, 1_800_000L),
+            RepairChapterInput("Chapter 2", 1_800_000L, null) // end filled from fresh metadata
+        )
+        val result = plan(
+            stored = listOf(RepairChapterInput("Book", 0L, 300_000L)),
+            tracks = listOf(track(1, "book.m4b")),
+            reparsed = reparsed,
+            primaryDurationMs = 3_600_000L
+        )!!
+        assertEquals(3_600_000L, result.durationMs)
+
+        val repaired = OneChapterRepairPlanner.repairedBook(
+            book = book,
+            plan = result,
+            chaptersJson = "[\"rebuilt\"]",
+            knownFileSizeBytes = 812_000_000L,
+            repairedAt = 555L
+        )
+
+        assertEquals(3_600_000L, repaired.durationMs)
+        assertEquals(812_000_000L, repaired.fileSizeBytes)
+        assertEquals(book.copy(
+            chaptersJson = "[\"rebuilt\"]",
+            chapterCount = 2,
+            durationMs = 3_600_000L,
+            fileSizeBytes = 812_000_000L,
+            lastModifiedAt = 555L
+        ), repaired)
+        // Identity and reading state are untouched by construction.
+        assertEquals(77L, repaired.id)
+        assertEquals(book.fileUri, repaired.fileUri)
+        assertEquals(book.filePath, repaired.filePath)
+        assertEquals(book.coverPath, repaired.coverPath)
+        assertEquals(1_700_000_000_000L, repaired.lastOpenedAt)
+        assertEquals(77L, progress.bookId)
+        assertEquals(0.9f, progress.progressPercent, 0f)
+        assertEquals(3_240_000L, progress.positionMs)
+    }
+
+    @Test
+    fun `reparse attempt key follows the file identity`() {
+        assertEquals("5:100:7", OneChapterRepairPlanner.reparseAttemptKey(5L, 100L, 7L))
+        assertNotEquals(
+            OneChapterRepairPlanner.reparseAttemptKey(5L, 100L, 7L),
+            OneChapterRepairPlanner.reparseAttemptKey(5L, 101L, 7L)
+        )
+        assertNotEquals(
+            OneChapterRepairPlanner.reparseAttemptKey(5L, 100L, 7L),
+            OneChapterRepairPlanner.reparseAttemptKey(5L, 100L, 8L)
+        )
     }
 
     @Test
@@ -183,6 +289,7 @@ class OneChapterRepairPlannerTest {
             stored = listOf(RepairChapterInput("Book", 0L, 60_000L)),
             tracks = listOf(track(1, "track 01.mp3"), track(2, "track 02.mp3"))
         )!!
+        assertEquals(120_000L, result.durationMs)
         val repaired = OneChapterRepairPlanner.repairedBook(
             book = book,
             plan = result,

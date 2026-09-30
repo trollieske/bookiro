@@ -93,6 +93,15 @@ class BookImportRepository(
         }
     }
 
+    /**
+     * Persistent per-book marker for single-file chapter re-parse attempts
+     * (MINOR 4): key = book id, value = `size:lastModified`. A file identity that
+     * already yielded no embedded chapters is not re-parsed on every cold start.
+     */
+    private val repairAttemptPrefs by lazy {
+        ctx.getSharedPreferences("one_chapter_repair_attempts", Context.MODE_PRIVATE)
+    }
+
     suspend fun importUris(
         uris: List<Uri>,
         source: ImportSourceEntity,
@@ -737,10 +746,11 @@ class BookImportRepository(
      * - single file: re-parse the real file with the canonical format parser and
      *   persist ONLY when more than one real embedded chapter is found.
      *
-     * Only `chapters_json`, `chapter_count` and `last_modified_at` are written:
-     * book id, fileUri/filePath, cover, lastOpenedAt, file associations and the
-     * ReadingProgressEntity row are untouched. Idempotent, and serialised with
-     * consolidation through [audiobookHealMutex].
+     * The stale fallback `duration_ms` (5-minute placeholder) is replaced by the
+     * rebuilt timeline end / fresh metadata duration, and `file_size_bytes` by the
+     * actual on-disk length. Book id, fileUri/filePath, cover, lastOpenedAt, file
+     * associations and the ReadingProgressEntity row are untouched. Idempotent, and
+     * serialised with consolidation through [audiobookHealMutex].
      */
     suspend fun repairOneChapterAudiobooks(): Int = audiobookHealMutex.withLock {
         withContext(dispatchers.io) {
@@ -764,7 +774,16 @@ class BookImportRepository(
 
                     val tracks = runCatching { db.audioTrackDao().getTracksForBook(book.id) }
                         .getOrDefault(emptyList())
-                    val reparsed = if (tracks.size < 2) reparseEmbeddedChapters(book) else emptyList()
+                    val singleFile = tracks.size < 2
+                    // MINOR 4: do not re-parse the same unchanged file on every start.
+                    val reparse = if (singleFile && !reparseAlreadyAttempted(book)) {
+                        reparseEmbeddedChapters(book)
+                    } else {
+                        null
+                    }
+                    if (reparse != null && reparse.sourceFound && reparse.chapters.size <= 1) {
+                        markReparseAttempt(book)
+                    }
 
                     val plan = OneChapterRepairPlanner.plan(
                         bookTitle = book.title,
@@ -778,14 +797,17 @@ class BookImportRepository(
                                 title = t.title,
                                 durationMs = t.durationMs,
                                 filePath = t.filePath,
-                                fileUri = t.fileUri,
-                                fileSizeBytes = t.fileSizeBytes
+                                fileUri = t.fileUri
                             )
                         },
-                        reparsed = reparsed,
-                        primaryDurationMs = book.durationMs
-                            ?: tracks.firstOrNull()?.durationMs
-                            ?: 0L
+                        reparsed = reparse?.chapters.orEmpty(),
+                        primaryDurationMs = if (singleFile) {
+                            reparse?.durationMs ?: book.durationMs ?: 0L
+                        } else {
+                            0L
+                        },
+                        fallbackMediaUri = book.fileUri ?: book.filePath,
+                        fallbackFilePath = book.filePath ?: book.fileUri
                     ) ?: continue
 
                     // Re-read before writing: an import/consolidation pass may have
@@ -799,7 +821,8 @@ class BookImportRepository(
                         OneChapterRepairPlanner.repairedBook(
                             book = current,
                             plan = plan,
-                            chaptersJson = repairChaptersToJson(plan.chapters)
+                            chaptersJson = repairChaptersToJson(plan.chapters),
+                            knownFileSizeBytes = knownBookFileSize(book, tracks)
                         )
                     )
 
@@ -819,7 +842,8 @@ class BookImportRepository(
                     Log.i(
                         TAG,
                         "[REPAIR_ONE_CHAPTER] book id=${book.id} " +
-                            "chapters=${plan.chapters.size} renumberedTracks=${plan.trackNumbers.size}"
+                            "chapters=${plan.chapters.size} renumberedTracks=${plan.trackNumbers.size} " +
+                            "durationChanged=${plan.durationMs != null && plan.durationMs > (book.durationMs ?: 0L)}"
                     )
                     repaired++
                 }
@@ -834,6 +858,44 @@ class BookImportRepository(
     private fun audioFileStem(book: BookEntity): String? =
         book.filePath?.substringAfterLast('/')?.substringBeforeLast('.')
             ?: book.fileUri?.substringAfterLast('/')?.substringBeforeLast('.')
+
+    /**
+     * Total size from the actual files on disk: single file -> `File.length()`;
+     * multi-track -> only when every track file exists (a partial sum would
+     * under-count). Null keeps the stored value.
+     */
+    private fun knownBookFileSize(book: BookEntity, tracks: List<AudioTrackEntity>): Long? {
+        if (tracks.size < 2) {
+            val file = book.filePath?.let { File(it) }?.takeIf { it.isFile } ?: return null
+            return file.length().takeIf { it > 0L }
+        }
+        var total = 0L
+        for (track in tracks) {
+            val file = track.filePath?.let { File(it) }?.takeIf { it.isFile } ?: return null
+            total += file.length()
+        }
+        return total.takeIf { it > 0L }
+    }
+
+    private fun reparseAlreadyAttempted(book: BookEntity): Boolean =
+        repairAttemptPrefs.getString("book_${book.id}", null) == reparseAttemptKey(book)
+
+    private fun markReparseAttempt(book: BookEntity) {
+        repairAttemptPrefs.edit().putString("book_${book.id}", reparseAttemptKey(book)).apply()
+    }
+
+    private fun reparseAttemptKey(book: BookEntity): String =
+        OneChapterRepairPlanner.reparseAttemptKey(
+            bookId = book.id,
+            fileSizeBytes = attemptFileSize(book),
+            lastModified = attemptLastModified(book)
+        )
+
+    private fun attemptFileSize(book: BookEntity): Long =
+        book.filePath?.let { File(it) }?.takeIf { it.isFile }?.length() ?: book.fileSizeBytes
+
+    private fun attemptLastModified(book: BookEntity): Long =
+        book.filePath?.let { File(it) }?.takeIf { it.isFile }?.lastModified() ?: book.lastModifiedAt
 
     /** Parses stored chaptersJson into the planner's minimal rows. */
     private fun parseStoredChapterRows(json: String?): List<RepairChapterInput> {
@@ -874,31 +936,43 @@ class BookImportRepository(
         return arr.toString()
     }
 
+    /** Result of the single-file re-parse: chapters + fresh duration, when a source existed. */
+    private data class ReparsedFile(
+        val chapters: List<RepairChapterInput>,
+        val durationMs: Long?,
+        val sourceFound: Boolean
+    )
+
     /**
      * Re-parses a single audio file with the canonical parser and a real filename
      * (with extension), mirroring `AudiobookEngine.discoverChapters`. Returns the
      * real embedded chapters found; empty when the container has none.
      */
-    private suspend fun reparseEmbeddedChapters(book: BookEntity): List<RepairChapterInput> {
+    private suspend fun reparseEmbeddedChapters(book: BookEntity): ReparsedFile {
         val fileName = chapterParserFileName(book.filePath, book.fileUri, book.format.name)
         val format = BookFormat.fromFilename(fileName)
-        if (!format.isAudio) return emptyList()
+        if (!format.isAudio) return ReparsedFile(emptyList(), null, sourceFound = false)
 
         val file = book.filePath?.let { File(it) }?.takeIf { it.isFile }
         val uri = file?.let { Uri.fromFile(it) }
             ?: book.fileUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
-            ?: return emptyList()
+            ?: return ReparsedFile(emptyList(), null, sourceFound = false)
         val size = file?.length()?.takeIf { it > 0L } ?: book.fileSizeBytes
         val streamProvider: (suspend () -> java.io.InputStream)? =
             file?.let { f -> { FileInputStream(f) } }
 
         val meta = runCatching {
             getParserFor(format).parse(ctx, uri, fileName, size, streamProvider)
-        }.getOrNull() ?: return emptyList()
+        }.getOrNull()
 
-        return meta.chapters
+        val chapters = meta?.chapters.orEmpty()
             .filter { it.startMs >= 0L }
             .map { RepairChapterInput(title = it.title, startMs = it.startMs, endMs = it.endMs) }
+        return ReparsedFile(
+            chapters = chapters,
+            durationMs = meta?.durationMs?.takeIf { it > 0L },
+            sourceFound = true
+        )
     }
 
     suspend fun importAssetsSamples(): Int = withContext(dispatchers.io) {
