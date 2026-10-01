@@ -57,6 +57,18 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
 
+    // Readium Kotlin Toolkit 3.0.3 is the newest released line built against
+    // Kotlin 1.9.24 metadata (readable by this repo's pinned Kotlin 2.0.21);
+    // 3.1.2 (Kotlin 2.1.21), 3.2/3.3 (2.3.20) and 3.4 (2.4.20) are not readable
+    // without a project-wide toolchain upgrade. See reader/README-READIUM.md.
+    implementation("org.readium.kotlin-toolkit:readium-shared:3.0.3")
+    implementation("org.readium.kotlin-toolkit:readium-streamer:3.0.3")
+    implementation("org.readium.kotlin-toolkit:readium-navigator:3.0.3")
+    // Hosts the stable EpubNavigatorFragment inside the Compose tree (no alpha
+    // Compose navigator is used).
+    implementation("androidx.fragment:fragment-compose:1.8.7")
+    implementation("androidx.fragment:fragment-ktx:1.8.7")
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     // JVM-test av hele EPUB-lasteveien (BookLoaderEngine → parseEpub → kapittel-

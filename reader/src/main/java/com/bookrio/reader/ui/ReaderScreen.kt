@@ -48,6 +48,7 @@ import com.bookrio.reader.engine.PageNavigator
 import com.bookrio.reader.engine.ReaderBookState
 import com.bookrio.reader.engine.ReaderWebEngine
 import com.bookrio.reader.pageturn.*
+import com.bookrio.reader.readium.ReadiumEpubReaderScreen
 import com.bookrio.reader.R
 import com.bookrio.reader.viewmodel.ReaderViewModel
 import kotlinx.coroutines.delay
@@ -65,6 +66,23 @@ fun ReaderScreen(
     vm: ReaderViewModel = viewModel(factory = vmFactory ?: defaultReaderVmFactory()),
 ) {
     val ui by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // EPUB is rendered by the Readium navigator (Readium owns layout/pagination).
+    // All other formats keep the existing Bookiro reader engine.
+    var epubMode by remember(bookId) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(bookId) {
+        val format = runCatching {
+            com.bookrio.data.local.ShelfDatabase.getInstance(context.applicationContext)
+                .bookDao().getById(bookId)?.format
+        }.getOrNull()
+        epubMode = format == com.bookrio.data.local.entity.FormatEntity.EPUB
+        if (epubMode != true) vm.load(bookId)
+    }
+    if (epubMode == true) {
+        ReadiumEpubReaderScreen(bookId = bookId, onBack = onBack)
+        return
+    }
     var showControls by rememberSaveable { mutableStateOf(false) }
     var showContentsSheet by rememberSaveable { mutableStateOf(false) }
     var showThemesSheet by rememberSaveable { mutableStateOf(false) }
@@ -73,7 +91,6 @@ fun ReaderScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var orientationLocked by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val context = LocalContext.current
 
     val tracker = remember {
         (context.applicationContext as com.bookrio.core.di.AppDependenciesProvider).readingTracker
@@ -115,7 +132,7 @@ fun ReaderScreen(
     var brightness by rememberSaveable { mutableFloatStateOf(-1f) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(brightness) { setWindowBrightness(context, brightness) }
-    LaunchedEffect(bookId) { vm.load(bookId) }
+    // vm.load is triggered by the format-check effect above (non-EPUB only).
 
     Box(Modifier.fillMaxSize()) {
         when {
