@@ -241,14 +241,17 @@ class AudioMetadataParser : FormatMetadataParser {
         }
         if (chapterKind == "m4b" || chapterKind == "m4a" || chapterKind == "mp4") {
             try {
-                val stream = when {
-                    sourceStreamProvider != null -> sourceStreamProvider()
-                    uri != null -> ctx.contentResolver.openInputStream(uri)
+                // Re-openable source so the QuickTime chapter-track reader can fetch
+                // its text samples from 'mdat' (which may sit before 'moov').
+                val openStream: (() -> InputStream?)? = when {
+                    sourceStreamProvider != null -> ({ kotlinx.coroutines.runBlocking { sourceStreamProvider() } })
+                    uri != null -> ({ ctx.contentResolver.openInputStream(uri) })
                     else -> null
                 }
+                val stream = openStream?.invoke()
                 if (stream != null) {
                     stream.use { s ->
-                        val ch = parseMp4Chapters(s, sizeBytes)
+                        val ch = parseMp4Chapters(s, sizeBytes, openStream)
                         embeddedChapters = ch.first
                         streamDurMs = ch.second
                     }
@@ -333,7 +336,7 @@ internal fun audioChapterExtension(filename: String?, uriPath: String?): String?
  * Vi går derfor gjennom TOPP-nivå-atomene ved å skippe i strømmen (hele filen,
  * ingen 8 MB-begrensning) og leser KUN 'moov'-atomet inn i minnet.
  */
-internal fun parseMp4Chapters(stream: InputStream, size: Long): Pair<List<ChapterInfo>, Long?> {
+internal fun parseMp4Chapters(stream: InputStream, size: Long, openStream: (() -> InputStream?)? = null): Pair<List<ChapterInfo>, Long?> {
     var totalDurMs: Long? = null
     val embeddedChapters = mutableListOf<Pair<Long, String>>()
 
@@ -485,8 +488,14 @@ internal fun parseMp4Chapters(stream: InputStream, size: Long): Pair<List<Chapte
         embeddedChapters.map { (raw, title) -> (raw / 10_000L) to title }
     } else embeddedChapters
 
+    // --- 4b. QuickTime chapter track (no Nero 'chpl' atom) --------------------
+    // iTunes/Audible-era M4B files often store chapters only as a referenced text
+    // track ('tref' -> 'chap'); without this fallback such a book reported ZERO
+    // embedded chapters and fell back to a single stub chapter.
+    val chapterPairs = scaledChapters.ifEmpty { parseQuickTimeChapterTrack(file, openStream) }
+
     // --- 5. Build ChapterInfo with proper [start, end) ranges
-    val chapters = scaledChapters.mapIndexed { idx, (startMs, title) ->
+    val chapters = chapterPairs.mapIndexed { idx, (startMs, title) ->
         ChapterInfo(
             index = idx,
             title = title.trim().ifBlank { "Kapittel ${idx + 1}" },
@@ -504,6 +513,241 @@ internal fun parseMp4Chapters(stream: InputStream, size: Long): Pair<List<Chapte
         chapters[chapters.lastIndex] = chapters.last().copy(endMs = end)
     }
     return Pair(chapters, totalDurMs ?: chapters.lastOrNull()?.endMs?.takeIf { it > 0 })
+}
+
+/**
+ * QuickTime chapter track: a media track references a text track via
+ * `tref` → `chap`; the referenced track's `mdia → minf → stbl` carries the
+ * chapter titles as text samples whose `stts` durations delimit the chapters.
+ *
+ * The chapter sample bytes live in `mdat` (often BEFORE `moov`), so they are
+ * read by re-opening the source through [openStream] and skipping to each
+ * sample's `stco` offset. Returns start-ms → title pairs (already in ms).
+ */
+private fun parseQuickTimeChapterTrack(
+    moov: ByteArray,
+    openStream: (() -> InputStream?)?,
+): List<Pair<Long, String>> {
+    if (openStream == null) return emptyList()
+
+    fun u32(off: Int): Long =
+        ((moov[off].toLong() and 0xFFL) shl 24) or
+            ((moov[off + 1].toLong() and 0xFFL) shl 16) or
+            ((moov[off + 2].toLong() and 0xFFL) shl 8) or
+            (moov[off + 3].toLong() and 0xFFL)
+
+    fun u64(off: Int): Long {
+        var v = 0L
+        for (i in 0 until 8) v = (v shl 8) or (moov[off + i].toLong() and 0xFFL)
+        return v
+    }
+
+    fun tag(off: Int): String =
+        buildString { for (i in 0 until 4) append(moov[off + i].toInt().toChar()) }
+
+    fun bounds(start: Int, end: Int, child: String): Pair<Int, Int>? {
+        var q = start
+        while (q + 8 <= end) {
+            val s = u32(q)
+            if (s < 8L || q + s > end) return null
+            if (tag(q + 4) == child) return (q + 8) to (q + s).toInt()
+            q += s.toInt()
+        }
+        return null
+    }
+
+    // 1) Chapter text track id(s) referenced by any track's tref.chap.
+    val chapterTrackIds = HashSet<Long>()
+    data class Trak(val start: Int, val end: Int, var trackId: Long)
+    val traks = ArrayList<Trak>()
+    var p = 0
+    while (p + 8 <= moov.size) {
+        val s = u32(p)
+        if (s < 8L || p + s > moov.size) break
+        if (tag(p + 4) == "trak") {
+            val end = (p + s).toInt()
+            var trackId = -1L
+            var q = p + 8
+            while (q + 8 <= end) {
+                val ss = u32(q)
+                if (ss < 8L || q + ss > end) break
+                when (tag(q + 4)) {
+                    "tkhd" -> {
+                        val ver = moov[q + 8].toInt() and 0xFF
+                        trackId = if (ver == 1) u64(q + 28) else u32(q + 20)
+                    }
+                    "tref" -> {
+                        var r = q + 8
+                        val refEnd = (q + ss).toInt()
+                        while (r + 8 <= refEnd) {
+                            // Track reference type atoms are standard atoms: size then type.
+                            val refSize = u32(r).toInt()
+                            val refType = tag(r + 4)
+                            if (refSize < 8) break
+                            if (refType == "chap") {
+                                var v = r + 8
+                                while (v + 4 <= r + refSize) {
+                                    chapterTrackIds.add(u32(v))
+                                    v += 4
+                                }
+                            }
+                            r += refSize
+                        }
+                    }
+                }
+                q += ss.toInt()
+            }
+            traks.add(Trak(p, end, trackId))
+        }
+        p += s.toInt()
+    }
+    val chapterTrack = traks.firstOrNull { it.trackId > 0L && it.trackId in chapterTrackIds }
+        ?: return emptyList()
+
+    // 2) mdia → (mdhd timescale) / minf → stbl
+    val mdia = bounds(chapterTrack.start + 8, chapterTrack.end, "mdia") ?: return emptyList()
+    var timescale = 0L
+    bounds(mdia.first, mdia.second, "mdhd")?.let { (ms, _) ->
+        // `bounds` returns the atom PAYLOAD range: version/flags(4), creation(4|8),
+        // modification(4|8), timescale(4).
+        val ver = moov[ms].toInt() and 0xFF
+        timescale = if (ver == 1) u32(ms + 20) else u32(ms + 12)
+    }
+    val minf = bounds(mdia.first, mdia.second, "minf") ?: return emptyList()
+    val stbl = bounds(minf.first, minf.second, "stbl") ?: return emptyList()
+
+    // 3) stts / stsz / stsc / stco|co64
+    val sampleDurations = ArrayList<Long>()
+    val sampleSizes = ArrayList<Int>()
+    val chunkOffsets = ArrayList<Long>()
+    val stsc = ArrayList<Triple<Int, Int, Int>>()
+    var q = stbl.first
+    while (q + 8 <= stbl.second) {
+        val ss = u32(q)
+        if (ss < 8L || q + ss > stbl.second) break
+        val end = (q + ss).toInt()
+        when (tag(q + 4)) {
+            "stts" -> {
+                val count = u32(q + 12).toInt()
+                var r = q + 16
+                for (i in 0 until count) {
+                    if (r + 8 > end) break
+                    val sc = u32(r).toInt().coerceAtMost(100_000)
+                    val sd = u32(r + 4)
+                    repeat(sc) { sampleDurations.add(sd) }
+                    r += 8
+                }
+            }
+            "stsz" -> {
+                val uniform = u32(q + 12)
+                val count = u32(q + 16).toInt()
+                if (uniform > 0L) {
+                    repeat(count) { sampleSizes.add(uniform.toInt()) }
+                } else {
+                    var r = q + 20
+                    for (i in 0 until count) {
+                        if (r + 4 > end) break
+                        sampleSizes.add(u32(r).toInt())
+                        r += 4
+                    }
+                }
+            }
+            "stsc" -> {
+                val count = u32(q + 12).toInt()
+                var r = q + 16
+                for (i in 0 until count) {
+                    if (r + 12 > end) break
+                    stsc.add(Triple(u32(r).toInt(), u32(r + 4).toInt(), u32(r + 8).toInt()))
+                    r += 12
+                }
+            }
+            "stco" -> {
+                val count = u32(q + 12).toInt()
+                var r = q + 16
+                for (i in 0 until count) {
+                    if (r + 4 > end) break
+                    chunkOffsets.add(u32(r))
+                    r += 4
+                }
+            }
+            "co64" -> {
+                val count = u32(q + 12).toInt()
+                var r = q + 16
+                for (i in 0 until count) {
+                    if (r + 8 > end) break
+                    chunkOffsets.add(u64(r))
+                    r += 8
+                }
+            }
+        }
+        q = end
+    }
+    if (sampleSizes.isEmpty() || chunkOffsets.isEmpty() || stsc.isEmpty()) return emptyList()
+
+    // 4) Map each sample index to its absolute file offset via stsc/stco.
+    val sampleOffsets = LongArray(sampleSizes.size)
+    var chunk = 1
+    var sampleIndex = 0
+    var entryIndex = 0
+    while (chunk <= chunkOffsets.size && sampleIndex < sampleSizes.size) {
+        while (entryIndex + 1 < stsc.size && stsc[entryIndex + 1].first <= chunk) entryIndex++
+        val perChunk = stsc[entryIndex].second.coerceAtLeast(1)
+        var offset = chunkOffsets[chunk - 1]
+        for (i in 0 until perChunk) {
+            if (sampleIndex >= sampleSizes.size) break
+            sampleOffsets[sampleIndex] = offset
+            offset += sampleSizes[sampleIndex]
+            sampleIndex++
+        }
+        chunk++
+    }
+
+    // 5) Read + decode each text sample; timestamps come from stts (× timescale).
+    val out = ArrayList<Pair<Long, String>>()
+    var ticks = 0L
+    for (i in sampleSizes.indices) {
+        val bytes = readByteRange(openStream, sampleOffsets[i], sampleSizes[i]) ?: ByteArray(0)
+        val title = decodeTextSample(bytes)
+        val startMs = if (timescale > 0L) (ticks * 1000L) / timescale else ticks
+        if (title.isNotBlank()) out.add(startMs to title)
+        ticks += sampleDurations.getOrNull(i) ?: 0L
+    }
+    return out
+}
+
+/** Re-opens the source and reads [size] bytes at absolute [offset]. */
+private fun readByteRange(openStream: () -> InputStream?, offset: Long, size: Int): ByteArray? {
+    if (size <= 0) return null
+    return try {
+        (openStream() ?: return null).use { s ->
+            var toSkip = offset
+            while (toSkip > 0) {
+                val skipped = try { s.skip(toSkip) } catch (_: Exception) { 0L }
+                if (skipped > 0) { toSkip -= skipped; continue }
+                if (s.read() < 0) return null
+                toSkip--
+            }
+            val buf = ByteArray(size)
+            val got = readN(s, buf, size)
+            if (got == size) buf else null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** 3GPP/QuickTime text sample: 2-byte big-endian length prefix + UTF-8 text. */
+private fun decodeTextSample(bytes: ByteArray): String {
+    if (bytes.isEmpty()) return ""
+    val body = if (bytes.size >= 2) {
+        val declared = ((bytes[0].toInt() and 0xFF) shl 8) or (bytes[1].toInt() and 0xFF)
+        // QuickTime `text` samples may carry trailing atoms (e.g. `encd`) after the
+        // declared text; `tx3g` samples end exactly at the declared length.
+        if (declared in 1..(bytes.size - 2)) bytes.copyOfRange(2, 2 + declared) else bytes
+    } else {
+        bytes
+    }
+    return body.toString(Charsets.UTF_8).trim('\u0000', ' ', '\n', '\r', '\t')
 }
 
 /** Leser nøyaktig n bytes (eller færre ved EOF) fra en InputStream. */

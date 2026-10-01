@@ -204,4 +204,101 @@ class Mp4ChapterParserTest {
         assertEquals("m4b", audioChapterExtension("Book.m4b", null))
         assertNull(audioChapterExtension("Some Title", "content://doc/1234"))
     }
+
+    // ── QuickTime chapter track (tref → chap), no Nero chpl atom ──────────────
+
+    private fun tkhdV0(trackId: Int): ByteArray {
+        val p = ByteArray(84)
+        writeU32(p, 0, 0)
+        writeU32(p, 4, 0)
+        writeU32(p, 8, 0)
+        writeU32(p, 12, trackId)
+        return atom("tkhd", p)
+    }
+
+    private fun mdhdV0(timeScale: Int, duration: Int): ByteArray {
+        val p = ByteArray(24)
+        writeU32(p, 0, 0)
+        writeU32(p, 4, 0)
+        writeU32(p, 8, 0)
+        writeU32(p, 12, timeScale)
+        writeU32(p, 16, duration)
+        return atom("mdhd", p)
+    }
+
+    private fun trefChap(trackId: Int): ByteArray {
+        val value = ByteArray(4)
+        writeU32(value, 0, trackId)
+        return atom("tref", atom("chap", value))
+    }
+
+    private fun _stts(count: Int, delta: Int): ByteArray {
+        val p = ByteArray(16)
+        writeU32(p, 0, 0)
+        writeU32(p, 4, 1)
+        writeU32(p, 8, count)
+        writeU32(p, 12, delta)
+        return atom("stts", p)
+    }
+
+    private fun _stsz(sizes: List<Int>): ByteArray {
+        val p = ByteArray(12 + sizes.size * 4)
+        writeU32(p, 0, 0)
+        writeU32(p, 4, 0)
+        writeU32(p, 8, sizes.size)
+        sizes.forEachIndexed { i, sz -> writeU32(p, 12 + i * 4, sz) }
+        return atom("stsz", p)
+    }
+
+    private fun _stsc(perChunk: Int): ByteArray {
+        val p = ByteArray(20)
+        writeU32(p, 0, 0)
+        writeU32(p, 4, 1)
+        writeU32(p, 8, 1)
+        writeU32(p, 12, perChunk)
+        writeU32(p, 16, 1)
+        return atom("stsc", p)
+    }
+
+    private fun _stco(offset: Int): ByteArray {
+        val p = ByteArray(12)
+        writeU32(p, 0, 0)
+        writeU32(p, 4, 1)
+        writeU32(p, 8, offset)
+        return atom("stco", p)
+    }
+
+    @Test
+    fun `quicktime chapter track without chpl atom is parsed`() {
+        val titles = listOf("One", "Two", "Three")
+        val samples = titles.map { t ->
+            val b = t.toByteArray(Charsets.UTF_8)
+            byteArrayOf(((b.size ushr 8) and 0xFF).toByte(), (b.size and 0xFF).toByte()) + b
+        }
+        val mdatPayload = samples.fold(ByteArray(0)) { a, b -> a + b }
+        val mdat = atom("mdat", mdatPayload)
+        val sampleOffset = 8 // mdat header
+
+        val stbl = atom(
+            "stbl",
+            _stts(titles.size, 1000) + _stsz(samples.map { it.size }) +
+                _stsc(titles.size) + _stco(sampleOffset)
+        )
+        val chapterTrack = atom("trak", tkhdV0(2) + atom("mdia", mdhdV0(1000, titles.size * 1000) + atom("minf", stbl)))
+        val mediaTrack = atom("trak", tkhdV0(1) + trefChap(2))
+        val moov = atom("moov", mvhdV0(1000, titles.size * 1000) + mediaTrack + chapterTrack)
+        val file = mdat + moov
+
+        val (chapters, _) = parseMp4Chapters(
+            ByteArrayInputStream(file),
+            file.size.toLong()
+        ) { ByteArrayInputStream(file) }
+
+        assertEquals(3, chapters.size)
+        assertEquals(listOf("One", "Two", "Three"), chapters.map { it.title })
+        assertEquals(0L, chapters[0].startMs)
+        assertEquals(1000L, chapters[1].startMs)
+        assertEquals(2000L, chapters[2].startMs)
+    }
+
 }
