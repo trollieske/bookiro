@@ -1,6 +1,7 @@
 package com.bookrio.player.engine
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -178,6 +179,15 @@ class ChapterRefreshTest {
 
         assertEquals(0, ChapterRefresh.naturalCompare("del1.mp3", "Del1.MP3"))
         assertTrue(ChapterRefresh.naturalCompare("kap2", "kap10") < 0)
+    }
+
+    @Test
+    fun `8 titlesMatch handles non-latin scripts`() {
+        // Normaliseringen skal beholde alle Unicode-bokstaver, ikke bare a-z0-9.
+        assertTrue(ChapterRefresh.titlesMatch("Война и мир", "Война и мир"))
+        assertTrue(ChapterRefresh.titlesMatch("三体", "三体"))
+        assertTrue(ChapterRefresh.titlesMatch("Οδύσσεια", "Οδύσσεια"))
+        assertFalse(ChapterRefresh.titlesMatch("Война и мир", "Преступление и наказание"))
     }
 
     @Test

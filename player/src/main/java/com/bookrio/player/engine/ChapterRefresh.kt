@@ -83,7 +83,7 @@ object ChapterRefresh {
     }
 
     private fun normalizeForTitleMatch(raw: String): String =
-        raw.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+        raw.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
     /**
      * Filnavn (med ending) å gi kapittel-parseren ved gjenoppdaging. Kallere som

@@ -135,4 +135,30 @@ class AudibleChapterLookupTest {
     fun `search query handles blank title`() {
         assertTrue(AudibleChapterLookup.buildSearchQueries("   ", "Someone").isEmpty())
     }
+
+    @Test
+    fun `search query handles author-suffix titles`() {
+        // «Tittel - Forfatter»: forfatter-leddet må droppes, ikke bli primærkandidat.
+        val queries = AudibleChapterLookup.buildSearchQueries(
+            "Lord Fouls Bane - Stephen R. Donaldson",
+            "Stephen R. Donaldson",
+        )
+        assertEquals("Lord Fouls Bane Stephen R. Donaldson", queries.first())
+
+        val orwell = AudibleChapterLookup.buildSearchQueries("1984 - George Orwell", "George Orwell")
+        assertEquals("1984 George Orwell", orwell.first())
+    }
+
+    @Test
+    fun `search query does not corrupt titles ending in book-like words`() {
+        assertTrue(AudibleChapterLookup.buildSearchQueries("Model 3", "Someone").contains("Model 3 Someone"))
+        assertFalse(AudibleChapterLookup.buildSearchQueries("Model 3", "Someone").any { it.startsWith("Mo ") })
+        assertTrue(AudibleChapterLookup.buildSearchQueries("My Notebook 3", "Someone").contains("My Notebook 3 Someone"))
+    }
+
+    @Test
+    fun `search query never gives up on bracket-only titles`() {
+        assertFalse(AudibleChapterLookup.buildSearchQueries("[Unabridged]", "Someone").isEmpty())
+        assertFalse(AudibleChapterLookup.buildSearchQueries("(A Novel)", "Someone").isEmpty())
+    }
 }

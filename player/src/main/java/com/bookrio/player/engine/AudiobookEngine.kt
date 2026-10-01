@@ -206,7 +206,10 @@ class AudiobookEngine(
      * at den persistente «allerede forsøkt»-markøren ikke blokkerer et nytt forsøk
      * på bøker som feilet under en eldre, svakere versjon.
      */
-    private val NET_LOOKUP_VERSION = 2
+    private val NET_LOOKUP_VERSION = 3
+
+    /** Etter en bom: ikke prøv samme bok på nytt før dette har gått. */
+    private val NET_LOOKUP_RETRY_COOLDOWN_MS = 24L * 60L * 60L * 1000L
 
     /**
      * Nett-fase: hent reelle kapittelnavn/grenser fra Audible-metadata når våre
@@ -225,13 +228,20 @@ class AudiobookEngine(
         // hoppes nettoppslaget over og boken får aldri kapitler.
         val chapterTitle = base[0].title.trim()
         val bookTitle = book.title.trim()
+        // Direkte sammenligning er Unicode-trygg og dekker tilfellet der
+        // normaliseringen skulle bli tom (kyrillisk/CJK/Gresk).
+        val titlesAlike = chapterTitle.equals(bookTitle, ignoreCase = true) ||
+            (bookTitle.isNotBlank() && chapterTitle.contains(bookTitle, ignoreCase = true)) ||
+            ChapterRefresh.titlesMatch(chapterTitle, bookTitle)
         val isStub = base.size == 1 && base[0].startMs == 0L &&
-            (ChapterRefresh.titlesMatch(chapterTitle, bookTitle) ||
-                AudibleChapterLookup.looksGeneric(chapterTitle))
+            (titlesAlike || AudibleChapterLookup.looksGeneric(chapterTitle))
         val wantsTitles = base.size >= 2 && base.any { AudibleChapterLookup.looksGeneric(it.title) }
         if (!isStub && !wantsTitles) return base
 
-        val identity = "${book.fileSizeBytes}:${book.lastModifiedAt}"
+        // STABIL identitet: lastModifiedAt bumpes når vi persisterer kapitler, så en
+        // nøkkel bygget på den ville aldri matchet igjen og tvunget nytt søk hver
+        // prosess. Størrelse + sti endres bare hvis selve filen byttes.
+        val identity = "${book.fileSizeBytes}:${book.filePath ?: book.fileUri ?: ""}"
         // Persistent huskemarkør. Nøkkelen er VERSJONERT slik at forbedret
         // oppslagslogikk re-prøver selv om en eldre kjøring feilet. Markøren settes
         // KUN ved faktisk treff, aldri ved bom — ellers ville én mislykket
@@ -242,15 +252,22 @@ class AudiobookEngine(
             chapterDiag("NET-SKIP id=${book.id} (allerede forsøkt)")
             return base
         }
+        // Kjøletid for bom: hindrer gjentatte serielle HTTP-forsøk på
+        // avspillingsstart-stien, men lar et midlertidig nettverksutfall rette seg.
+        val lastFailedAt = netPrefs.getLong("failed_at:$netKey", 0L)
+        if (lastFailedAt > 0L && System.currentTimeMillis() - lastFailedAt < NET_LOOKUP_RETRY_COOLDOWN_MS) {
+            chapterDiag("NET-COOLDOWN id=${book.id}")
+            return base
+        }
         if (netLookupAttempted.put(book.id, identity) == identity) return base
 
         val updated = lookupOnlineChapters(this, book, base, playableSourceUri(book))
         val improved = updated != base && updated.size > 1
         if (improved) {
-            netPrefs.edit()
-                .putStringSet("attempted", (netPrefs.getStringSet("attempted", emptySet())!! + netKey))
-                .apply()
-            runCatching {
+            // Persister FØRST; marker som forsøkt kun hvis skrivingen faktisk gikk
+            // gjennom. Ellers ville en feilet DB-skriving blokkert et nytt forsøk
+            // for alltid (identiteten er uendret).
+            val persisted = runCatching {
                 db.bookDao().update(
                     book.copy(
                         chaptersJson = chaptersToJson(updated),
@@ -259,9 +276,17 @@ class AudiobookEngine(
                         lastModifiedAt = System.currentTimeMillis(),
                     )
                 )
+            }.isSuccess
+            if (persisted) {
+                netPrefs.edit()
+                    .putStringSet("attempted", (netPrefs.getStringSet("attempted", emptySet())!! + netKey))
+                    .apply()
+                chapterDiag("NET-PERSISTED id=${book.id} chapters=${updated.size}")
+            } else {
+                chapterDiag("NET-PERSIST-FAILED id=${book.id}")
             }
-            chapterDiag("NET-PERSISTED id=${book.id} chapters=${updated.size}")
         } else {
+            netPrefs.edit().putLong("failed_at:$netKey", System.currentTimeMillis()).apply()
             chapterDiag("NET-MISS id=${book.id} (ingen treff, prøver igjen ved behov)")
         }
         return updated
