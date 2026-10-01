@@ -511,7 +511,7 @@ class PodcastPlaybackService : MediaSessionService() {
 
     /**
      * Artwork for the podcast session's MediaMetadata. Episode artwork wins; when the
-     * feed/episode has none the bundled Bookrio mark is published as a deterministic
+     * feed/episode has none the bundled Bookiro mark is published as a deterministic
      * local fallback (an `android.resource` URI, which Media3's bitmap loader and the
      * in-app Coil pipeline both resolve). A session must never end up without artwork
      * of its own: the system UI would otherwise keep showing whatever cover was there
