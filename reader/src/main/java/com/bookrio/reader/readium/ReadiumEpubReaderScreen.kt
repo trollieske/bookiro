@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -43,11 +44,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -244,7 +248,7 @@ internal fun ReadiumEpubReaderScreen(
         onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        DisposableEffect(showControls, activity) {
+        DisposableEffect(activity) {
             val window = activity?.window ?: return@DisposableEffect onDispose { }
             val attrs = window.attributes
             attrs.layoutInDisplayCutoutMode =
@@ -256,6 +260,31 @@ internal fun ReadiumEpubReaderScreen(
 
     fun applyPrefs() {
         navigator?.submitPreferences(EpubPreferences(fontSize = fontSize, theme = theme))
+    }
+
+    // Read the REAL window insets through the Android API. Compose's WindowInsets
+    // were already consumed by the app shell, which is why the camera cutout was
+    // ignored. `displayCutout` is physical and constant, so padding the reading
+    // surface from it keeps the viewport stable while the menu is toggled.
+    val localView = LocalView.current
+    val density = LocalDensity.current
+    var windowInsets by remember { mutableStateOf(WindowInsetsCompat.CONSUMED) }
+    DisposableEffect(localView) {
+        ViewCompat.setOnApplyWindowInsetsListener(localView) { _, insets ->
+            windowInsets = insets
+            insets
+        }
+        ViewCompat.requestApplyInsets(localView)
+        onDispose { ViewCompat.setOnApplyWindowInsetsListener(localView, null) }
+    }
+    val cutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout())
+    val readerPadding = with(density) {
+        PaddingValues(
+            start = cutout.left.toDp() + 8.dp,
+            end = cutout.right.toDp() + 8.dp,
+            top = cutout.top.toDp() + 10.dp,
+            bottom = cutout.bottom.toDp() + 10.dp,
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize().background(OmarchyColors.Bg)) {
@@ -285,11 +314,21 @@ internal fun ReadiumEpubReaderScreen(
                             activity.supportFragmentManager.fragmentFactory = factory
                             onDispose { }
                         }
-                        AndroidFragment(
-                            EpubNavigatorFragment::class.java,
-                            modifier = Modifier.fillMaxSize(),
-                        ) { fragment ->
-                            navigator = fragment
+                        // The reading surface is inset by the CONSTANT device safe area
+                        // (camera cutout / rounded corners) plus a small margin. It does
+                        // NOT depend on system-bar visibility, so the viewport never
+                        // changes when the chrome is toggled and the text stays put.
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(readerPadding),
+                        ) {
+                            AndroidFragment(
+                                EpubNavigatorFragment::class.java,
+                                modifier = Modifier.fillMaxSize(),
+                            ) { fragment ->
+                                navigator = fragment
+                            }
                         }
 
                         // Supported gesture hook: one tap toggles the chrome. Swipes and
