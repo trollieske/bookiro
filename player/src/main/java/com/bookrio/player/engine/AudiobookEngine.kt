@@ -202,6 +202,13 @@ class AudiobookEngine(
     private val netLookupAttempted = java.util.concurrent.ConcurrentHashMap<Long, String>()
 
     /**
+     * Versjon av nett-oppslagslogikken. Økes når søket/valideringen forbedres, slik
+     * at den persistente «allerede forsøkt»-markøren ikke blokkerer et nytt forsøk
+     * på bøker som feilet under en eldre, svakere versjon.
+     */
+    private val NET_LOOKUP_VERSION = 2
+
+    /**
      * Nett-fase: hent reelle kapittelnavn/grenser fra Audible-metadata når våre
      * egne kilder ikke ga dem:
      *  - stub (én generisk kapittel) → kapitler kan OPPRETTES fra Audibles
@@ -211,21 +218,26 @@ class AudiobookEngine(
      * Persisteres umiddelbart; maks ÉN nett-attempt per filidentitet per prosess.
      */
     private suspend fun netEnhance(book: BookEntity, base: List<AudiobookChapter>): List<AudiobookChapter> {
-        // Stub-deteksjon: identisk tittel, «Forfatter - Tittel»-form, eller generisk.
+        // Stub-deteksjon: identisk tittel (begge retninger/normalisert) eller generisk.
+        // MERK: lagret stubb-tittel kan være en FORKORTET form av boktittelen
+        // («Thomas Covenant 01 - Lord Fouls Bane» mot «Stephen R. Donaldson - Thomas
+        // Covenant 01 - Lord Fouls Bane»), så vi må sjekke begge retninger — ellers
+        // hoppes nettoppslaget over og boken får aldri kapitler.
         val chapterTitle = base[0].title.trim()
         val bookTitle = book.title.trim()
         val isStub = base.size == 1 && base[0].startMs == 0L &&
-            (chapterTitle.equals(bookTitle, ignoreCase = true) ||
-                (bookTitle.isNotBlank() && chapterTitle.contains(bookTitle, ignoreCase = true)) ||
+            (ChapterRefresh.titlesMatch(chapterTitle, bookTitle) ||
                 AudibleChapterLookup.looksGeneric(chapterTitle))
         val wantsTitles = base.size >= 2 && base.any { AudibleChapterLookup.looksGeneric(it.title) }
         if (!isStub && !wantsTitles) return base
 
         val identity = "${book.fileSizeBytes}:${book.lastModifiedAt}"
-        // Persistent huskemarkør: aldri mer enn én nett-attempt per filidentitet,
-        // også på tvers av app-omstarter (unødvendig nettverk ellers).
+        // Persistent huskemarkør. Nøkkelen er VERSJONERT slik at forbedret
+        // oppslagslogikk re-prøver selv om en eldre kjøring feilet. Markøren settes
+        // KUN ved faktisk treff, aldri ved bom — ellers ville én mislykket
+        // søkestreng blokkert kapitler permanent (selve feilen her).
         val netPrefs = ctx.getSharedPreferences("chapter_net_lookup", Context.MODE_PRIVATE)
-        val netKey = "${book.id}:$identity"
+        val netKey = "v$NET_LOOKUP_VERSION:${book.id}:$identity"
         if (netPrefs.getStringSet("attempted", emptySet())?.contains(netKey) == true) {
             chapterDiag("NET-SKIP id=${book.id} (allerede forsøkt)")
             return base
@@ -233,10 +245,11 @@ class AudiobookEngine(
         if (netLookupAttempted.put(book.id, identity) == identity) return base
 
         val updated = lookupOnlineChapters(this, book, base, playableSourceUri(book))
-        netPrefs.edit()
-            .putStringSet("attempted", (netPrefs.getStringSet("attempted", emptySet())!! + netKey))
-            .apply()
-        if (updated != base && updated.size > 1) {
+        val improved = updated != base && updated.size > 1
+        if (improved) {
+            netPrefs.edit()
+                .putStringSet("attempted", (netPrefs.getStringSet("attempted", emptySet())!! + netKey))
+                .apply()
             runCatching {
                 db.bookDao().update(
                     book.copy(
@@ -248,6 +261,8 @@ class AudiobookEngine(
                 )
             }
             chapterDiag("NET-PERSISTED id=${book.id} chapters=${updated.size}")
+        } else {
+            chapterDiag("NET-MISS id=${book.id} (ingen treff, prøver igjen ved behov)")
         }
         return updated
     }

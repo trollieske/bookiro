@@ -264,7 +264,7 @@ class AudioMetadataParser : FormatMetadataParser {
         if (AUDIO_META_DIAG) {
             android.util.Log.d(
                 AUDIO_META_TAG,
-                "audio meta: ext=${'$'}{filename.substringAfterLast('.')} embeddedChapters=${'$'}embeddedChapters.size streamDurMs=${'$'}streamDurMs"
+                "audio meta: ext=${filename.substringAfterLast('.')} embeddedChapters=${embeddedChapters.size} streamDurMs=$streamDurMs"
             )
         }
 

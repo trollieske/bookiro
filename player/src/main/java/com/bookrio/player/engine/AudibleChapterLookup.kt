@@ -46,16 +46,8 @@ object AudibleChapterLookup {
 
     /** Søker Audible-katalogen og returnerer kandidat-ASIN-er (maks [maxResults]). */
     fun searchAsins(title: String, author: String?, maxResults: Int = 6): List<String> {
-        val queries = buildList {
-            val t = title.trim()
-            add(if (author.isNullOrBlank()) t else "$t $author")
-            val shortTitle = t.substringBefore(':').trim()
-            if (shortTitle.isNotBlank() && !shortTitle.equals(t, ignoreCase = true)) {
-                add(if (author.isNullOrBlank()) shortTitle else "$shortTitle $author")
-            }
-        }
         val seen = LinkedHashSet<String>()
-        for (q in queries) {
+        for (q in buildSearchQueries(title, author)) {
             if (seen.size >= maxResults) break
             val url = "https://api.audible.com/1.0/catalog/products" +
                 "?response_groups=product_attrs&num_results=${maxResults}&keywords=" +
@@ -69,6 +61,71 @@ object AudibleChapterLookup {
             }
         }
         return seen.toList()
+    }
+
+    /**
+     * Bygger ordnede søkestrenger fra rå tittel/forfatter. Nødvendig fordi
+     * importerte titler ofte inneholder forfatterprefiks og serienummer, f.eks.
+     * «Stephen R. Donaldson - Thomas Covenant 01 - Lord Fouls Bane». Et søk på
+     * hele den strengen gir NULL treff (verifisert), mens
+     * «Lord Fouls Bane Stephen R. Donaldson» finner riktig utgave.
+     *
+     * Rekkefølgen er «mest konkret først» slik at [searchAsins] treffer den
+     * riktige utgaven før et bredt søk kan fylle resultatlisten med støy.
+     * Ren funksjon → JVM-testbar.
+     */
+    internal fun buildSearchQueries(title: String, author: String?): List<String> {
+        val raw = title.trim()
+        val authorTrim = author?.trim().orEmpty()
+        if (raw.isBlank()) return emptyList()
+
+        fun stripNoise(s: String): String = s
+            .replace(Regex("\\[[^\\]]*\\]"), " ")
+            .replace(Regex("\\([^)]*\\)"), " ")
+            .replace(Regex("\\{[^}]*\\}"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim(' ', '-', ':', '\u2013', '\u2014', '|')
+
+        val cleaned = stripNoise(raw)
+
+        // Fjern ledende forfatternavn: «Forfatter - Tittel», «Forfatter: Tittel».
+        var body = cleaned
+        if (authorTrim.isNotBlank()) {
+            for (sep in listOf(" - ", " \u2013 ", " \u2014 ", ": ", " | ")) {
+                val prefix = authorTrim + sep
+                if (body.startsWith(prefix, ignoreCase = true)) {
+                    body = body.substring(prefix.length).trim()
+                    break
+                }
+            }
+        }
+
+        // Fjern serienummer: «..., Book 3», «Vol. 2», «Del 1», ledende «01 - ».
+        fun stripSeries(s: String): String = s
+            .replace(Regex("(?i)\\s*,?\\s*(book|bok|vol|volume|del|part)\\s*\\.?\\s*\\d+\\s*$"), " ")
+            .replace(Regex("^\\s*[\\[(]?\\d{1,3}[\\])]?\\s*[.\\-:\u2013\u2014]\\s*"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim(' ', '-', ':', '\u2013', '\u2014')
+
+        val afterAuthor = body
+        // Siste ledd dropper «Serie 01 - »-prefiks; håndter alle tankestreker.
+        val segmented = afterAuthor.replace(" \u2013 ", " - ").replace(" \u2014 ", " - ")
+        val lastSegment = segmented.substringAfterLast(" - ").trim()
+        val beforeColon = afterAuthor.substringBefore(":").trim()
+
+        val titleCandidates = LinkedHashSet<String>()
+        titleCandidates.add(stripSeries(lastSegment))
+        titleCandidates.add(stripSeries(beforeColon))
+        titleCandidates.add(stripSeries(afterAuthor))
+        titleCandidates.add(cleaned)
+
+        val queries = LinkedHashSet<String>()
+        for (t in titleCandidates) {
+            if (t.isBlank()) continue
+            if (authorTrim.isNotBlank()) queries.add("$t $authorTrim")
+            queries.add(t)
+        }
+        return queries.toList()
     }
 
     /** Henter kapitler (title, startOffsetMs, lengthMs) for en ASIN, eller null. */
