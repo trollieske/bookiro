@@ -75,7 +75,7 @@ class ReaderViewModel(
                     percent   = existing?.progressPercent ?: engineState.percent,
                     scrollPct = existing?.scrollPct ?: 0f,
                     currentPage = restoredPage,
-                    totalPages  = 0,   // will be filled in by HtmlPageRenderer via onPageCountKnown
+                    totalPages  = 0,   // will be filled in by the WebView pagination via onPageCountKnown
                     error       = mergedError,
                 )
             }.onSuccess {

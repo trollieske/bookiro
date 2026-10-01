@@ -97,4 +97,68 @@ class AudibleChapterLookupTest {
         // Ukjent egen varighet → aldri bygge
         assertNull(AudibleChapterLookup.buildChaptersFromFetched(fetched, null, ourDurationMs = 0L))
     }
+
+    @Test
+    fun `search query strips author prefix, series number and brackets`() {
+        val queries = AudibleChapterLookup.buildSearchQueries(
+            "Stephen R. Donaldson - Thomas Covenant 01 - Lord Fouls Bane [2008-ScottBrick]",
+            "Stephen R. Donaldson",
+        )
+        // Beste søk først: ren tittel + forfatter (gir nøyaktig riktig ASIN)
+        assertEquals("Lord Fouls Bane Stephen R. Donaldson", queries.first())
+        // Aldri den forurensede råstrengen som første forsøk
+        assertFalse(queries.first().startsWith("Stephen R. Donaldson - "))
+        // Den rene tittelen finnes også uten forfatter
+        assertTrue(queries.contains("Lord Fouls Bane"))
+    }
+
+    @Test
+    fun `search query keeps colon subtitle as a candidate`() {
+        val queries = AudibleChapterLookup.buildSearchQueries(
+            "Dungeon Crawler Carl: A LitRPG/Gamelit Adventure",
+            "Matt Dinniman",
+        )
+        assertTrue(queries.contains("Dungeon Crawler Carl Matt Dinniman"))
+        assertTrue(queries.contains("Dungeon Crawler Carl"))
+    }
+
+    @Test
+    fun `search query strips trailing book number and leading track number`() {
+        val queries = AudibleChapterLookup.buildSearchQueries("The First Law, Book 3", "Joe Abercrombie")
+        assertTrue(queries.contains("The First Law Joe Abercrombie"))
+
+        val leading = AudibleChapterLookup.buildSearchQueries("01 - The Blade Itself", "Joe Abercrombie")
+        assertTrue(leading.contains("The Blade Itself Joe Abercrombie"))
+    }
+
+    @Test
+    fun `search query handles blank title`() {
+        assertTrue(AudibleChapterLookup.buildSearchQueries("   ", "Someone").isEmpty())
+    }
+
+    @Test
+    fun `search query handles author-suffix titles`() {
+        // «Tittel - Forfatter»: forfatter-leddet må droppes, ikke bli primærkandidat.
+        val queries = AudibleChapterLookup.buildSearchQueries(
+            "Lord Fouls Bane - Stephen R. Donaldson",
+            "Stephen R. Donaldson",
+        )
+        assertEquals("Lord Fouls Bane Stephen R. Donaldson", queries.first())
+
+        val orwell = AudibleChapterLookup.buildSearchQueries("1984 - George Orwell", "George Orwell")
+        assertEquals("1984 George Orwell", orwell.first())
+    }
+
+    @Test
+    fun `search query does not corrupt titles ending in book-like words`() {
+        assertTrue(AudibleChapterLookup.buildSearchQueries("Model 3", "Someone").contains("Model 3 Someone"))
+        assertFalse(AudibleChapterLookup.buildSearchQueries("Model 3", "Someone").any { it.startsWith("Mo ") })
+        assertTrue(AudibleChapterLookup.buildSearchQueries("My Notebook 3", "Someone").contains("My Notebook 3 Someone"))
+    }
+
+    @Test
+    fun `search query never gives up on bracket-only titles`() {
+        assertFalse(AudibleChapterLookup.buildSearchQueries("[Unabridged]", "Someone").isEmpty())
+        assertFalse(AudibleChapterLookup.buildSearchQueries("(A Novel)", "Someone").isEmpty())
+    }
 }

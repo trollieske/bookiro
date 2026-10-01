@@ -39,4 +39,9 @@ The file may be empty, corrupted, DRM-protected, or in a supported format that c
     <string name="rdr_error_no_access">No access to the book. Try importing the folder again.</string>
     <string name="rdr_error_tts_not_ready">Speech service not ready</string>
     <string name="rdr_error_no_text_chapter">No chapter with text</string>
+    <string name="rdr_section_n">Section %1$d</string>
+    <string name="rdr_unnamed_section">Unnamed section</string>
+    <string name="rdr_no_builtin_toc">This book has no built-in table of contents — showing sections.</string>
+    <string name="rdr_open_error">Could not open the book.</string>
+    <string name="rdr_reader_unavailable">The reader is unavailable on this device.</string>
 </resources>

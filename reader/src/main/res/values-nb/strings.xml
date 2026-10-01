@@ -39,4 +39,9 @@ Filen kan være tom, skadet, ha en DRM-beskyttelse, eller ha et støttet format 
     <string name="rdr_error_no_access">Ingen tilgang til boken. Prøv å importere mappen på nytt.</string>
     <string name="rdr_error_tts_not_ready">Stemmetjeneste ikke klar</string>
     <string name="rdr_error_no_text_chapter">Ingen kapittel med tekst</string>
+    <string name="rdr_section_n">Seksjon %1$d</string>
+    <string name="rdr_unnamed_section">Uten navn</string>
+    <string name="rdr_no_builtin_toc">Boken har ingen innebygd innholdsfortegnelse — viser seksjoner.</string>
+    <string name="rdr_open_error">Kan ikke åpne boken.</string>
+    <string name="rdr_reader_unavailable">Leseren er utilgjengelig på denne enheten.</string>
 </resources>

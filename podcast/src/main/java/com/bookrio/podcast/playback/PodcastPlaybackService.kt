@@ -130,9 +130,15 @@ class PodcastPlaybackService : MediaSessionService() {
         fun getService(): PodcastPlaybackService = this@PodcastPlaybackService
     }
 
-    override fun onBind(intent: Intent?): IBinder {
-        super.onBind(intent)
-        return binder
+    override fun onBind(intent: Intent?): IBinder? {
+        // Same as the audiobook service: Media3's session binder must reach
+        // MediaController / system media controls; the in-app view model (no action)
+        // gets the local binder.
+        return if (intent?.action == null) {
+            binder
+        } else {
+            super.onBind(intent)
+        }
     }
 
     override fun onCreate() {

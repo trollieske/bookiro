@@ -97,10 +97,10 @@ fun TorrentScreen(
                 actions = {
                     if (state.activeCount > 0) {
                         IconButton(onClick = { vm.pauseAll() }) {
-                            Icon(Icons.Default.Pause, "Pause alle", tint = MaterialTheme.colorScheme.tertiary)
+                            Icon(Icons.Default.Pause, stringResource(R.string.toru_pause_all), tint = MaterialTheme.colorScheme.tertiary)
                         }
                         IconButton(onClick = { vm.resumeAll() }) {
-                            Icon(Icons.Default.PlayArrow, "Fortsett alle", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.PlayArrow, stringResource(R.string.toru_resume_all), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -134,7 +134,12 @@ fun TorrentScreen(
             }
             var searchQuery by rememberSaveable { mutableStateOf("") }
             var activeFilter by rememberSaveable { mutableStateOf(0) }
-            val filterLabels = listOf("Alle", "Aktive", "Ferdig", "Feilet")
+            val filterLabels = listOf(
+                stringResource(R.string.toru_filter_all),
+                stringResource(R.string.toru_filter_active),
+                stringResource(R.string.toru_filter_done),
+                stringResource(R.string.toru_filter_failed),
+            )
 
             OutlinedTextField(
                 value = searchQuery,
@@ -149,7 +154,7 @@ fun TorrentScreen(
 
             if (searchQuery.isNotBlank() || state.downloads.isEmpty()) {
                 Text(
-                    "Forhåndsinnstilte kilder",
+                    stringResource(R.string.toru_preset_sources),
                     style = ShelfTypography.BodySmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -232,16 +237,16 @@ fun TorrentScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            if (state.downloads.isEmpty()) "Ingen torrent-nedlastinger"
-                            else "Ingen resultater i filteret/for søket ditt",
+                            if (state.downloads.isEmpty()) stringResource(R.string.toru_empty_title)
+                            else stringResource(R.string.toru_empty_filtered),
                             style = ShelfTypography.TitleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            if (state.downloads.isEmpty()) "Trykk på Magnet- eller .torrent-knappen for å begynne, eller bruk et forslag nedenfor."
-                            else "Prøv et annet filter, eller tøm søkefeltet.",
+                            if (state.downloads.isEmpty()) stringResource(R.string.toru_empty_hint)
+                            else stringResource(R.string.toru_filter_hint),
                             style = ShelfTypography.BodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -249,7 +254,7 @@ fun TorrentScreen(
                 }
             } else {
                 Text(
-                    "${filtered.size} av ${state.downloads.size} nedlastinger",
+                    stringResource(R.string.toru_count_of, filtered.size, state.downloads.size),
                     style = ShelfTypography.BodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -318,13 +323,13 @@ private fun SpeedCard(dl: Long, ul: Long, activeCount: Int) {
         ) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ArrowDownward, "Nedlastning", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.ArrowDownward, stringResource(R.string.toru_download), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(4.dp))
                     Text(formatBps(dl), style = ShelfTypography.TitleSmall, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ArrowUpward, "Opplasting", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
+                    Icon(Icons.Default.ArrowUpward, stringResource(R.string.toru_upload), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
                     Spacer(Modifier.width(4.dp))
                     Text(formatBps(ul), style = ShelfTypography.BodyMedium, fontWeight = FontWeight.Medium)
                 }
@@ -366,13 +371,13 @@ private fun TorrentCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        dl.displayName ?: "Torrent ${dl.id}",
+                        dl.displayName ?: stringResource(R.string.toru_torrent_n, dl.id),
                         style = ShelfTypography.BodyLarge,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "${if (dl.status == DownloadStatusEntity.COMPLETED) "Fullført · Seeder (Aktiv)" else statusLabel(dl.status)} · ${formatSize(dlBytes)} / ${formatSize(totalBytes)}",
+                        "${if (dl.status == DownloadStatusEntity.COMPLETED) stringResource(R.string.toru_completed_seeding) else statusLabel(dl.status)} · ${formatSize(dlBytes)} / ${formatSize(totalBytes)}",
                         style = ShelfTypography.BodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -383,16 +388,16 @@ private fun TorrentCard(
                         style = ShelfTypography.BodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    val trStatus = stats?.trackerStatus ?: "Søker..."
+                    val trStatus = stats?.trackerStatus ?: stringResource(R.string.toru_searching)
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "Tracker: $trStatus",
+                        stringResource(R.string.toru_tracker, trStatus),
                         style = ShelfTypography.BodySmall,
                         color = if (trStatus.contains("feil") || trStatus.contains("error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = { expanded = !expanded }) {
-                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Flere")
+                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, stringResource(R.string.toru_more))
                 }
             }
 
@@ -413,14 +418,14 @@ private fun TorrentCard(
                 val infoHash = dl.infoHash
                 if (infoHash != null) {
                     Text(
-                        "Hash: ${infoHash.take(16)}…",
+                        stringResource(R.string.toru_hash, infoHash.take(16)),
                         style = ShelfTypography.BodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
                 }
                 Text(
-                    "Lagret: ${dl.savePath}",
+                    stringResource(R.string.toru_saved, dl.savePath),
                     style = ShelfTypography.BodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -644,7 +649,7 @@ private fun formatAgo(epochMs: Long): String {
     return when {
         seconds < 60 -> "${seconds}s"
         seconds < 3600 -> "${seconds / 60}m"
-        else -> "${seconds / 3600}t"
+        else -> "${seconds / 3600}h"
     }
 }
 
@@ -669,7 +674,7 @@ private fun AddMagnetDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Lim inn magnet-lenken du kopierte fra torrent-nettsiden din",
+                    stringResource(R.string.toru_magnet_paste_hint),
                     style = ShelfTypography.BodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -685,14 +690,15 @@ private fun AddMagnetDialog(
     )
 }
 
+@Composable
 private fun statusLabel(status: DownloadStatusEntity): String = when (status) {
-    DownloadStatusEntity.PENDING -> "Venter"
-    DownloadStatusEntity.RUNNING -> "Laster ned"
-    DownloadStatusEntity.PAUSED -> "Pause"
-    DownloadStatusEntity.COMPLETED -> "Ferdig"
-    DownloadStatusEntity.FAILED -> "Feilet"
-    DownloadStatusEntity.CANCELLED -> "Avbrutt"
-    else -> "Venter"
+    DownloadStatusEntity.PENDING -> stringResource(R.string.toru_status_pending)
+    DownloadStatusEntity.RUNNING -> stringResource(R.string.toru_status_running)
+    DownloadStatusEntity.PAUSED -> stringResource(R.string.toru_status_paused)
+    DownloadStatusEntity.COMPLETED -> stringResource(R.string.toru_status_completed)
+    DownloadStatusEntity.FAILED -> stringResource(R.string.toru_status_failed)
+    DownloadStatusEntity.CANCELLED -> stringResource(R.string.toru_status_cancelled)
+    else -> stringResource(R.string.toru_status_pending)
 }
 
 private fun formatBps(bps: Long): String {
@@ -716,7 +722,7 @@ private fun formatEta(seconds: Long): String {
     val m = seconds / 60
     if (m < 60) return "${m}m ${seconds % 60}s"
     val h = m / 60
-    return "${h}t ${m % 60}m"
+    return "${h}h ${m % 60}m"
 }
 
 private fun getClipboardMagnet(context: android.content.Context): String {

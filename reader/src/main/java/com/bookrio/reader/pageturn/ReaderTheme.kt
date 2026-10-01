@@ -1,7 +1,8 @@
 package com.bookrio.reader.pageturn
 
 /**
- * Theme colours for the reader, shared between [HtmlPageRenderer] and the UI.
+ * Theme colours for the reader, shared between [com.bookrio.reader.engine.ReaderWebEngine]
+ * (generated reader HTML) and the Compose UI (paper background).
  *
  * All colour values are CSS colour strings (hex, rgb, hsl…).
  */
@@ -10,7 +11,7 @@ data class ReaderThemeColors(
     val bodyBg: String,
     val textColor: String,
     val headingColor: String,
-    /** Opaque Android int colour (used for Bitmap paper background). */
+    /** Opaque Android int colour (used for the Compose reader background). */
     val paperColorInt: Int,
 )
 

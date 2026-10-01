@@ -39,4 +39,9 @@ El archivo puede estar vacío, dañado, protegido por DRM o en un formato compat
     <string name="rdr_error_no_access">Sin acceso al libro. Intenta importar la carpeta de nuevo.</string>
     <string name="rdr_error_tts_not_ready">Servicio de voz no listo</string>
     <string name="rdr_error_no_text_chapter">Ningún capítulo con texto</string>
+    <string name="rdr_section_n">Sección %1$d</string>
+    <string name="rdr_unnamed_section">Sección sin nombre</string>
+    <string name="rdr_no_builtin_toc">Este libro no tiene índice integrado: se muestran las secciones.</string>
+    <string name="rdr_open_error">No se pudo abrir el libro.</string>
+    <string name="rdr_reader_unavailable">El lector no está disponible en este dispositivo.</string>
 </resources>

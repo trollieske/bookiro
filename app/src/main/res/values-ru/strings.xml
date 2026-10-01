@@ -59,6 +59,14 @@
     <string name="settings_db_imported">База данных импортирована</string>
     <string name="settings_watch_folder">Отслеживать новые файлы в папке библиотеки</string>
     <string name="settings_watch_folder_sub">Добавляет книги автоматически</string>
+    <string name="settings_library_folder">Папка библиотеки</string>
+    <string name="settings_library_folder_sub">Где Bookiro читает и отслеживает книги</string>
+    <string name="settings_library_folder_not_set">Не задана — нажмите, чтобы выбрать</string>
+    <string name="settings_library_folder_change">Изменить</string>
+    <string name="settings_library_folder_remove">Удалить</string>
+    <string name="settings_library_folder_open_failed">Ни один файловый менеджер не может открыть эту папку</string>
+    <string name="settings_library_folder_no_permission">Доступ к папке потерян — выберите её снова</string>
+    <string name="settings_library_folder_chosen">Папка библиотеки задана</string>
     <string name="settings_online_cover">Поиск обложек онлайн</string>
     <string name="settings_online_cover_sub">Искать обложки в интернете</string>
     <string name="settings_about_description">Bookiro — частный читатель и плеер аудиокниг без рекламы</string>

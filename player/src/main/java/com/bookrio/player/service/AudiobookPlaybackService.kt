@@ -34,8 +34,9 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import com.bookrio.data.local.ShelfDatabase
-import com.bookrio.data.local.entity.FormatEntity
+import com.bookrio.data.local.entity.BookEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.player.AudiobookNowPlaying
 import com.bookrio.player.engine.AudiobookChapter
@@ -50,14 +51,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.Executors
 
 /** Intern spesifikasjon for ett MediaItem: kapittel + global start + evt. klipp innenfor samme fil. */
 private data class ActiveItemSpec(
@@ -93,6 +91,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
         const val ACTION_SKIP_BACK = "com.bookrio.player.SKIP_BACK"
         const val ACTION_SKIP_FORWARD = "com.bookrio.player.SKIP_FORWARD"
         const val ACTION_STOP = "com.bookrio.player.STOP"
+
+        /** Bounded browse-artwork cache size (entries are a few tens of KB). */
+        private const val MAX_COVER_CACHE_ENTRIES = 256
     }
 
     private val serviceScope = CoroutineScope(
@@ -142,10 +143,19 @@ class AudiobookPlaybackService : MediaLibraryService() {
         fun getService(): AudiobookPlaybackService = this@AudiobookPlaybackService
     }
 
-    override fun onBind(intent: Intent?): IBinder {
+    override fun onBind(intent: Intent?): IBinder? {
         Log.d(TAG, "onBind: action=${intent?.action}")
-        super.onBind(intent)
-        return binder
+        // Media3's MediaSessionService framework binder is what a MediaController /
+        // MediaBrowser (Android Auto, Bluetooth, system media controls) must receive.
+        // The in-app PlayerViewModel binds with an explicit component and no action
+        // and wants the local binder. Returning the local binder for EVERY caller
+        // (the previous behaviour) handed Auto a plain Binder that never answers the
+        // session handshake, so its browse screen stayed on the loading spinner.
+        return if (intent?.action == null) {
+            binder
+        } else {
+            super.onBind(intent)
+        }
     }
 
     override fun onCreate() {
@@ -174,16 +184,20 @@ class AudiobookPlaybackService : MediaLibraryService() {
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId ?: return
-                if (id.startsWith("book_")) {
-                    val bookId = runCatching { id.removePrefix("book_").toLong() }.getOrNull() ?: return
-                    if (currentBookId != bookId) {
-                        // Media library skip: the player now holds the library item, not
-                        // our timeline; the guarded load below decides whether this
-                        // engine may start.
-                        loadedTimeline.cleared()
-                        loadBook(bookId, autoPlay = exo.playWhenReady, force = exo.playWhenReady)
-                        return
-                    }
+                val libraryBookId = AudiobookLibraryTree.bookIdOf(id)
+                if (libraryBookId != null) {
+                    // A `book_<id>` item can only come from the media library
+                    // (Android Auto / browser playFromMediaId): our own timeline items
+                    // are `<bookId>_<chapterIndex>` and always carry a URI. The player
+                    // therefore no longer holds our timeline, so (re)load it and treat
+                    // the request as an explicit play gesture — selecting a book in
+                    // the car must also take audio ownership back from a playing
+                    // podcast, and must work after the engine was retired for the
+                    // same book (currentBookId is intentionally kept across retire).
+                    loadedTimeline.cleared()
+                    Log.i(TAG, "library item $id selected: loading book $libraryBookId")
+                    loadBook(libraryBookId, autoPlay = true, force = true)
+                    return
                 }
                 // Chapter transition inside the same book: refresh immediately instead
                 // of waiting for the next ticker tick.
@@ -228,12 +242,21 @@ class AudiobookPlaybackService : MediaLibraryService() {
         })
         player = exo
 
-        val sessionCallback = object : MediaSession.Callback {
+        // NOTE: this callback is passed to the MediaLibrarySession below, so the
+        // library command grants MUST live here. A previous version kept them in a
+        // separate MediaSession.Callback that was never attached, so a MediaBrowser /
+        // Android Auto library controller connected but stayed PENDING forever
+        // (perpetual loading screen) because the library command codes were absent.
+        val libraryCallback = object : MediaLibraryService.MediaLibrarySession.Callback {
             override fun onConnect(
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo
             ): MediaSession.ConnectionResult {
-                val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                // DEFAULT_SESSION_AND_LIBRARY_COMMANDS, not DEFAULT_SESSION_COMMANDS:
+                // Media3's MediaLibraryServiceLegacyStub refuses onGetChildren and
+                // onGetItem for Android Auto unless the controller holds the library
+                // command codes (50003/50004).
+                val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                     .add(SessionCommand(CMD_SPEED, Bundle()))
                     .add(SessionCommand(CMD_SKIP_BACK, Bundle()))
                     .add(SessionCommand(CMD_SKIP_FORWARD, Bundle()))
@@ -277,25 +300,40 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     else -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
                 }
             }
-        }
 
-        val libraryCallback = object : MediaLibraryService.MediaLibrarySession.Callback {
             override fun onGetLibraryRoot(
                 session: MediaLibraryService.MediaLibrarySession,
                 caller: MediaSession.ControllerInfo,
                 params: LibraryParams?
-            ): ListenableFuture<LibraryResult<MediaItem>> {
-                val root = MediaItem.Builder()
-                    .setMediaId("__ROOT__")
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(this@AudiobookPlaybackService.getString(R.string.ply_library_root))
-                            .setIsBrowsable(true)
-                            .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
-                            .build()
-                    )
-                    .build()
-                return Futures.immediateFuture(LibraryResult.ofItem(root, params))
+            ): ListenableFuture<LibraryResult<MediaItem>> =
+                Futures.immediateFuture(LibraryResult.ofItem(buildLibraryRootItem(), params))
+
+            /**
+             * Resolves browsed media ids to library items. Android Auto calls this
+             * (legacy onLoadItem) when the browse tree item is selected and when the
+             * host needs details for the now-playing card; without it the card falls
+             * back to the app icon and grey placeholders.
+             */
+            override fun onGetItem(
+                session: MediaLibraryService.MediaLibrarySession,
+                caller: MediaSession.ControllerInfo,
+                mediaId: String
+            ): ListenableFuture<LibraryResult<MediaItem>> = libraryFuture {
+                if (mediaId == AudiobookLibraryTree.ROOT_MEDIA_ID) {
+                    return@libraryFuture LibraryResult.ofItem(buildLibraryRootItem(), null)
+                }
+                val dao = db?.bookDao()
+                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                val bookId = AudiobookLibraryTree.bookIdOf(mediaId)
+                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                val book = dao.getById(bookId)?.takeIf { !it.isDeleted }
+                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                val entry = AudiobookLibraryTree.itemForMediaId(mediaId, listOf(book))
+                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                LibraryResult.ofItem(
+                    entryToMediaItem(entry, coverBytesFor(entry.bookId, entry.coverPath)),
+                    null
+                )
             }
 
             override fun onGetChildren(
@@ -305,46 +343,19 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 page: Int,
                 pageSize: Int,
                 params: LibraryParams?
-            ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-                val db = db ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
-                return Futures.immediateFuture(
-                    runCatching {
-                        val audioFormats = setOf(
-                            FormatEntity.M4B, FormatEntity.M4A, FormatEntity.MP3,
-                            FormatEntity.AAC, FormatEntity.FLAC, FormatEntity.OGG,
-                            FormatEntity.OPUS, FormatEntity.OGG_OPUS, FormatEntity.WAV
-                        )
-                        val allBooks = runBlocking(Dispatchers.IO) {
-                            db.bookDao().observeAll().first().filter { it.format in audioFormats }
-                        }
-                        val sorted = allBooks.sortedWith(
-                            compareByDescending<com.bookrio.data.local.entity.BookEntity> { it.lastOpenedAt ?: 0L }
-                                .thenBy { it.title }
-                        )
-                        val items = sorted.map { book ->
-                            val cover = coverArtworkFor(book.id)
-                            MediaItem.Builder()
-                                .setMediaId("book_${book.id}")
-                                .setMediaMetadata(
-                                    MediaMetadata.Builder()
-                                        .setTitle(book.title)
-                                        .setDisplayTitle(book.title)
-                                        .setArtist(book.author)
-                                        .setAlbumTitle(book.title)
-                                        .setSubtitle(book.author)
-                                        .setIsPlayable(true)
-                                        .setIsBrowsable(false)
-                                        .apply { cover?.bytes?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
-                                        .build()
-                                )
-                                .build()
-                        }
-                        LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
-                    }.getOrElse { t ->
-                        Log.e(TAG, "onGetChildren failed", t)
-                        LibraryResult.ofError(LibraryResult.RESULT_ERROR_UNKNOWN)
-                    }
-                )
+            ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = libraryFuture {
+                val dao = db?.bookDao()
+                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                // Exact children of the requested parent: root -> audiobooks, a book
+                // id -> nothing (books are playable leaves; chapters are NOT
+                // browsable, the engine owns one chapter timeline per book), anything
+                // else -> error. Previously every parent returned the whole library.
+                val entries = AudiobookLibraryTree.childrenOf(parentId, dao.getAllOnce())
+                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                val items = AudiobookLibraryTree.page(entries, page, pageSize).map { entry ->
+                    entryToMediaItem(entry, coverBytesFor(entry.bookId, entry.coverPath))
+                }
+                LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
             }
         }
 
@@ -980,6 +991,62 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibraryService.MediaLibrarySession? = librarySession
 
+    /**
+     * Runs a MediaLibrarySession callback body on [Dispatchers.IO] and completes the
+     * returned future there. Media3 and Android Auto expect these callbacks to return
+     * quickly; doing the DB read (and bitmap decoding) inline on the session callback
+     * (main) thread — as the previous onGetChildren did — can stall/ANR the browse
+     * until Auto gives up on a black screen.
+     */
+    private fun <T : Any> libraryFuture(block: suspend () -> LibraryResult<T>): ListenableFuture<LibraryResult<T>> {
+        val future = SettableFuture.create<LibraryResult<T>>()
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                future.set(block())
+            } catch (t: Throwable) {
+                Log.e(TAG, "media library callback failed", t)
+                future.set(LibraryResult.ofError<T>(LibraryResult.RESULT_ERROR_UNKNOWN))
+            }
+        }
+        return future
+    }
+
+    /** Browsable, non-playable library root of the audiobook branch. */
+    private fun buildLibraryRootItem(): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(AudiobookLibraryTree.ROOT_MEDIA_ID)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(getString(R.string.ply_library_root))
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+                    .build()
+            )
+            .build()
+
+    /** The single Media3 conversion of a pure [AudiobookLibraryTree.LibraryEntry]. */
+    private fun entryToMediaItem(entry: AudiobookLibraryTree.LibraryEntry, artwork: ByteArray?): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(entry.mediaId)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(entry.title)
+                    .setDisplayTitle(entry.title)
+                    .setArtist(entry.artist)
+                    .setAlbumTitle(entry.albumTitle)
+                    .setSubtitle(entry.subtitle)
+                    .setIsPlayable(entry.isPlayable)
+                    .setIsBrowsable(entry.isBrowsable)
+                    .setMediaType(
+                        if (entry.isBrowsable) MediaMetadata.MEDIA_TYPE_FOLDER_MIXED
+                        else MediaMetadata.MEDIA_TYPE_AUDIO_BOOK
+                    )
+                    .apply { artwork?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
+                    .build()
+            )
+            .build()
+
     fun currentPositionMs(): Long {
         val p = player ?: return 0L
         val idx = p.currentMediaItemIndex
@@ -1073,6 +1140,26 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     private data class CoverArtwork(val bytes: ByteArray, val bitmap: Bitmap)
+
+    /** One decoded cover per book file version, reused across browse callbacks. */
+    private class CachedCover(val signature: String, val bytes: ByteArray)
+
+    private val coverCache = java.util.concurrent.ConcurrentHashMap<Long, CachedCover>()
+
+    /**
+     * Cover bytes for a browse/library item, decoded once per file version. Always
+     * called from [libraryFuture]'s IO dispatcher, never from the session callback
+     * thread (the previous code decoded every cover inline on main).
+     */
+    private fun coverBytesFor(bookId: Long, coverPath: String?): ByteArray? {
+        val file = resolveCoverFile(bookId, coverPath) ?: return null
+        val signature = "${file.absolutePath}:${file.length()}:${file.lastModified()}"
+        coverCache[bookId]?.let { cached -> if (cached.signature == signature) return cached.bytes }
+        val artwork = coverArtworkFor(bookId, coverPath) ?: return null
+        if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
+        coverCache[bookId] = CachedCover(signature, artwork.bytes)
+        return artwork.bytes
+    }
 
     private fun resolveCoverFile(bookId: Long, coverPathFromDb: String?): File? {
         val fromDb = coverPathFromDb?.takeIf { it.isNotBlank() }?.let { File(it) }

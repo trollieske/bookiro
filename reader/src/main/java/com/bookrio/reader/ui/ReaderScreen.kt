@@ -1,11 +1,8 @@
 package com.bookrio.reader.ui
 
 import android.app.Activity
-import android.util.Log
 import android.content.Context
-import android.graphics.Bitmap
 import androidx.compose.animation.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -26,19 +23,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -47,71 +42,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.bookrio.reader.engine.HtmlPageRenderer
-import com.bookrio.reader.engine.RenderCoordinator
-import com.bookrio.reader.engine.PageBitmapCache
 import com.bookrio.reader.engine.PageIndexMath
 import com.bookrio.reader.engine.PageNavAction
 import com.bookrio.reader.engine.PageNavigator
 import com.bookrio.reader.engine.ReaderBookState
+import com.bookrio.reader.engine.ReaderWebEngine
 import com.bookrio.reader.pageturn.*
+import com.bookrio.reader.readium.ReadiumEpubReaderScreen
 import com.bookrio.reader.R
 import com.bookrio.reader.viewmodel.ReaderViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-// Varighet på den enkle side-overgangen (slide + fade). Kort og subtil —
-// ingen krøll, ingen shaders, ingen fantomside.
-private const val PAGE_TRANSITION_MS = 180
-
-// Diagnostikk for blink-jakt (slås AV i release): logger kun hendelser som kan
-// påvirke synlig innhold — prepare-fullføring, cache-skriving og vist side.
-// Aldri rått bokinnhold.
-private const val READER_DIAG = false // gated: kun diagnostikkbygg
-private fun readerDiag(msg: String) { if (READER_DIAG) Log.d("ReaderDiag", msg) }
-
-// Gated diagnostikk for kontroll-overlegg (AV som standard): logger KUN mål og
-// nøkler ved vis/skjul av kontroller — aldri rått bokinnhold, URL-er, filnavn eller base64.
-private const val READER_LAYOUT_DIAG = false
-private fun layoutDiag(msg: String) { if (READER_LAYOUT_DIAG) Log.d("ReaderLayoutDiag", msg) }
-
-/**
- * Ren (Compose-fri) beregning av leserens innholdsboks.
- *
- * INVARIANT: kildebitmapmen fra HtmlPageRenderer (effectiveWidthPx × contentHeightPx)
- * og Canvas-destinasjonen (destinationWidthPx × destinationHeightPx) deler nøyaktig
- * samme logiske innholdsboks — samme mål, samme aspektratio. Padden påføres
- * nøyaktig ÉN gang til hver: aldri uavhengig X/Y-skalering, aldri dobbel padding.
- *
- * Målene utledes KUN av det stabile fullskjerm-lesevinduet (målt én gang) —
- * aldri av om kontrollene er synlige.
- */
-internal data class ReaderContentBox(
-    val viewportWidthPx: Int,
-    val viewportHeightPx: Int,
-    val hPadPx: Int,
-    val vPadPx: Int,
-) {
-    val effectiveWidthPx: Int get() = (viewportWidthPx - 2 * hPadPx).coerceAtLeast(1)
-    val contentHeightPx: Int get() = (viewportHeightPx - 2 * vPadPx).coerceAtLeast(1)
-
-    /** Destinasjonsinnholdsboks i Canvas — identisk med rendererens bitmapdims. */
-    val destinationWidthPx: Int get() = effectiveWidthPx
-    val destinationHeightPx: Int get() = contentHeightPx
-
-    val sourceAspectRatio: Float
-        get() = effectiveWidthPx.toFloat() / contentHeightPx.toFloat()
-
-    val destinationAspectRatio: Float
-        get() = destinationWidthPx.toFloat() / destinationHeightPx.toFloat()
-
-    /** Kanonisk størrelsesnøkkel — identisk med ReaderScreen sin "$w-$h". */
-    fun sizeKey(): String = "$effectiveWidthPx-$contentHeightPx"
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,6 +66,23 @@ fun ReaderScreen(
     vm: ReaderViewModel = viewModel(factory = vmFactory ?: defaultReaderVmFactory()),
 ) {
     val ui by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // EPUB is rendered by the Readium navigator (Readium owns layout/pagination).
+    // All other formats keep the existing Bookiro reader engine.
+    var epubMode by remember(bookId) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(bookId) {
+        val format = runCatching {
+            com.bookrio.data.local.ShelfDatabase.getInstance(context.applicationContext)
+                .bookDao().getById(bookId)?.format
+        }.getOrNull()
+        epubMode = format == com.bookrio.data.local.entity.FormatEntity.EPUB
+        if (epubMode != true) vm.load(bookId)
+    }
+    if (epubMode == true) {
+        ReadiumEpubReaderScreen(bookId = bookId, onBack = onBack)
+        return
+    }
     var showControls by rememberSaveable { mutableStateOf(false) }
     var showContentsSheet by rememberSaveable { mutableStateOf(false) }
     var showThemesSheet by rememberSaveable { mutableStateOf(false) }
@@ -133,7 +91,6 @@ fun ReaderScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var orientationLocked by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val context = LocalContext.current
 
     val tracker = remember {
         (context.applicationContext as com.bookrio.core.di.AppDependenciesProvider).readingTracker
@@ -175,7 +132,7 @@ fun ReaderScreen(
     var brightness by rememberSaveable { mutableFloatStateOf(-1f) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(brightness) { setWindowBrightness(context, brightness) }
-    LaunchedEffect(bookId) { vm.load(bookId) }
+    // vm.load is triggered by the format-check effect above (non-EPUB only).
 
     Box(Modifier.fillMaxSize()) {
         when {
@@ -193,14 +150,14 @@ fun ReaderScreen(
                 // er ren overlegg over den allerede viste siden — de påvirker aldri
                 // leserens mål, bitmapgeometri eller leseflatens dimensjoner. ──
                 Box(Modifier.matchParentSize().background(bgC)) {
-                    RealBookSlideReader(
+                    DirectWebReader(
                         modifier = Modifier.matchParentSize(),
                         ui = ui,
-                        showControls = showControls,
                         onToggleControls = { showControls = !showControls; if (!showControls) showContentsSheet = false; tracker.onUserInteraction() },
                         onPageTurned = { vm.onPageTurned(it); tracker.onUserInteraction() },
                         onTotalPages = { vm.onPageCountKnown(it) },
                         onJumpToChapterPage = { ch, page, pct -> vm.jumpToChapterPage(ch, page, pct) },
+                        onPreviousChapter = { vm.previousChapter(); tracker.onUserInteraction() },
                         onHighlight = { hl -> vm.saveHighlight(hl.text, hl.colorInt, hl.pageIndex, hl.startPageOffset, hl.endPageOffset) }
                     )
                 }
@@ -450,231 +407,74 @@ fun ReaderScreen(
     }
 }
 
-/** Avvis gjenvunnet, feil størrelse, gjennomsiktig eller ellers ugyldig bitmap. */
-private fun isUsableRenderBitmap(b: Bitmap): Boolean {
-    if (b.isRecycled || b.width < 2 || b.height < 2) return false
-    val w = b.width
-    val h = b.height
-    val samples = listOf(
-        intArrayOf(1, 1), intArrayOf(w / 2, h / 2), intArrayOf(w - 2, h - 2), intArrayOf(w / 2, 1)
-    )
-    var first = 0
-    var transparent = 0
-    samples.forEachIndexed { i, pt ->
-        val c = runCatching { b.getPixel(pt[0], pt[1]) }.getOrElse { return false }
-        if (i == 0) first = c else if (c != first) return true
-        if ((c ushr 24) == 0) transparent++
-    }
-    return transparent != samples.size
-}
+/** Leserens horisontale/vertikale padding (leseområdet = vinduet minus denne). */
+private val PAGE_H_PAD = 32.dp
+private val PAGE_V_PAD = 48.dp
 
 /**
- * Siden som faktisk vises i leseflaten: nøkkel + posisjon + bitmap. Nøyaktig én
- * slik instans tegnes av gangen — aldri en fantomside eller et stale underlag.
+ * DIREKTE LESER: kapittel-HTML-en vises i en on-screen WebView (Compose
+ * `AndroidView`) — ingen offscreen WebView, ingen bitmap og ingen capture.
+ *
+ * - Paginering: CSS multi-column (`column-width: 100vw`) i `#content-wrapper`.
+ *   Sidetall = ceil(scrollWidth / viewportWidth), gjeldende side = scrollX/vw.
+ * - Sidevending: programmatisk horisontal scroll (`scrollLeft = side × bredde`).
+ * - Tap-soner (JS i WebView-en + Compose i padding-kantene): venstre 28 % =
+ *   forrige, høyre 28 % = neste, midten = kontroller — som før.
+ * - ViewModel-ens kapittel-lokale sideindeks er fortsatt sannheten: nytt
+ *   sidetall rapporteres via [onTotalPages] → onPageCountKnown, sidevendinger
+ *   via [onPageTurned], kapittelkryss via [onJumpToChapterPage] /
+ *   [onPreviousChapter] (bakover-kryss går alltid til forrige kapittels SISTE
+ *   side — aldri side 0 av feil).
  */
-private data class DisplayedPage(
-    val key: String,
-    val chapterIndex: Int,
-    val pageIndex: Int,
-    val bitmap: Bitmap,
-)
-
-/**
- * Felles Paint-flagg for ALLE drawBitmap-kall av rendererte leser-sider:
- * bilinær filtering ved skalering, dithering og antialiasing — aldri null-Paint.
- * Konstant (ikke instans) slik at flagg-settet er JVM-enhetstestbart.
- */
-internal const val PAGE_BITMAP_PAINT_FLAGS: Int =
-    android.graphics.Paint.ANTI_ALIAS_FLAG or
-    android.graphics.Paint.FILTER_BITMAP_FLAG or
-    android.graphics.Paint.DITHER_FLAG
-
 @Composable
-private fun RealBookSlideReader(
+private fun DirectWebReader(
     modifier: Modifier = Modifier,
     ui: ReaderBookState,
-    showControls: Boolean,
     onToggleControls: () -> Unit,
     onPageTurned: (Int) -> Unit,
     onTotalPages: (Int) -> Unit,
     onJumpToChapterPage: (sectionIndex: Int, localPageIndex: Int, chapterPct: Float) -> Unit,
+    onPreviousChapter: () -> Unit,
     onHighlight: (com.bookrio.reader.engine.HighlightData) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    // Fullskjerm-målet (hele skjermen i dp → px) er stabilt på tvers av
-    // kontroll-toggle: vis/skjul av systembars endrer aldri denne verdien, så
-    // effectiveWidthPx/contentHeightPx/sizeKey/configKey/renderKey og hele
-    // bitmapgeometrien er UENDRET før og etter en toggle. (Padding påføres
-    // nøyaktig én gang til renderer-dims og én gang — med SAMME tall — til
-    // Canvas-destinasjonen, se ReaderContentBox.)
-    val configuration = LocalConfiguration.current
-    val swPx = with(density) { configuration.screenWidthDp.dp.toPx() }.toInt()
-    val shPx = with(density) { configuration.screenHeightDp.dp.toPx() }.toInt()
-
-    // Sideinnholdsboksen (identisk med paddingen i leseflaten):
-    // rendererens bitmapdimensjoner MÅ være nøyaktig disse — aldri en blanding
-    // av fullskjerm- og padde-mål (som gav vertikal skvis + skaleringsartefakter).
-    // Padden påføres nøyaktig ÉN gang: samme tall brukes til Canvas-destinasjonen.
-    val pageHPad = 32.dp
-    val pageVPad = 48.dp
-    val contentBox = ReaderContentBox(
-        viewportWidthPx = swPx,
-        viewportHeightPx = shPx,
-        hPadPx = with(density) { pageHPad.toPx() }.toInt(),
-        vPadPx = with(density) { pageVPad.toPx() }.toInt(),
-    )
-    val effectiveWidthPx = contentBox.effectiveWidthPx
-    val contentHeightPx = contentBox.contentHeightPx
-    val sizeKey = "$effectiveWidthPx-$contentHeightPx"
-    val fontKey = "${ui.fontSizeSp}-${ui.readerTheme}"
-    val configKey = "$fontKey-$sizeKey"
-    fun renderKey(ch: Int, page: Int): String = "$ch|$configKey|p$page"
+    val engine = remember { ReaderWebEngine(context) }
+    DisposableEffect(engine) { onDispose { engine.release() } }
 
     val chapters = ui.chapters
     val chapterCount = chapters.size
     val chapIdx = ui.currentChapterIndex.coerceIn(0, (chapterCount - 1).coerceAtLeast(0))
-    val hasNextSect = chapIdx < chapterCount - 1
-    val hasPrevSect = chapIdx > 0
-
-    // Én WebView-renderer per kapittel — eierskap håndheves av RenderCoordinator.
-    val renderers = remember(effectiveWidthPx, contentHeightPx) {
-        java.util.concurrent.ConcurrentHashMap<Int, HtmlPageRenderer>()
-    }
-    fun rendererFor(ch: Int): HtmlPageRenderer =
-        renderers.getOrPut(ch) { HtmlPageRenderer(context, effectiveWidthPx, contentHeightPx, onHighlight) }
-    DisposableEffect(effectiveWidthPx, contentHeightPx) {
-        onDispose {
-            renderers.values.forEach { it.release() }
-            renderers.clear()
-        }
-    }
-
-    // ── Bitmap-cache + klargjøringskart. Nøklet på font/tema/størrelse: byttes de,
-    // fødes nye instanser (og gamle WebViews re-klargjøres) — aldri delt stale cache. ──
-    val cache = remember(effectiveWidthPx, contentHeightPx, fontKey) { PageBitmapCache(maxSize = 14) }
-    val prepared = remember(effectiveWidthPx, contentHeightPx, fontKey) { mutableStateMapOf<Int, Int>() }
-
-    // ── Render-koordinator: enkelt-eierskap, dedup på nøkkel, spesulativ lav prio ──
-    val coordinatorScope = remember(effectiveWidthPx, contentHeightPx, fontKey) {
-        CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    }
-    DisposableEffect(effectiveWidthPx, contentHeightPx, fontKey) {
-        onDispose { coordinatorScope.cancel() }
-    }
-    // Koordinatoren er ENESTE forfatter i cachen: callbacken validerer bitmapmen
-    // (isUsable) og skriver den under den kanoniske nøkkelen (pageKey === renderKey).
-    val coordinator = remember(effectiveWidthPx, contentHeightPx, fontKey) {
-        RenderCoordinator<Bitmap>(
-            scope = coordinatorScope,
-            isUsable = ::isUsableRenderBitmap,
-            onRendered = { _, key, bmp ->
-                cache.put(key, bmp)
-                readerDiag("CACHE-PUT key='$key' bmp=${bmp.width}x${bmp.height}")
-            },
-        )
-    }
-
-    val scope = rememberCoroutineScope()
-    val updatedUi by rememberUpdatedState(ui)
-
-    // ── Sidetall for gjeldende kapittel. Kun en fersk prepare-teller er autoritativ:
-    // prepared[chapIdx] fylles av kapittel-inngangens prepare og av nabo-prefetch.
-    // Er tallet ukjent gater vi sidevendinger — vi gjetter ALDRI en grense. ──
-    val chapterPages = prepared[chapIdx]?.takeIf { it > 0 }
-    val pageCount = chapterPages ?: 0
-
-    // Sideindeksen er ALLTID VM-ens chapter-lokale currentPage (samme tall DB lagrer).
-    // Kjent sidetall → trygg clamp. Ukjent → vis den lagrede indeksen UENDRET; vi
-    // faller aldri stille tilbake til side 0 (gammel posisjon skal alltid forsøkes).
-    val page = if (chapterPages != null)
-        PageIndexMath.clampPage(ui.currentPage, chapterPages)
-    else
-        ui.currentPage.coerceAtLeast(0)
-    val targetKey = renderKey(chapIdx, page)
-
-    // ── Gated layout-diagnostikk (READER_LAYOUT_DIAG = false som standard) ──
-    // Logger KUN mål, aspektratio, nøkler og sidetilstand ved vis/skjul av kontroller.
-    // En korrekt toggle rapporterer identiske verdier før og etter.
-    LaunchedEffect(showControls) {
-        if (!READER_LAYOUT_DIAG) return@LaunchedEffect
-        val srcBmp = cache.getSync(renderKey(chapIdx, page))
-        val srcW = srcBmp?.width ?: -1
-        val srcH = srcBmp?.height ?: -1
-        val dstW = contentBox.destinationWidthPx
-        val dstH = contentBox.destinationHeightPx
-        val srcAr = if (srcH > 0) (srcW.toFloat() / srcH) else -1f
-        val dstAr = contentBox.destinationAspectRatio
-        layoutDiag(
-            "TOGGLE showControls=$showControls" +
-            " viewport=${swPx}x$shPx" +
-            " effective=${effectiveWidthPx}x$contentHeightPx" +
-            " src=${srcW}x$srcH dst=${dstW}x$dstH" +
-            " srcAR=$srcAr dstAR=$dstAr" +
-            " sizeKey=$sizeKey configKey=$configKey" +
-            " renderKey=${renderKey(chapIdx, page)}" +
-            " page=$page pages=$pageCount chapters=$chapterCount"
-        )
-    }
-
-    /** Kjerne uten lås — kalleren (koordinatoren) eier eier-låsen. */
-    suspend fun prepareChapterUnlocked(ch: Int): Int {
-        prepared[ch]?.let { return it }
-        if (ch < 0 || ch >= chapterCount) return 0
-        val count = runCatching {
-            rendererFor(ch).prepare(chapters[ch].htmlContent, updatedUi.fontSizeSp, readerThemeColors(updatedUi.readerTheme))
-        }.getOrDefault(0)
-        if (count > 0) prepared[ch] = count
-        return count
-    }
-
-    /** Klargjør kapittel i sin renderer — gjennom koordinatorens eier-lås. */
-    suspend fun prepareChapter(ch: Int): Int = coordinator.withOwner(ch) { prepareChapterUnlocked(ch) }
-
-    /**
-     * Forhåndstegn side [page] i nabo-kapittelet [chapter]: prepare via eier-låsen,
-     * deretter render GJENNOM koordinatoren (renderCurrent) — aldri direkte
-     * rendererFor(...).renderPage(...). Koordinator-callbacken skriver cachen under
-     * den kanoniske renderKey.
-     */
-    suspend fun prefetchNeighbor(chapter: Int, page: Int) {
-        val count = prepareChapter(chapter)
-        if (count <= 0 || chapter < 0 || chapter >= chapterCount) return
-        val target = if (page < 0) count - 1 else page.coerceIn(0, count - 1)
-        val key = renderKey(chapter, target)
-        if (cache.getSync(key) != null) return
-        coordinator.renderCurrent(
-            ownerKey = chapter,
-            pageKey = key,
-            page = target,
-        ) { p -> rendererFor(chapter).renderPage(p, key) }
-        readerDiag("PREFETCH-DONE ch=$chapter page=$target")
-    }
-
-    // Klargjør nåværende kapittel (font/tema/størrelse re-klargjør) og forhåndstegn
-    // nabo-kapitlenes kant-sider — grensekryss viser da en ferdig bitmap umiddelbart.
-    LaunchedEffect(chapIdx, fontKey, sizeKey) {
-        if (chapterCount == 0) return@LaunchedEffect
-        coordinator.cancelSpeculative()
-        val count = prepareChapter(chapIdx)
-        readerDiag("PREPARE-DONE ch=$chapIdx pages=$count")
-        if (count > 0 && chapIdx == updatedUi.currentChapterIndex) onTotalPages(count)
-        if (hasPrevSect) scope.launch { runCatching { prefetchNeighbor(chapIdx - 1, -1) } }
-        if (hasNextSect) scope.launch { runCatching { prefetchNeighbor(chapIdx + 1, 0) } }
-    }
-
-    // ÉN gjenbrukbar Paint for ALLE drawBitmap-kall av rendererte leser-sider:
-    // filtering + dithering + antialiasing (aldri null-Paint), opprettes ikke på nytt per ramme.
-    val pageBitmapPaint = remember(effectiveWidthPx, contentHeightPx, fontKey) {
-        android.graphics.Paint(PAGE_BITMAP_PAINT_FLAGS)
-    }
     val themeColors = readerThemeColors(ui.readerTheme)
     val paperColor = Color(themeColors.paperColorInt)
 
-    // ── Tap-soner: NØYAKTIG samme terskler som den gamle curl-leseren ──
-    // venstre 28 % = forrige side, høyre 28 % = neste side, midten = kontroller.
-    // Sidevendinger og kapittelkryss går via de eksisterende VM-veiene
-    // (onPageTurned / jumpToChapterPage) — ingen egen vindusmaskin.
+    // Kapittel + typografi identifiserer HTML-en som lastes i WebView-en.
+    val loadKey = "$chapIdx|${ui.fontSizeSp}|${ui.readerTheme}"
+
+    // Sidetallet er kun gyldig når NETTOPP dette kapittelet/typografien er målt.
+    val measured = engine.measuredLoadKey == loadKey
+    val pageCount = if (measured) engine.pageCount else 0
+    // Kjent sidetall → trygg clamp. Ukjent → vis lagret indeks uendret (aldri
+    // stille tilbake til side 0); scrollen skjer først når målingen er klar.
+    val page = if (pageCount > 0) PageIndexMath.clampPage(ui.currentPage, pageCount)
+               else ui.currentPage.coerceAtLeast(0)
+
+    LaunchedEffect(loadKey) {
+        val chapter = chapters.getOrNull(chapIdx) ?: return@LaunchedEffect
+        engine.load(loadKey, chapter.htmlContent, ui.fontSizeSp, themeColors, lang = "en")
+    }
+
+    // Målt sidetall → eksisterende kapittel-lokale side-modell i ViewModel.
+    LaunchedEffect(loadKey, measured, pageCount) {
+        if (measured && pageCount > 0) onTotalPages(pageCount)
+    }
+
+    // VM-ens side → programmatisk scroll. Kjører også etter ny måling
+    // (rotasjon/vindusendring) slik at posisjonen gjenopprettes.
+    LaunchedEffect(loadKey, measured, pageCount, page) {
+        if (!measured || pageCount <= 0) return@LaunchedEffect
+        engine.scrollToPage(page)
+    }
+
     val onTurnForward: () -> Unit = {
         if (pageCount > 0) {
             when (val action = PageNavigator.turnForward(page, pageCount, chapIdx, chapterCount)) {
@@ -687,186 +487,68 @@ private fun RealBookSlideReader(
     }
     val onTurnBackward: () -> Unit = {
         if (pageCount > 0) {
-            val prevPages = prepared[chapIdx - 1]?.takeIf { it > 0 }
-            when (val action = PageNavigator.turnBackward(page, pageCount, chapIdx, chapterCount, prevPages)) {
+            // Bakover-kryss trenger forrige kapittels sidetall, som først er kjent
+            // etter at kapittelet er lastet og målt. Grensekrysset går derfor via
+            // ViewModel-ens kapittel-vei (chapterPct = 1 → SISTE side, aldri 0).
+            when (
+                val action = PageNavigator.turnBackward(
+                    currentIndex = page,
+                    pageCount = pageCount,
+                    chapterIndex = chapIdx,
+                    chapterCount = chapterCount,
+                    previousChapterPageCount = null,
+                )
+            ) {
                 is PageNavAction.TurnTo -> onPageTurned(action.page)
                 is PageNavAction.JumpToChapter ->
                     onJumpToChapterPage(action.chapterIndex, action.page, action.chapterPct)
-                PageNavAction.None -> {
-                    // Står på første side i et kapittel, men forrige kapittel er ikke
-                    // klargjort ennå: klargjør og hopp til SISTE side når tallet er kjent.
-                    // Brukeren blir aldri stående uten respons, og vi lander aldri på
-                    // side 0 av en feil.
-                    if (page == 0 && chapIdx > 0) {
-                        // Frys navigasjonskonteksten ved tappetidspunktet. Klargjøringen
-                        // kan ta tid, og brukeren kan ha navigert (TOC, framover-tapp,
-                        // fontbytte) innen den er ferdig.
-                        val tapChapter = chapIdx
-                        val tapPage = page
-                        scope.launch {
-                            val prevCount = prepareChapter(tapChapter - 1)
-                            // Revalider: commit bare når vi fortsatt står på samme side.
-                            // Ellers ville en sen commit rive brukeren tilbake til et
-                            // sted de allerede har forlatt.
-                            if (!PageNavigator.shouldCommitBackwardCross(
-                                    tapChapterIndex = tapChapter,
-                                    tapPage = tapPage,
-                                    currentChapterIndex = updatedUi.currentChapterIndex,
-                                    currentPage = updatedUi.currentPage,
-                                )
-                            ) {
-                                return@launch
-                            }
-                            val retry = if (prevCount > 0)
-                                PageNavigator.turnBackward(tapPage, pageCount, tapChapter, chapterCount, prevCount)
-                            else null
-                            if (retry is PageNavAction.JumpToChapter) {
-                                onJumpToChapterPage(retry.chapterIndex, retry.page, retry.chapterPct)
-                            }
-                            // Klargjøring feilet: gjør ingenting. Aldri hopp til side 0
-                            // (det ville vært feil landingsside) og aldri gjett en kant.
-                        }
+                PageNavAction.None -> if (page == 0 && chapIdx > 0) onPreviousChapter()
+            }
+        }
+    }
+    val onTap: (Float) -> Unit = { frac ->
+        when {
+            frac < 0.28f -> onTurnBackward()
+            frac > 0.72f -> onTurnForward()
+            else -> onToggleControls()
+        }
+    }
+
+    // Bro-callbacks oppdateres hver komposisjon — de kalles asynkront fra WebView-en.
+    SideEffect {
+        engine.onTapZone = onTap
+        engine.onHighlight = onHighlight
+        engine.onPageSettled = { settled ->
+            // ScrollX er sannheten: en bruker-drag (eller snap) som lander på en
+            // annen side oppdaterer den kapittel-lokale modellen — men bare når
+            // dette kapittelet faktisk er målt.
+            if (measured && pageCount > 0 && settled != ui.currentPage) {
+                onPageTurned(settled.coerceIn(0, pageCount - 1))
+            }
+        }
+    }
+
+    Box(modifier.fillMaxSize().background(paperColor)) {
+        // Tap-soner i padding-kantene rundt leseområdet (samme soner som før).
+        // Tegnes UNDER WebView-en, så tekstutvalg i leseområdet eies av WebView-en.
+        Box(
+            Modifier
+                .matchParentSize()
+                .pointerInput(chapIdx, page, pageCount, chapterCount) {
+                    detectTapGestures { offset ->
+                        val width = size.width.toFloat().coerceAtLeast(1f)
+                        onTap(offset.x.coerceIn(0f, width) / width)
                     }
                 }
-            }
-        }
-    }
-    // rememberUpdatedState: pointerInput-blokken lever over flere komposisjoner og
-    // må alltid kalle den NYESTE handleren (aldri en stale closure fra en tidligere side).
-    val currentForward by rememberUpdatedState(onTurnForward)
-    val currentBackward by rememberUpdatedState(onTurnBackward)
-    val currentToggle by rememberUpdatedState(onToggleControls)
+        )
 
-    // ── Vist side: NØYAKTIG én bitmap i én leseflate. Bitmapmen byttes først når den
-    // nye siden er ferdig rendret — ingen fantomside, ingen stale underlay og ingen
-    // bitmap under kontrollene. ──
-    var displayed by remember { mutableStateOf<DisplayedPage?>(null) }
-
-    // ── Maks ÉN spesulativ prefetch: neste side, bare når koordinatoren er ledig.
-    // På grensen forhåndstegnes nabo-kapittelets landingsside (side 0 / siste side)
-    // slik at et grensekryss viser ferdig bitmap uten tom side. ──
-    // Nøkkelen inkluderer displayed?.key: prefetchen kjøres først NÅR den gjeldende
-    // siden faktisk vises. Ellers ville display-effecten rett etterpaa kalle
-    // renderCurrent(samme kapittel) og kansellere den spekulative side+1-renderingen
-    // (RenderCoordinator.cancelSpeculativeFor), saa forhaandstegning var død.
-    LaunchedEffect(displayed?.key, chapIdx, page, pageCount, fontKey, sizeKey) {
-        // Vent til gjeldende side er paa skjermen; da er renderCurrent ferdig og
-        // kansellerer ikke lenger den spekulative naboen.
-        if (displayed?.key != targetKey) return@LaunchedEffect
-        coordinator.cancelSpeculative()
-        if (pageCount <= 0) return@LaunchedEffect
-        val next = page + 1
-        if (next < pageCount) {
-            if (coordinator.isIdle()) {
-                coordinator.requestSpeculative(
-                    ownerKey = chapIdx,
-                    pageKey = renderKey(chapIdx, next),
-                    page = next,
-                ) { p -> rendererFor(chapIdx).renderPage(p, renderKey(chapIdx, next)) }
-            }
-        } else if (hasNextSect) {
-            scope.launch { runCatching { prefetchNeighbor(chapIdx + 1, 0) } }
-        }
-        if (page == 0 && hasPrevSect) {
-            scope.launch { runCatching { prefetchNeighbor(chapIdx - 1, -1) } }
-        }
-    }
-
-    // ── Vist side: bytt bitmap først når den nye siden er ferdig rendret. ──
-    LaunchedEffect(targetKey, fontKey, sizeKey, chapterPages) {
-        if (targetKey.isEmpty() || displayed?.key == targetKey) return@LaunchedEffect
-        val cached = cache.getSync(targetKey)
-        val bmp = cached ?: coordinator.renderCurrent(
-            ownerKey = chapIdx,
-            pageKey = targetKey,
-            page = page,
-        ) { p -> rendererFor(chapIdx).renderPage(p, targetKey) }
-        if (bmp != null) {
-            readerDiag("DISPLAY key='$targetKey' bmp=${bmp.width}x${bmp.height}")
-            displayed = DisplayedPage(targetKey, chapIdx, page, bmp)
-        }
-    }
-
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(paperColor)
-            .pointerInput(chapIdx, page, pageCount, chapterCount) {
-                detectTapGestures { offset ->
-                    val width = size.width.toFloat().coerceAtLeast(1f)
-                    val xFrac = offset.x.coerceIn(0f, width) / width
-                    when {
-                        xFrac < 0.28f -> currentBackward()
-                        xFrac > 0.72f -> currentForward()
-                        else -> currentToggle()
-                    }
-                }
-            }
-    ) {
-        AnimatedContent(
-            targetState = displayed,
-            contentKey = { it?.key ?: "" },
-            transitionSpec = {
-                val from = initialState
-                val to = targetState
-                val forward = when {
-                    from == null || to == null -> true
-                    to.chapterIndex != from.chapterIndex -> to.chapterIndex > from.chapterIndex
-                    else -> to.pageIndex >= from.pageIndex
-                }
-                if (forward) {
-                    (slideInHorizontally(tween(PAGE_TRANSITION_MS)) { it / 6 } + fadeIn(tween(PAGE_TRANSITION_MS))) togetherWith
-                        (slideOutHorizontally(tween(PAGE_TRANSITION_MS)) { -it / 6 } + fadeOut(tween(PAGE_TRANSITION_MS)))
-                } else {
-                    (slideInHorizontally(tween(PAGE_TRANSITION_MS)) { -it / 6 } + fadeIn(tween(PAGE_TRANSITION_MS))) togetherWith
-                        (slideOutHorizontally(tween(PAGE_TRANSITION_MS)) { it / 6 } + fadeOut(tween(PAGE_TRANSITION_MS)))
-                }
-            },
+        AndroidView(
+            factory = { engine.webView },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = pageHPad, vertical = pageVPad),
-            contentAlignment = Alignment.Center,
-            label = "reader-page",
-        ) { shown ->
-            val b = shown?.bitmap
-            if (b != null) {
-                Canvas(Modifier.fillMaxSize()) {
-                    drawIntoCanvas {
-                        val native = it.nativeCanvas
-                        if (!b.isRecycled) {
-                            native.drawBitmap(
-                                b, null,
-                                // Destinasjon = innholdsboksen beregnet fra SAMME mål som
-                                // rendereren (effectiveWidthPx × contentHeightPx) — kilde og
-                                // destinasjon deler aspektratio, aldri uavhengig X/Y-skalering.
-                                android.graphics.RectF(0f, 0f, contentBox.destinationWidthPx.toFloat(), contentBox.destinationHeightPx.toFloat()),
-                                pageBitmapPaint
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (displayed == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        }
-
-        if (showControls) {
-            val metrics by rendererFor(chapIdx).lastMetrics.collectAsStateWithLifecycle()
-            Surface(
-                modifier = Modifier.align(Alignment.Center).padding(top = 120.dp),
-                color = Color.Black.copy(0.7f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    "${stringResource(R.string.rdr_rendering)}: $metrics",
-                    color = Color.White,
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-        }
+                .padding(horizontal = PAGE_H_PAD, vertical = PAGE_V_PAD)
+                .onSizeChanged { size -> engine.onViewportChanged(size.width, size.height) },
+        )
     }
 }
 

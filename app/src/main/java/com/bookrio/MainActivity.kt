@@ -285,10 +285,16 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
             }
         }
     ) { innerPadding ->
+        // The reader is a full-screen surface that applies its OWN constant insets.
+        // The Scaffold's safeDrawing padding changes when the system bars hide/show,
+        // which resized the Readium navigator and visibly moved the text every time
+        // the in-book menu was toggled.
+        val readerEntry by navController.currentBackStackEntryAsState()
+        val isReaderRoute = readerEntry?.destination?.route == ShelfDestinations.Reader.route
         NavHost(
             navController = navController,
             startDestination = startDest,
-            modifier = Modifier.padding(innerPadding)
+            modifier = if (isReaderRoute) Modifier.fillMaxSize() else Modifier.padding(innerPadding)
         ) {
             composable(ShelfDestinations.Library.route) {
                 LibraryScreen(

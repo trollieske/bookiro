@@ -59,6 +59,14 @@
     <string name="settings_db_imported">Base de données importée</string>
     <string name="settings_watch_folder">Surveiller le dossier de la bibliothèque pour détecter de nouveaux fichiers</string>
     <string name="settings_watch_folder_sub">Ajoute les livres automatiquement</string>
+    <string name="settings_library_folder">Dossier de bibliothèque</string>
+    <string name="settings_library_folder_sub">Où Bookiro lit et surveille les livres</string>
+    <string name="settings_library_folder_not_set">Non défini — appuyez pour choisir</string>
+    <string name="settings_library_folder_change">Modifier</string>
+    <string name="settings_library_folder_remove">Supprimer</string>
+    <string name="settings_library_folder_open_failed">Aucun gestionnaire de fichiers ne peut ouvrir ce dossier</string>
+    <string name="settings_library_folder_no_permission">L\'accès au dossier a été perdu — choisissez-le à nouveau</string>
+    <string name="settings_library_folder_chosen">Dossier de bibliothèque défini</string>
     <string name="settings_online_cover">Recherche de couverture en ligne</string>
     <string name="settings_online_cover_sub">Recherche des couvertures sur Internet</string>
     <string name="settings_about_description">Bookiro — un lecteur et lecteur audio privé, sans publicité</string>

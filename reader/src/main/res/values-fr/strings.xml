@@ -39,4 +39,9 @@ Le fichier peut être vide, corrompu, protégé par DRM ou dans un format pris e
     <string name="rdr_error_no_access">Aucun accès au livre. Essayez de réimporter le dossier.</string>
     <string name="rdr_error_tts_not_ready">Service vocal non prêt</string>
     <string name="rdr_error_no_text_chapter">Aucun chapitre avec du texte</string>
+    <string name="rdr_section_n">Section %1$d</string>
+    <string name="rdr_unnamed_section">Section sans nom</string>
+    <string name="rdr_no_builtin_toc">Ce livre n\'a pas de table des matières intégrée — affichage des sections.</string>
+    <string name="rdr_open_error">Impossible d\'ouvrir le livre.</string>
+    <string name="rdr_reader_unavailable">Le lecteur n\'est pas disponible sur cet appareil.</string>
 </resources>

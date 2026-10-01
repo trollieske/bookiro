@@ -59,6 +59,14 @@
     <string name="settings_db_imported">Databasen er importeret</string>
     <string name="settings_watch_folder">Overvåg biblioteksmappen for nye filer</string>
     <string name="settings_watch_folder_sub">Tilføjer bøger automatisk</string>
+    <string name="settings_library_folder">Bibliotekmappe</string>
+    <string name="settings_library_folder_sub">Hvor Bookiro læser og overvåger bøger</string>
+    <string name="settings_library_folder_not_set">Ikke valgt – tryk for at vælge</string>
+    <string name="settings_library_folder_change">Skift</string>
+    <string name="settings_library_folder_remove">Fjern</string>
+    <string name="settings_library_folder_open_failed">Ingen filhåndtering kan åbne denne mappen</string>
+    <string name="settings_library_folder_no_permission">Adgangen til mappen er mistet – vælg den igen</string>
+    <string name="settings_library_folder_chosen">Bibliotekmappe valgt</string>
     <string name="settings_online_cover">Online omslagssøgning</string>
     <string name="settings_online_cover_sub">Søg efter omslag på internettet</string>
     <string name="settings_about_description">Bookiro – en privat, reklamefri læser og lydbogsafspiller</string>
