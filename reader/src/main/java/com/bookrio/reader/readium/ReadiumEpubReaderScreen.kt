@@ -2,6 +2,8 @@
 
 package com.bookrio.reader.readium
 
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,8 +14,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,15 +42,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.compose.AndroidFragment
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.ReadingProgressEntity
+import com.bookrio.reader.R
 import com.bookrio.designsystem.theme.OmarchyColors
 import com.bookrio.designsystem.theme.ShelfTypography
 import kotlinx.coroutines.Dispatchers
@@ -55,23 +64,122 @@ import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
+import org.readium.r2.navigator.input.InputListener
+import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.util.Url
+
+/**
+ * One entry in the in-book navigation list (a real TOC entry, or a spine fallback).
+ */
+internal data class ChapterEntry(
+    val link: Link,
+    val title: String,
+    val depth: Int,
+    /** True when the publication provides no title (spine fallback / blank TOC title). */
+    val unnamed: Boolean,
+    /** Normalized resource path used to match against the current Locator. */
+    val resourceKey: String,
+)
+
+/** Result of reading a publication's navigation data. */
+internal data class BookChapters(
+    /** Hierarchical TOC, or an honest unnamed fallback list built from the spine. */
+    val entries: List<ChapterEntry>,
+    val fromTableOfContents: Boolean,
+)
+
+/** Flattens a hierarchical TOC into depth-annotated entries. */
+internal fun flattenTocEntries(links: List<Link>, keyOf: (Link) -> String): List<ChapterEntry> {
+    val entries = ArrayList<ChapterEntry>()
+    fun walk(links: List<Link>, depth: Int) {
+        links.forEach { link ->
+            val raw = link.title?.trim().orEmpty()
+            entries.add(
+                ChapterEntry(
+                    link = link,
+                    title = raw.ifBlank { fileNameLabel(link.href.toString()) },
+                    depth = depth,
+                    unnamed = raw.isBlank(),
+                    resourceKey = keyOf(link),
+                )
+            )
+            walk(link.children, depth + 1)
+        }
+    }
+    walk(links, 0)
+    return entries
+}
+
+/** Builds a clearly-unnamed section list from the spine (used when the TOC is empty). */
+internal fun spineFallbackEntries(links: List<Link>, keyOf: (Link) -> String): List<ChapterEntry> =
+    links.mapIndexed { index, link ->
+        val raw = link.title?.trim().orEmpty()
+        ChapterEntry(
+            link = link,
+            title = raw,
+            depth = 0,
+            unnamed = raw.isBlank(),
+            resourceKey = keyOf(link),
+        )
+    }
+
+/**
+ * Builds the TOC list. Prefers the real `publication.tableOfContents` (hierarchical).
+ * When that is empty, falls back to `publication.readingOrder` (spine) as clearly
+ * unnamed "Seksjon N" entries — no invented timed/fixed chapters.
+ */
+internal fun buildBookChapters(publication: Publication): BookChapters {
+    val keyOf: (Link) -> String = { link ->
+        runCatching { publication.url(link).toString() }.getOrDefault(link.href.toString())
+    }
+    if (publication.tableOfContents.isNotEmpty()) {
+        val entries = flattenTocEntries(publication.tableOfContents, keyOf)
+        if (entries.isNotEmpty()) return BookChapters(entries, fromTableOfContents = true)
+    }
+    return BookChapters(spineFallbackEntries(publication.readingOrder, keyOf), fromTableOfContents = false)
+}
+
+private fun fileNameLabel(href: String): String {
+    val file = href.substringBefore('#').substringAfterLast('/').substringBeforeLast('.')
+    return file.replace(Regex("[-_]+"), " ").trim()
+}
+
+/** Matches a locator href against a chapter resource key (path-suffix aware). */
+internal fun chapterIndexForLocator(entries: List<ChapterEntry>, locatorHref: Url): Int {
+    val target = normalize(locatorHref.toString())
+    var best = -1
+    entries.forEachIndexed { index, entry ->
+        if (resourcesMatch(entry.resourceKey, target)) best = index
+    }
+    return best
+}
+
+private fun normalize(value: String): String =
+    value.substringBefore('#').substringBefore('?').trimStart('/')
+
+private fun resourcesMatch(a: String, b: String): Boolean {
+    val x = normalize(a)
+    val y = normalize(b)
+    return x == y || x.endsWith("/$y") || y.endsWith("/$x")
+}
 
 /**
  * Readium-backed EPUB reader: opens the publication with Readium and renders it
  * with the stable [EpubNavigatorFragment] hosted inside Compose. Bookiro owns the
- * chrome (top/bottom bars, contents sheet, preferences) but NOT pagination —
- * Readium lays out and paginates the EPUB itself.
+ * chrome only — Readium lays out and paginates the EPUB itself.
  *
- * Reading position is a Readium [Locator]; it is persisted additively in the
- * existing `reading_progress.anchor_cfi` column as Locator JSON, with
- * `progress_percent` from the total progression. Old pageIndex-only progress is
- * not blindly mapped to a page number (pagination is not stable after reflow);
- * when there is no stored Locator the book opens at the start and the limitation
- * is recorded in reader/README-READIUM.md.
+ * Behaviour:
+ *  - starts in a clean reading state (controls and system bars hidden);
+ *  - a single tap in the reading area toggles the chrome through Readium's
+ *    supported `VisualNavigator.addInputListener` API (swipes/selection untouched);
+ *  - chrome is a true overlay: toggling it never resizes the navigator, so the
+ *    viewport, reflow and Locator stay stable;
+ *  - the current chapter is derived from the Readium Locator matched against the
+ *    TOC (or the spine fallback) and updates on swipes, TOC jumps and resume.
  */
 @Composable
 internal fun ReadiumEpubReaderScreen(
@@ -84,22 +192,25 @@ internal fun ReadiumEpubReaderScreen(
     val scope = rememberCoroutineScope()
 
     var publication by remember { mutableStateOf<Publication?>(null) }
+    var chapters by remember { mutableStateOf<BookChapters?>(null) }
     var initialLocator by remember { mutableStateOf<Locator?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var bookTitle by remember { mutableStateOf("") }
-    var showControls by remember { mutableStateOf(true) }
+    // Clean reading state: controls hidden, system bars immersive.
+    var showControls by remember { mutableStateOf(false) }
     var showContents by remember { mutableStateOf(false) }
     var fontSize by remember { mutableStateOf(1.0) }
     var theme by remember { mutableStateOf(Theme.DARK) }
     var navigator by remember { mutableStateOf<EpubNavigatorFragment?>(null) }
     var progressPercent by remember { mutableStateOf(0) }
+    var activeChapterIndex by remember { mutableStateOf(-1) }
 
     LaunchedEffect(bookId) {
         val book = runCatching { db.bookDao().getById(bookId) }.getOrNull()
         bookTitle = book?.title ?: ""
         val filePath = book?.filePath
         if (filePath.isNullOrBlank()) {
-            error = "Boken mangler en lesbar fil på denne enheten."
+            error = context.getString(R.string.rdr_error_file_not_found)
             return@LaunchedEffect
         }
         val saved = runCatching { db.progressDao().getByBook(bookId) }.getOrNull()
@@ -108,8 +219,39 @@ internal fun ReadiumEpubReaderScreen(
             runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
         }
         ReadiumPublicationOpener.open(context.applicationContext, filePath)
-            .onSuccess { publication = it }
-            .onFailure { error = it.message ?: "Kan ikke åpne boken" }
+            .onSuccess { pub ->
+                publication = pub
+                chapters = buildBookChapters(pub)
+                initialLocator?.let { locator ->
+                    activeChapterIndex = chapterIndexForLocator(chapters!!.entries, locator.href)
+                }
+            }
+            .onFailure { error = it.message ?: context.getString(R.string.rdr_open_error) }
+    }
+
+    // Immersive system bars: hidden while reading, visible while the chrome is up.
+    // Applied in the Readium route itself (ReaderScreen returns early for EPUB).
+    DisposableEffect(showControls, activity) {
+        val window = activity?.window ?: return@DisposableEffect onDispose { }
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (showControls) {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        DisposableEffect(showControls, activity) {
+            val window = activity?.window ?: return@DisposableEffect onDispose { }
+            val attrs = window.attributes
+            attrs.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            window.attributes = attrs
+            onDispose { }
+        }
     }
 
     fun applyPrefs() {
@@ -125,67 +267,98 @@ internal fun ReadiumEpubReaderScreen(
             else -> {
                 val pub = publication!!
                 if (activity == null) {
-                    ReaderMessage("Leseren krever en FragmentActivity.", onBack)
+                    ReaderMessage(context.getString(R.string.rdr_reader_unavailable), onBack)
                 } else {
-                    val factory = remember(pub) {
-                        EpubNavigatorFactory(pub).createFragmentFactory(
-                            initialLocator = initialLocator,
-                            initialPreferences = EpubPreferences(fontSize = fontSize, theme = theme),
-                        )
-                    }
-                    DisposableEffect(factory) {
-                        activity.supportFragmentManager.fragmentFactory = factory
-                        onDispose { }
-                    }
-                    AndroidFragment(
-                        EpubNavigatorFragment::class.java,
-                        modifier = Modifier.fillMaxSize(),
-                    ) { fragment ->
-                        navigator = fragment
-                    }
-                    LaunchedEffect(navigator) {
-                        navigator?.currentLocator?.collect { locator ->
-                            progressPercent =
-                                ((locator.locations.totalProgression ?: 0.0) * 100).toInt()
-                            persistLocator(db, bookId, locator, scope)
+                    Box(Modifier.fillMaxSize()) {
+                        val factory = remember(pub) {
+                            EpubNavigatorFactory(pub).createFragmentFactory(
+                                initialLocator = initialLocator,
+                                initialPreferences = EpubPreferences(fontSize = fontSize, theme = theme),
+                                // Bookiro owns insets: never let Readium add its own
+                                // system-bar padding, which caused wrong page sizing.
+                                configuration = EpubNavigatorFragment.Configuration(
+                                    shouldApplyInsetsPadding = false,
+                                ),
+                            )
+                        }
+                        DisposableEffect(factory) {
+                            activity.supportFragmentManager.fragmentFactory = factory
+                            onDispose { }
+                        }
+                        AndroidFragment(
+                            EpubNavigatorFragment::class.java,
+                            modifier = Modifier.fillMaxSize(),
+                        ) { fragment ->
+                            navigator = fragment
+                        }
+
+                        // Supported gesture hook: one tap toggles the chrome. Swipes and
+                        // long-press/selection are not consumed (onDrag/onTap only).
+                        DisposableEffect(navigator) {
+                            val nav = navigator ?: return@DisposableEffect onDispose { }
+                            val listener = object : InputListener {
+                                override fun onTap(event: TapEvent): Boolean {
+                                    showControls = !showControls
+                                    return true
+                                }
+                            }
+                            nav.addInputListener(listener)
+                            onDispose { nav.removeInputListener(listener) }
+                        }
+
+                        LaunchedEffect(navigator) {
+                            navigator?.currentLocator?.collect { locator ->
+                                progressPercent =
+                                    ((locator.locations.totalProgression ?: 0.0) * 100).toInt()
+                                activeChapterIndex = chapterIndexForLocator(
+                                    chapters?.entries.orEmpty(),
+                                    locator.href,
+                                )
+                                persistLocator(db, bookId, locator, scope)
+                            }
+                        }
+
+                        // True overlay: bars are aligned children of the Box, so the
+                        // navigator keeps its full size and never reflows.
+                        val activeEntry = chapters?.entries?.getOrNull(activeChapterIndex)
+                        val activeChapterLabel = activeEntry?.let { entry ->
+                            entry.title.ifBlank {
+                                stringResource(R.string.rdr_section_n, activeChapterIndex + 1)
+                            }
+                        }
+                        if (showControls) {
+                            ReaderTopBar(
+                                modifier = Modifier.align(Alignment.TopCenter),
+                                title = bookTitle,
+                                chapter = activeChapterLabel,
+                                percent = progressPercent,
+                                onBack = onBack,
+                                onHide = { showControls = false },
+                            )
+                            ReaderBottomBar(
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                                onContents = { showContents = true },
+                                onFontDown = { fontSize = (fontSize - 0.1).coerceAtLeast(0.6); applyPrefs() },
+                                onFontUp = { fontSize = (fontSize + 0.1).coerceAtMost(3.0); applyPrefs() },
+                                onTheme = {
+                                    theme = when (theme) {
+                                        Theme.DARK -> Theme.LIGHT
+                                        Theme.LIGHT -> Theme.SEPIA
+                                        Theme.SEPIA -> Theme.DARK
+                                    }
+                                    applyPrefs()
+                                },
+                                onHide = { showControls = false },
+                            )
                         }
                     }
-                }
-
-                // Tap in the top / bottom margins toggles the chrome without
-                // covering the text surface (Readium owns the reading area).
-                if (showControls) {
-                    ReaderChrome(
-                        title = bookTitle,
-                        percent = progressPercent,
-                        onBack = onBack,
-                        onContents = { showContents = true },
-                        onFontDown = { fontSize = (fontSize - 0.1).coerceAtLeast(0.6); applyPrefs() },
-                        onFontUp = { fontSize = (fontSize + 0.1).coerceAtMost(3.0); applyPrefs() },
-                        onTheme = {
-                            theme = when (theme) {
-                                Theme.DARK -> Theme.LIGHT
-                                Theme.LIGHT -> Theme.SEPIA
-                                Theme.SEPIA -> Theme.DARK
-                            }
-                            applyPrefs()
-                        },
-                        onHide = { showControls = false },
-                    )
-                } else {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clickable { showControls = true },
-                    )
                 }
             }
         }
     }
 
-    if (showContents && publication != null) {
-        val toc = publication!!.tableOfContents
+    if (showContents && chapters != null) {
+        val chapterList = chapters!!.entries
         ModalBottomSheet(
             onDismissRequest = { showContents = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -193,100 +366,136 @@ internal fun ReadiumEpubReaderScreen(
             contentColor = OmarchyColors.Fg,
         ) {
             Text(
-                "Innhold",
+                stringResource(R.string.rdr_contents),
                 style = ShelfTypography.TitleMedium,
                 color = OmarchyColors.FgBright,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
-            LazyColumn {
-                items(flattenToc(toc), key = { it.first.href.toString() + it.second }) { (link, depth) ->
-                    Text(
-                        text = link.title ?: link.href.toString(),
-                        color = if (depth == 0) OmarchyColors.FgBright else OmarchyColors.Dim,
-                        fontSize = 14.sp,
+            if (!chapters!!.fromTableOfContents) {
+                Text(
+                    stringResource(R.string.rdr_no_builtin_toc),
+                    color = OmarchyColors.Dim,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            }
+            LazyColumn(modifier = Modifier.navigationBarsPadding()) {
+                items(chapterList, key = { it.resourceKey + it.depth }) { entry ->
+                    val index = chapterList.indexOf(entry)
+                    val active = index == activeChapterIndex
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 showContents = false
-                                navigator?.go(link, animated = true)
+                                navigator?.go(entry.link, animated = true)
                             }
-                            .padding(start = (20 + depth * 16).dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
-                    )
+                            .padding(
+                                start = (20 + entry.depth * 16).dp,
+                                end = 20.dp,
+                                top = 10.dp,
+                                bottom = 10.dp,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = entry.title.ifBlank {
+                                    stringResource(R.string.rdr_section_n, index + 1)
+                                },
+                                color = if (active) OmarchyColors.Accent else OmarchyColors.FgBright,
+                                fontSize = if (entry.depth == 0) 15.sp else 13.sp,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (entry.unnamed) {
+                                Text(
+                                    stringResource(R.string.rdr_unnamed_section),
+                                    color = OmarchyColors.Dim,
+                                    fontSize = 10.sp,
+                                )
+                            }
+                        }
+                        if (active) {
+                            Text("•", color = OmarchyColors.Accent, fontSize = 18.sp)
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-private fun flattenToc(links: List<Link>, depth: Int = 0): List<Pair<Link, Int>> =
-    links.flatMap { link -> listOf(link to depth) + flattenToc(link.children, depth + 1) }
-
-private fun persistLocator(
-    db: ShelfDatabase,
-    bookId: Long,
-    locator: Locator,
-    scope: kotlinx.coroutines.CoroutineScope,
+@Composable
+private fun ReaderTopBar(
+    modifier: Modifier,
+    title: String,
+    chapter: String?,
+    percent: Int,
+    onBack: () -> Unit,
+    onHide: () -> Unit,
 ) {
-    val json = runCatching { locator.toJSON().toString() }.getOrNull() ?: return
-    val pct = (locator.locations.totalProgression ?: locator.locations.progression ?: 0.0).toFloat()
-    scope.launch(Dispatchers.IO) {
-        runCatching {
-            val prior = db.progressDao().getByBook(bookId) ?: ReadingProgressEntity(bookId = bookId)
-            db.progressDao().insertOrReplace(
-                prior.copy(
-                    anchorCfi = json,
-                    anchorHref = locator.href.toString(),
-                    progressPercent = pct.coerceIn(0f, 1f),
-                    updatedAt = System.currentTimeMillis(),
-                ),
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(OmarchyColors.Panel)
+            .statusBarsPadding()
+            .clickable { onHide() }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.rdr_back),
+                tint = OmarchyColors.Accent,
             )
         }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                color = OmarchyColors.FgBright,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 15.sp,
+            )
+            Text(
+                chapter?.takeIf { it.isNotBlank() } ?: "$percent %",
+                color = OmarchyColors.Dim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 11.sp,
+            )
+        }
+        Text("$percent %", color = OmarchyColors.Dim, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
     }
 }
 
 @Composable
-private fun ReaderChrome(
-    title: String,
-    percent: Int,
-    onBack: () -> Unit,
+private fun ReaderBottomBar(
+    modifier: Modifier,
     onContents: () -> Unit,
     onFontDown: () -> Unit,
     onFontUp: () -> Unit,
     onTheme: () -> Unit,
     onHide: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(OmarchyColors.Panel)
-                .clickable { onHide() }
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Tilbake", tint = OmarchyColors.Accent)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, color = OmarchyColors.FgBright, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 15.sp)
-                Text("$percent %", color = OmarchyColors.Dim, fontSize = 11.sp)
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(OmarchyColors.Panel)
-                .clickable { onHide() }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            ChromeButton("Innhold", Icons.Default.Menu, onContents)
-            ChromeButton("A-", Icons.Default.FormatSize, onFontDown)
-            ChromeButton("A+", Icons.Default.FormatSize, onFontUp)
-            ChromeButton("Tema", Icons.Default.Palette, onTheme)
-        }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(OmarchyColors.Panel)
+            .navigationBarsPadding()
+            .clickable { onHide() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        ChromeButton(stringResource(R.string.rdr_contents), Icons.Default.Menu, onContents)
+        ChromeButton("A-", Icons.Default.FormatSize, onFontDown)
+        ChromeButton("A+", Icons.Default.FormatSize, onFontUp)
+        ChromeButton(stringResource(R.string.rdr_theme), Icons.Default.Palette, onTheme)
     }
 }
 
@@ -308,6 +517,34 @@ private fun ReaderMessage(message: String, onBack: () -> Unit) {
     ) {
         Text(message, color = OmarchyColors.Fg, fontSize = 14.sp)
         Spacer(Modifier.height(16.dp))
-        Text("Tilbake", color = OmarchyColors.Accent, fontSize = 14.sp, modifier = Modifier.clickable { onBack() })
+        Text(
+            stringResource(R.string.rdr_back),
+            color = OmarchyColors.Accent,
+            fontSize = 14.sp,
+            modifier = Modifier.clickable { onBack() },
+        )
+    }
+}
+
+private fun persistLocator(
+    db: ShelfDatabase,
+    bookId: Long,
+    locator: Locator,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    val json = runCatching { locator.toJSON().toString() }.getOrNull() ?: return
+    val pct = (locator.locations.totalProgression ?: locator.locations.progression ?: 0.0).toFloat()
+    scope.launch(Dispatchers.IO) {
+        runCatching {
+            val prior = db.progressDao().getByBook(bookId) ?: ReadingProgressEntity(bookId = bookId)
+            db.progressDao().insertOrReplace(
+                prior.copy(
+                    anchorCfi = json,
+                    anchorHref = locator.href.toString(),
+                    progressPercent = pct.coerceIn(0f, 1f),
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
     }
 }

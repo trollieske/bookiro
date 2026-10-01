@@ -39,4 +39,9 @@
     <string name="rdr_error_no_access">Немає доступу до книги. Спробуйте імпортувати папку знову.</string>
     <string name="rdr_error_tts_not_ready">Мовна служба не готова</string>
     <string name="rdr_error_no_text_chapter">Немає розділу з текстом</string>
+    <string name="rdr_section_n">Розділ %1$d</string>
+    <string name="rdr_unnamed_section">Розділ без назви</string>
+    <string name="rdr_no_builtin_toc">У книзі немає вбудованого змісту — показано розділи.</string>
+    <string name="rdr_open_error">Не вдалося відкрити книгу.</string>
+    <string name="rdr_reader_unavailable">Читач недоступний на цьому пристрої.</string>
 </resources>

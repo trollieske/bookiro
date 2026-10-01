@@ -39,4 +39,9 @@ Filen kan vara tom, skadad, DRM-skyddad eller i ett format som inte kunde tolkas
     <string name="rdr_error_no_access">Ingen åtkomst till boken. Försök importera mappen igen.</string>
     <string name="rdr_error_tts_not_ready">Taltjänsten är inte redo</string>
     <string name="rdr_error_no_text_chapter">Inget kapitel med text</string>
+    <string name="rdr_section_n">Avsnitt %1$d</string>
+    <string name="rdr_unnamed_section">Utan namn</string>
+    <string name="rdr_no_builtin_toc">Boken har ingen inbyggd innehållsförteckning — visar avsnitt.</string>
+    <string name="rdr_open_error">Kunde inte öppna boken.</string>
+    <string name="rdr_reader_unavailable">Läsaren är inte tillgänglig på den här enheten.</string>
 </resources>

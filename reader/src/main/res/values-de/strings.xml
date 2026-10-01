@@ -39,4 +39,9 @@ Die Datei könnte leer, beschädigt, DRM-geschützt oder in einem unterstützten
     <string name="rdr_error_no_access">Kein Zugriff auf das Buch. Versuche, den Ordner erneut zu importieren.</string>
     <string name="rdr_error_tts_not_ready">Sprachdienst nicht bereit</string>
     <string name="rdr_error_no_text_chapter">Kein Kapitel mit Text</string>
+    <string name="rdr_section_n">Abschnitt %1$d</string>
+    <string name="rdr_unnamed_section">Unbenannter Abschnitt</string>
+    <string name="rdr_no_builtin_toc">Dieses Buch hat kein eingebautes Inhaltsverzeichnis — Abschnitte werden angezeigt.</string>
+    <string name="rdr_open_error">Das Buch konnte nicht geöffnet werden.</string>
+    <string name="rdr_reader_unavailable">Der Reader ist auf diesem Gerät nicht verfügbar.</string>
 </resources>

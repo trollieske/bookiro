@@ -39,4 +39,9 @@ Filen kan være tom, beskadiget, DRM-beskyttet eller i et understøttet format, 
     <string name="rdr_error_no_access">Ingen adgang til bogen. Prøv at importere mappen igen.</string>
     <string name="rdr_error_tts_not_ready">Taleservice ikke klar</string>
     <string name="rdr_error_no_text_chapter">Intet kapitel med tekst</string>
+    <string name="rdr_section_n">Afsnit %1$d</string>
+    <string name="rdr_unnamed_section">Uden navn</string>
+    <string name="rdr_no_builtin_toc">Bogen har ingen indbygget indholdsfortegnelse — viser afsnit.</string>
+    <string name="rdr_open_error">Kunne ikke åbne bogen.</string>
+    <string name="rdr_reader_unavailable">Læseren er ikke tilgængelig på denne enhed.</string>
 </resources>
