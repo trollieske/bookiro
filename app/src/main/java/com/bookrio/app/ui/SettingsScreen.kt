@@ -2,6 +2,7 @@ package com.bookrio.app.ui
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,9 +42,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.bookrio.app.storage.LibraryFolderLauncher
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.DarkModePref
+import com.bookrio.core.storage.LibraryFolderNames
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
@@ -68,6 +71,7 @@ data class SettingsUiState(
     val audioFadeOut: Boolean = true,
     val autoPlayNext: Boolean = false,
     val watchLibraryFolder: Boolean = false,
+    val libraryFolderUri: String? = null,
     val ftpSyncEnabled: Boolean = false,
     val ftpWifiOnly: Boolean = true,
     val ftpChargingOnly: Boolean = false,
@@ -130,7 +134,8 @@ class SettingsViewModel(
         prefs.libraryTabCountsEnabled,
         prefs.onlineCoverLookup,
         prefs.handoffPrecision,
-        prefs.handoffToastEnabled
+        prefs.handoffToastEnabled,
+        prefs.libraryFolderUri
     ) { a ->
         @Suppress("UNCHECKED_CAST")
         SettingsUiState(
@@ -166,6 +171,7 @@ class SettingsViewModel(
             onlineCoverLookup = a[29] as Boolean,
             handoffPrecision = a[30] as String,
             handoffToastEnabled = a[31] as Boolean,
+            libraryFolderUri = a[32] as String?,
             seenOnboarding = false
         )
     }.stateIn(
@@ -221,6 +227,48 @@ class SettingsViewModel(
             // MediaScannerWorker keeps it fresh (hourly, battery-friendly).
             runCatching {
                 com.bookrio.app.workers.MediaScannerWorker.runOnce(getApplication())
+            }
+        }
+    }
+
+    /**
+     * Lagrer bibliotekmappen og beholder tilgang på tvers av app-omstarter.
+     * Returnerer false når tilgangen ikke kunne beholdes, slik at UI-et kan si
+     * ifra i stedet for å melde falsk suksess.
+     */
+    suspend fun setLibraryFolder(ctx: Context, uri: Uri?): Boolean = withContext(dispatchers.io) {
+        val previous = runCatching { prefs.libraryFolderUri.first() }.getOrNull()
+        if (uri == null) {
+            releasePersistedGrant(ctx, previous)
+            prefs.setLibraryFolderUri(null)
+            return@withContext true
+        }
+        // Skrivetilgang innvilges ikke alltid; fall tilbake til lesetilgang.
+        val granted = runCatching {
+            ctx.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }.isSuccess || runCatching {
+            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }.isSuccess
+        if (!granted) return@withContext false
+        if (previous != null && previous != uri.toString()) releasePersistedGrant(ctx, previous)
+        prefs.setLibraryFolderUri(uri.toString())
+        true
+    }
+
+    /** Frigjør en gammel persistabel URI-tilgang så vi ikke lekker opptil grant-taket. */
+    private fun releasePersistedGrant(ctx: Context, uriString: String?) {
+        val parsed = uriString?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: return
+        runCatching {
+            ctx.contentResolver.releasePersistableUriPermission(
+                parsed,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }.onFailure {
+            runCatching {
+                ctx.contentResolver.releasePersistableUriPermission(parsed, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
     }
@@ -376,6 +424,107 @@ private fun defaultSettingsVmFactory(): ViewModelProvider.Factory {
         initializer {
             SettingsViewModel(app)
         }
+    }
+}
+
+/**
+ * Radd for bibliotekmappen: ett trykk åpner mappen i filbehandleren; når den
+ * ikke er valgt, åpner trykket mappevelgeren. Endre/fjern ligger bak overløpet.
+ */
+@Composable
+private fun LibraryFolderRow(
+    uri: String?,
+    onChoose: () -> Unit,
+    onOpen: (Uri) -> Unit,
+    onRemove: () -> Unit,
+) {
+    var showActions by remember { mutableStateOf(false) }
+    val label = LibraryFolderNames.treeDocumentPath(uri)
+    val hasFolder = !uri.isNullOrBlank()
+    val notSet = stringResource(R.string.settings_library_folder_not_set)
+    val subtitle = label ?: uri ?: notSet
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (!hasFolder) {
+                    onChoose()
+                } else {
+                    uri?.let { runCatching { Uri.parse(it) }.getOrNull() }?.let(onOpen)
+                }
+            }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.FolderOpen,
+            contentDescription = null,
+            tint = com.bookrio.designsystem.theme.OmarchyColors.Fg,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.settings_library_folder),
+                style = ShelfTypography.BodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = com.bookrio.designsystem.theme.OmarchyColors.FgBright
+            )
+            Spacer(Modifier.height(1.dp))
+            Text(
+                subtitle,
+                style = ShelfTypography.BodySmall,
+                color = com.bookrio.designsystem.theme.OmarchyColors.Dim
+            )
+        }
+        if (hasFolder) {
+            IconButton(onClick = { showActions = true }) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = stringResource(R.string.settings_library_folder_change),
+                    modifier = Modifier.size(18.dp),
+                    tint = com.bookrio.designsystem.theme.OmarchyColors.Dim
+                )
+            }
+        } else {
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = com.bookrio.designsystem.theme.OmarchyColors.Dim
+            )
+        }
+    }
+
+    if (showActions) {
+        AlertDialog(
+            onDismissRequest = { showActions = false },
+            title = { Text(stringResource(R.string.settings_library_folder)) },
+            text = {
+                Column {
+                    Text(label ?: uri.orEmpty())
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.settings_library_folder_sub),
+                        style = ShelfTypography.BodySmall,
+                        color = com.bookrio.designsystem.theme.OmarchyColors.Dim
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showActions = false
+                    onChoose()
+                }) { Text(stringResource(R.string.settings_library_folder_change)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showActions = false
+                    onRemove()
+                }) { Text(stringResource(R.string.settings_library_folder_remove)) }
+            }
+        )
     }
 }
 
@@ -587,6 +736,31 @@ fun SettingsScreen(
         vm.importDb(ctx, uri)
         if (uri != null) {
             scope.launch { snackbarHostState.showSnackbar(ctx.getString(R.string.settings_db_imported)) }
+        }
+    }
+
+    val libraryFolderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { tree: Uri? ->
+        if (tree != null) {
+            scope.launch {
+                val saved = vm.setLibraryFolder(ctx, tree)
+                snackbarHostState.showSnackbar(
+                    ctx.getString(
+                        if (saved) R.string.settings_library_folder_chosen
+                        else R.string.settings_library_folder_no_permission
+                    )
+                )
+            }
+        }
+    }
+    // ActivityResultLauncher.launch kaster ActivityNotFoundException på enheter
+    // uten mappevelger; ikke krasj av den grunn.
+    val chooseLibraryFolder: () -> Unit = {
+        runCatching { libraryFolderPicker.launch(null) }.onFailure {
+            scope.launch {
+                snackbarHostState.showSnackbar(ctx.getString(R.string.settings_library_folder_open_failed))
+            }
         }
     }
     var showLanguagePicker by rememberSaveable { mutableStateOf(false) }
@@ -976,6 +1150,29 @@ fun SettingsScreen(
                             Text(stringResource(R.string.settings_import_button))
                         }
                     }
+
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+                    LibraryFolderRow(
+                        uri = state.libraryFolderUri,
+                        onChoose = chooseLibraryFolder,
+                        onOpen = { folderUri ->
+                            when (LibraryFolderLauncher.open(ctx, folderUri)) {
+                                LibraryFolderLauncher.Result.OK -> Unit
+                                LibraryFolderLauncher.Result.NO_PERMISSION -> scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        ctx.getString(R.string.settings_library_folder_no_permission)
+                                    )
+                                }
+                                LibraryFolderLauncher.Result.NO_HANDLER -> scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        ctx.getString(R.string.settings_library_folder_open_failed)
+                                    )
+                                }
+                            }
+                        },
+                        onRemove = { scope.launch { vm.setLibraryFolder(ctx, null) } },
+                    )
 
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 

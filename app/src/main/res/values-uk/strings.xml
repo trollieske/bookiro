@@ -59,6 +59,14 @@
     <string name="settings_db_imported">Базу даних імпортовано</string>
     <string name="settings_watch_folder">Стежити за новими файлами в папці бібліотеки</string>
     <string name="settings_watch_folder_sub">Додає книг автоматично</string>
+    <string name="settings_library_folder">Папка бібліотеки</string>
+    <string name="settings_library_folder_sub">Де Bookiro читає та відстежує книги</string>
+    <string name="settings_library_folder_not_set">Не задано — торкніться, щоб вибрати</string>
+    <string name="settings_library_folder_change">Змінити</string>
+    <string name="settings_library_folder_remove">Видалити</string>
+    <string name="settings_library_folder_open_failed">Жоден файловий менеджер не може відкрити цю папку</string>
+    <string name="settings_library_folder_no_permission">Доступ до папки втрачено — виберіть її знову</string>
+    <string name="settings_library_folder_chosen">Папку бібліотеки задано</string>
     <string name="settings_online_cover">Пошук обкладинок онлайн</string>
     <string name="settings_online_cover_sub">Шукати обкладинки в інтернеті</string>
     <string name="settings_about_description">Bookiro — приватний читач і плеєр аудіокниг без реклами</string>

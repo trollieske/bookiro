@@ -59,6 +59,14 @@
     <string name="settings_db_imported">Database imported</string>
     <string name="settings_watch_folder">Watch library folder for new files</string>
     <string name="settings_watch_folder_sub">Adds books automatically</string>
+    <string name="settings_library_folder">Library folder</string>
+    <string name="settings_library_folder_sub">Where Bookiro reads and watches for books</string>
+    <string name="settings_library_folder_not_set">Not set — tap to choose</string>
+    <string name="settings_library_folder_change">Change</string>
+    <string name="settings_library_folder_remove">Remove</string>
+    <string name="settings_library_folder_open_failed">No file manager can open this folder</string>
+    <string name="settings_library_folder_no_permission">Permission to the folder was lost — choose it again</string>
+    <string name="settings_library_folder_chosen">Library folder set</string>
     <string name="settings_online_cover">Online cover lookup</string>
     <string name="settings_online_cover_sub">Search for covers on the internet</string>
     <string name="settings_about_description">Bookiro — a private, ad-free reader and audiobook player</string>

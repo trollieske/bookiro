@@ -59,6 +59,14 @@
     <string name="settings_db_imported">Databasen har importerats</string>
     <string name="settings_watch_folder">Bevaka biblioteksmappen för nya filer</string>
     <string name="settings_watch_folder_sub">Lägger till böcker automatiskt</string>
+    <string name="settings_library_folder">Biblioteksmapp</string>
+    <string name="settings_library_folder_sub">Där Bookiro läser och övervakar böcker</string>
+    <string name="settings_library_folder_not_set">Inte angiven – tryck för att välja</string>
+    <string name="settings_library_folder_change">Ändra</string>
+    <string name="settings_library_folder_remove">Ta bort</string>
+    <string name="settings_library_folder_open_failed">Ingen filhanterare kan öppna den här mappen</string>
+    <string name="settings_library_folder_no_permission">Åtkomsten till mappen har förlorats – välj den igen</string>
+    <string name="settings_library_folder_chosen">Biblioteksmapp angiven</string>
     <string name="settings_online_cover">Omslagssökning online</string>
     <string name="settings_online_cover_sub">Sök efter omslag på internet</string>
     <string name="settings_about_description">Bookiro – en privat, reklamfri läsare och ljudboksapp</string>
