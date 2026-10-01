@@ -30,6 +30,14 @@ android {
     }
 
     buildFeatures { compose = true }
+
+    testOptions {
+        unitTests {
+            // Robolectric trenger merged Android-resurser for JVM-tester
+            // (syntetisk EPUB gjennom BookLoaderEngine + Room in-memory).
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -51,4 +59,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // JVM-test av hele EPUB-lasteveien (BookLoaderEngine → parseEpub → kapittel-
+    // HTML). Robolectric gir ekte Android-rammeverk (XmlPullParser, Uri, Log) og
+    // Room in-memory-database; versjonen holdes som literal fordi den ikke
+    // finnes i versjonskatalogen.
+    testImplementation(libs.androidx.room.runtime)
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
