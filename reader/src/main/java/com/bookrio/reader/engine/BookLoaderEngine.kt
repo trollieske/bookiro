@@ -57,7 +57,7 @@ data class ReaderBookState(
     val readerTheme: String = "sepia",
     /** Side-indeks innenfor gjeldende kapittel (reader-local, ikke global). */
     val currentPage: Int = 0,
-    /** Total page count after off-screen rendering (filled by HtmlPageRenderer). */
+    /** Total page count for the current chapter (filled by the live WebView pagination). */
     val totalPages: Int = 0,
     val error: String? = null,
     /** When non-null: the next time onPageCountKnown arrives, re-seek currentPage to this percent.
@@ -491,7 +491,7 @@ class BookLoaderEngine(
         }
 
         // --- 4. Parse the converted EPUB using the *existing* EPUB parser pipeline ---
-        //    This means the converted book uses HtmlPageRenderer, theme/typography,
+        //    This means the converted book uses Bookiro's reader WebView, theme/typography,
         //    chapter navigation, etc. — 100% identical to native EPUB. No separate MOBI renderer.
         val parsed: ParsedBook? = try {
             parseEpub(ctx, cachedEpub.absolutePath, null)

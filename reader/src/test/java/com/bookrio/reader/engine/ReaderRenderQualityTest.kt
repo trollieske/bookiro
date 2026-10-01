@@ -1,29 +1,36 @@
 package com.bookrio.reader.engine
 
 import com.bookrio.reader.pageturn.readerThemeColors
-import com.bookrio.reader.ui.PAGE_BITMAP_PAINT_FLAGS
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Rendering-kvalitet: gjenerert leser-CSS, generasjonsvakt og bitmap-tregnflagg.
- * Ren JVM (ingen Android-runtime-kall) — konstanter/funksjoner uten sideeffekter.
+ * Rendering-kvalitet for den DIREKTE WebView-leseren: generert leser-CSS og
+ * paginerings-kontrakten (CSS multi-column + scroll-bro). Ren JVM (ingen
+ * Android-runtime-kall) — konstanter/funksjoner uten sideeffekter.
+ *
+ * Merk: dette er markup/CSS-kontrakter, ikke en device-test. Faktisk
+ * WebView-oppførsel (kolonnebredde, scrollWidth, utvalg) må verifiseres på
+ * enhet.
  */
 class ReaderRenderQualityTest {
 
-    // 1) Generert leser-CSS: stabile bilde-begrensninger før capture/paginering
-    @Test
-    fun `generert leser-CSS inneholder stabile bilde-begrensninger`() {
-        val html = buildReaderHtml(
-            content = "<p>tekst</p>",
+    private fun html(theme: String = "sepia", content: String = "<p>tekst</p>"): String =
+        buildReaderHtml(
+            content = content,
             fontSizeSp = 18,
-            theme = readerThemeColors("sepia"),
+            theme = readerThemeColors(theme),
             lang = "en",
             cssQuoteBorder = 3f,
+            generation = 7L,
         )
+
+    // 1) Generert leser-CSS: stabile bilde-begrensninger (uendret fra den gamle
+    //    leser-CSS-en, gjenbrukt av den direkte WebView-en)
+    @Test
+    fun `generert leser-CSS inneholder stabile bilde-begrensninger`() {
+        val html = html()
 
         // Medie-elementene skal begrenses til kolonnebredden og beholde aspect ratio
         assertTrue(
@@ -60,55 +67,60 @@ class ReaderRenderQualityTest {
         assertFalse("ingen enhetsspesifikke px-offsets i CSS", html.contains("overflow-y: scroll"))
     }
 
-    // 2) Lenkefarging: Shelf legger aldri til egen a-farge (blå lenker er
+    // 2) Lenkefarging: Bookiro legger aldri til egen a-farge (blå lenker er
     //    kildens eller UA-default) — ingen overstyrt linkfarge i leser-CSS
     @Test
     fun `generert leser-CSS overstyrer aldri lenkefarging`() {
-        val html = buildReaderHtml(
-            content = "<p><a href=\"https://shelf.app/r/\">lenke</a></p>",
-            fontSizeSp = 18,
-            theme = readerThemeColors("light"),
-            lang = "en",
-            cssQuoteBorder = 3f,
-        )
+        val html = html(content = "<p><a href=\"https://bookiro.app/r/\">lenke</a></p>")
         Regex("<style>(.*?)</style>", RegexOption.DOT_MATCHES_ALL)
             .find(html)!!.groupValues[1]
             .let { css ->
-                assertFalse("ingen a-farging i Shelf-CSS", Regex("\\ba\\s*,|\\ba\\s*\\{|a:\\s*link|a:\\s*visited").containsMatchIn(css))
+                assertFalse("ingen a-farging i Bookiro-CSS", Regex("\\ba\\s*,|\\ba\\s*\\{|a:\\s*link|a:\\s*visited").containsMatchIn(css))
             }
     }
 
-    // 3) Generasjonsvakt: stale asynkrone WebView-callbacks skal forkastes
+    // 3) Paginering: kapittelet er en horisontal kolonne-scroller — hver kolonne
+    //    er nøyaktig viewportbredden, så side N ligger på scrollLeft = N × vw.
     @Test
-    fun `generasjonsvakt forkaster stale callbacks`() {
-        val active = AtomicLong(5L)
-        val gate = RenderGenerationGate(active)
+    fun `generert leser-CSS paginerer med eksakt viewportbrede kolonner`() {
+        val html = html()
+        val css = Regex("<style>(.*?)</style>", RegexOption.DOT_MATCHES_ALL).find(html)!!.groupValues[1]
 
-        assertTrue("callback for aktiv generasjon aksepteres", gate.accepts(5L))
-        assertFalse("callback for eldre generasjon forkastes", gate.accepts(4L))
-        assertFalse("callback for fremtidig generasjon forkastes", gate.accepts(6L))
-
-        // Etter en ny prepare-generasjon er alle tidligere callbacks stale
-        active.incrementAndGet()
-        assertFalse("5 er stale etter ny generasjon", gate.accepts(5L))
-        assertTrue("6 er nå aktiv", gate.accepts(6L))
+        assertTrue(
+            "#content-wrapper skal ha column-width: 100vw",
+            Regex("#content-wrapper\\s*\\{[^}]*column-width:\\s*100vw", RegexOption.DOT_MATCHES_ALL).containsMatchIn(css),
+        )
+        assertTrue(
+            "#content-wrapper skal ha column-gap: 0 (sidebredde == viewport)",
+            Regex("#content-wrapper\\s*\\{[^}]*column-gap:\\s*0", RegexOption.DOT_MATCHES_ALL).containsMatchIn(css),
+        )
+        assertTrue(
+            "#content-wrapper skal ha column-fill: auto",
+            Regex("#content-wrapper\\s*\\{[^}]*column-fill:\\s*auto", RegexOption.DOT_MATCHES_ALL).containsMatchIn(css),
+        )
+        assertTrue(
+            "#content-wrapper skal være horisontal scroller (overflow-x: auto)",
+            Regex("#content-wrapper\\s*\\{[^}]*overflow-x:\\s*auto", RegexOption.DOT_MATCHES_ALL).containsMatchIn(css),
+        )
+        // Ingen gammel transform-basert sidevending igjen
+        assertFalse("ingen translateX-sidevending i CSS", css.contains("translateX"))
+        assertFalse("ingen will-change: transform", css.contains("will-change"))
     }
 
-    // 4) Bitmap-tegning: felles Paint skal bruke filtering + dithering + antialiasing
-    //    (android.graphics.Paint-flaggverdier: ANTI_ALIAS = 1, FILTER_BITMAP = 2, DITHER = 4;
-    //    brukes som litteraler siden enhetstestens stub-jar ikke garanterer konstanttypene)
+    // 4) Paginerings-broen: sidetall fra scrollWidth og side fra scrollX
     @Test
-    fun `bitmap-tregnflagg inkluderer filtering dithering og antialiasing`() {
-        val antiAlias = 1
-        val filterBitmap = 2
-        val dither = 4
-        assertEquals(
-            "PAGE_BITMAP_PAINT_FLAGS skal være ANTI_ALIAS | FILTER_BITMAP | DITHER",
-            antiAlias or filterBitmap or dither,
-            PAGE_BITMAP_PAINT_FLAGS,
-        )
-        assertTrue("FILTER_BITMAP_FLAG må være satt", (PAGE_BITMAP_PAINT_FLAGS and filterBitmap) != 0)
-        assertTrue("DITHER_FLAG må være satt", (PAGE_BITMAP_PAINT_FLAGS and dither) != 0)
-        assertTrue("ANTI_ALIAS_FLAG må være satt", (PAGE_BITMAP_PAINT_FLAGS and antiAlias) != 0)
+    fun `generert leser-HTML eksponerer scroll-basert paginerings-bro`() {
+        val html = html()
+        assertTrue("sidetallet leses fra scrollWidth", html.contains("Math.ceil((wrapper.scrollWidth - 1) / s)"))
+        assertTrue("gjeldende side leses fra scrollX", html.contains("Math.round(wrapper.scrollLeft / s)"))
+        assertTrue("sidevending er programmatisk scroll", html.contains("wrapper.scrollLeft = target * s"))
+        assertTrue("sidetall rapporteres til Kotlin", html.contains("AndroidReader.onPagination"))
+        assertTrue("scroll-endringer rapporteres til Kotlin", html.contains("AndroidReader.onPageSettled"))
+        assertTrue("tap-soner rapporteres til Kotlin", html.contains("AndroidReader.onTap"))
+        assertTrue("markering rapporteres til Kotlin", html.contains("AndroidReader.onHighlight"))
+        assertTrue("generasjonen er bakt inn i HTML-en", html.contains("var GEN = 7"))
+        // Ingen bitmap-/capture-rester i markupen
+        assertFalse("ingen postVisualStateCallback", html.contains("postVisualStateCallback"))
+        assertFalse("ingen drawIntoCanvas", html.contains("drawIntoCanvas"))
     }
 }
