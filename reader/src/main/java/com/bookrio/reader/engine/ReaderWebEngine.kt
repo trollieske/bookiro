@@ -391,11 +391,11 @@ class ReaderWebEngine(context: Context) {
     private var lastViewportHeight = 0
 
     /** Nøkkelen til kapittelet/typografien som sist ble lastet (null = ingenting lastet). */
-    var loadKey: String? = null
+    var loadKey: String? by mutableStateOf<String?>(null)
         private set
 
     /** Nøkkelen som faktisk er ferdig målt (sidetallet er gyldig for denne). */
-    var measuredLoadKey: String? = null
+    var measuredLoadKey: String? by mutableStateOf<String?>(null)
         private set
 
     /** Sidetall for [measuredLoadKey]. 0 = ennå ikke målt. */
