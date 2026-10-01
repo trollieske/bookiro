@@ -4,7 +4,7 @@ You are the lead integrator for the Android release of Bookiro. Execute the work
 
 ## Ground truth, not assumptions
 
-On 2026-10-01, GitHub showed `trollieske/bookrio` `main` at `5e99ec2` containing overnight torrent/audiobook, playback, reader and Bookiro rebrand commits. `trollieske/shelf` `rebrand/bookiro-android` at `ca86c7e` has the rename but lacks those fixes. `bookrio/ios-parity` is independent. These remote observations are NOT proof of the local working tree or the downloaded APK. The user installed an APK downloaded manually from GitHub: its launcher still says **Bookrio**, not **Bookiro**. The user confirms the simplified reader is still broken. In Android Auto the app is selectable but opening it shows black; its media card shows the app icon and grey placeholders instead of meaningful media details. Prior commits claim fixes; device behavior disproves release readiness.
+On 2026-10-01, GitHub showed `trollieske/bookiro` `main` at `5e99ec2` containing overnight torrent/audiobook, playback, reader and Bookiro rebrand commits. `trollieske/shelf` `rebrand/bookiro-android` at `ca86c7e` has the rename but lacks those fixes. `bookiro/ios-parity` is independent. These remote observations are NOT proof of the local working tree or the downloaded APK. The user installed an APK downloaded manually from GitHub: its launcher still says **Bookrio**, not **Bookiro**. The user confirms the simplified reader is still broken. In Android Auto the app is selectable but opening it shows black; its media card shows the app icon and grey placeholders instead of meaningful media details. Prior commits claim fixes; device behavior disproves release readiness.
 
 ## Phase 0 — integrator: preserve and identify
 
