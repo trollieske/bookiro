@@ -223,9 +223,9 @@ class TorrentViewModel(
                     importStatus = "IMPORTED:$importedCount"
                 )
             )
-            toastFlow.tryEmit("Importerte $importedCount bøker til biblioteket!")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_imported_count, importedCount))
         } else {
-            toastFlow.tryEmit("Ingen bøker funnet — bruk «Velg mappe» for å peke til riktig nedlastingsmappe")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_import_no_books))
         }
     }
 
@@ -242,9 +242,9 @@ class TorrentViewModel(
                     )
                 )
             }
-            toastFlow.tryEmit("Importerte $count bøker fra valgt mappe!")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_imported_from_folder, count))
         } else {
-            toastFlow.tryEmit("Ingen støttede bøker funnet i den valgte mappen")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_import_no_supported))
         }
     }
 

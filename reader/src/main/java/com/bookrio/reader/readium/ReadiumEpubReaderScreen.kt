@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FormatSize
@@ -419,8 +420,7 @@ internal fun ReadiumEpubReaderScreen(
                 )
             }
             LazyColumn(modifier = Modifier.navigationBarsPadding()) {
-                items(chapterList, key = { it.resourceKey + it.depth }) { entry ->
-                    val index = chapterList.indexOf(entry)
+                itemsIndexed(chapterList, key = { index, _ -> index }) { index, entry ->
                     val active = index == activeChapterIndex
                     Row(
                         modifier = Modifier

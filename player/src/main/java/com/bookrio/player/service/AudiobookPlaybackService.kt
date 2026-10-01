@@ -143,10 +143,19 @@ class AudiobookPlaybackService : MediaLibraryService() {
         fun getService(): AudiobookPlaybackService = this@AudiobookPlaybackService
     }
 
-    override fun onBind(intent: Intent?): IBinder {
+    override fun onBind(intent: Intent?): IBinder? {
         Log.d(TAG, "onBind: action=${intent?.action}")
-        super.onBind(intent)
-        return binder
+        // Media3's MediaSessionService framework binder is what a MediaController /
+        // MediaBrowser (Android Auto, Bluetooth, system media controls) must receive.
+        // The in-app PlayerViewModel binds with an explicit component and no action
+        // and wants the local binder. Returning the local binder for EVERY caller
+        // (the previous behaviour) handed Auto a plain Binder that never answers the
+        // session handshake, so its browse screen stayed on the loading spinner.
+        return if (intent?.action == null) {
+            binder
+        } else {
+            super.onBind(intent)
+        }
     }
 
     override fun onCreate() {
@@ -233,7 +242,12 @@ class AudiobookPlaybackService : MediaLibraryService() {
         })
         player = exo
 
-        val sessionCallback = object : MediaSession.Callback {
+        // NOTE: this callback is passed to the MediaLibrarySession below, so the
+        // library command grants MUST live here. A previous version kept them in a
+        // separate MediaSession.Callback that was never attached, so a MediaBrowser /
+        // Android Auto library controller connected but stayed PENDING forever
+        // (perpetual loading screen) because the library command codes were absent.
+        val libraryCallback = object : MediaLibraryService.MediaLibrarySession.Callback {
             override fun onConnect(
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo
@@ -241,9 +255,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 // DEFAULT_SESSION_AND_LIBRARY_COMMANDS, not DEFAULT_SESSION_COMMANDS:
                 // Media3's MediaLibraryServiceLegacyStub refuses onGetChildren and
                 // onGetItem for Android Auto unless the controller holds the library
-                // command codes (50003/50004). Replacing the default set here used to
-                // silently strip them, so Auto connected but its browse tree came back
-                // null -> empty (black) screen and no resolvable media card details.
+                // command codes (50003/50004).
                 val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                     .add(SessionCommand(CMD_SPEED, Bundle()))
                     .add(SessionCommand(CMD_SKIP_BACK, Bundle()))
@@ -288,9 +300,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     else -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
                 }
             }
-        }
 
-        val libraryCallback = object : MediaLibraryService.MediaLibrarySession.Callback {
             override fun onGetLibraryRoot(
                 session: MediaLibraryService.MediaLibrarySession,
                 caller: MediaSession.ControllerInfo,

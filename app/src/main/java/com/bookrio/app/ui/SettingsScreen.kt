@@ -1347,7 +1347,7 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            "BOOKRIO",
+                            stringResource(R.string.app_name).uppercase(),
                             style = ShelfTypography.TitleMedium.copy(fontFamily = FontFamily.Monospace),
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 4.sp,
@@ -1368,7 +1368,7 @@ fun SettingsScreen(
                             )
                         }
                         Text(
-                            "1.0.0",
+                            com.bookrio.BuildConfig.VERSION_NAME,
                             style = ShelfTypography.BodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
