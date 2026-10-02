@@ -54,8 +54,6 @@ import com.bookrio.designsystem.components.BookVisual
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
 import com.bookrio.library.ui.SampleBooks
-import java.net.HttpURLConnection
-import java.net.URL
 
 private val GENERIC_CHAPTER_TITLE =
     Regex("^(kapittel|kapitel|chapter)\\s*\\d+$", RegexOption.IGNORE_CASE)
@@ -134,23 +132,9 @@ private fun parseChapters(json: String?, ctx: Context): List<String> {
 }
 
 private fun dbgUi(location: String, hypothesisId: String, msg: String, data: String) {
-    Thread {
-        try {
-            val safeMsg = msg.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-            val safeData = data.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-            val body = """{"sessionId":"ebook-audio-crash","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"$location","msg":"[DEBUG] $safeMsg","data":{"info":"$safeData"},"ts":${System.currentTimeMillis()}}"""
-            val conn = (URL("http://192.168.1.10:7777/event").openConnection() as HttpURLConnection)
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 1500
-            conn.readTimeout = 1500
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.outputStream.use { it.write(body.toByteArray()) }
-            runCatching { conn.inputStream.close() }
-            conn.disconnect()
-        } catch (_: Throwable) {
-        }
-    }.start()
+    // Removed before Play: this used to POST diagnostics (including file URIs and
+    // paths) to a hardcoded LAN debug server. Kept as an explicit no-op so the
+    // former debug-point call sites stay harmless. Do not re-enable remote telemetry.
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

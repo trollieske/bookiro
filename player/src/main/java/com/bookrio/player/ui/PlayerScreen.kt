@@ -59,8 +59,6 @@ import com.bookrio.player.viewmodel.PlayerViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.max
@@ -944,23 +942,8 @@ private fun formatDuration(totalSeconds: Long): String {
 }
 
 private fun dbgPlayerUi(hypothesisId: String, msg: String, data: String) {
-    Thread {
-        try {
-            val safeMsg = msg.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-            val safeData = data.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-            val body = """{"sessionId":"ebook-audio-crash","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"PlayerScreen","msg":"[DEBUG] $safeMsg","data":{"info":"$safeData"},"ts":${System.currentTimeMillis()}}"""
-            val conn = (URL("http://192.168.1.10:7777/event").openConnection() as HttpURLConnection)
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 1500
-            conn.readTimeout = 1500
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.outputStream.use { it.write(body.toByteArray()) }
-            runCatching { conn.inputStream.close() }
-            conn.disconnect()
-        } catch (_: Throwable) {
-        }
-    }.start()
+    // Removed before Play: used to POST diagnostics to a hardcoded LAN debug server.
+    // Intentionally a no-op now.
 }
 
 @Composable
