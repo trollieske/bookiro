@@ -30,11 +30,11 @@ break any Linux/macOS CI clone** and should be made machine-local (e.g. remove i
 committed `gradle.properties` and use an env var / local file). See Needs human review.
 
 ### 0.1 Release build (final)
-`assembleRelease` + `bundleRelease` **BUILD SUCCESSFUL** (9m03s with cold R8).
-Produced `app-release.aab` (49 MB) and split APKs (arm64 31 MB, armeabi-v7a 29 MB,
-x86_64 32 MB, universal 60 MB). Release is already R8-minified + resource-shrunk, so
-the 31 MB arm64 download is much smaller than the 60 MB debug APK. The release build is
-still signed with the **debug keystore** (see blocker #2).
+`assembleRelease` + `bundleRelease` **BUILD SUCCESSFUL** (with the R8 `Log`-stripping rule).
+Produced `app-release.aab` and split APKs (arm64 ≈ 32 MB, armeabi-v7a ≈ 30 MB).
+Release is already R8-minified + resource-shrunk, so the arm64 download is much smaller
+than the 60 MB debug APK. The release build is still signed with the **debug keystore**
+(see blocker #2).
 
 ---
 
@@ -87,6 +87,19 @@ Details of B8 (torrent):
 - **Wasted work on every launch.** The worker started the native session + a foreground notification on every app start and `runNow` used non-unique `enqueue` (workers could pile up). The worker now returns early when there is nothing pending, and `runNow` uses `enqueueUniqueWork(..., KEEP)`.
 - **Missing notification permission** on the Torrent route; now requests `POST_NOTIFICATIONS`.
 - Added a localized "Only download content you have the rights to" notice next to the preset sources.
+
+### 2.2 Round 2 additions
+
+| Commit | Area | Change |
+|---|---|---|
+| `616a0e3` | Play | **Removed the Libgen preset source.** Only Internet Archive, Standard Ebooks and Project Gutenberg remain. |
+| `b5dd0a7` | Functional (high) | **Added a network security config.** There was none, so on targetSdk 28+ Android blocked every `http://` connection — WebDAV, Calibre Content Server and plain-HTTP podcast feeds on a LAN failed with *CLEARTEXT communication not permitted*. Cleartext is now permitted (LAN IPs cannot be domain-allow-listed) with system TLS anchors kept. |
+| `da4e037` | Torrent | Cap failed session adds at 10 → `FAILED` (no more 2-second retry loop); convert 32-char base32 magnet infohashes to hex + case-insensitive `xt` match; `deleteDownload(withFiles=true)` only deletes paths strictly inside the private torrent dir; torrent notification now opens the app. |
+| `d8f6044` | Torrent / Settings | **The torrent background / Wi-Fi-only / charging-only / min-battery settings now actually work.** They were written to DataStore but never read; the worker hardcoded the values and was scheduled regardless of the master toggle. New `applyUserSettings()` is called on app start and after every toggle. |
+| `ac261ff` | UI | Torrent settings section used a hardcoded purple that clashed with the single lime HUD accent; Home empty-state Sources link now has a 48 dp touch target. |
+| `ebe7d52` | Perf / privacy | R8 `-assumenosideeffects` strips `Log.v/d/i` from release builds (smaller APK, fewer path/URI strings in logs); `Log.w/e` kept. |
+| `ab8a46f` | i18n | Reader bookmark save/remove HUD and stored bookmark title/snippet were hardcoded Norwegian/English (new `rdr_bookmark_saved`, `rdr_bookmark_removed`, `rdr_page_n` keys, all 10 locales). The torrent summary showed the raw `TrackerState` enum and picked the error colour via `contains("feil")/"error"`; now carries the enum and uses the localized `toru_tr_*` labels. |
+| `e042b3c` | i18n | Removed the last hardcoded Norwegian in `:core`/`:designsystem` (PDF/CBZ parse-failure HTML, MOBI magic-byte exception, not-downloaded cover `contentDescription`) — now English base locale; full resource localization needs `Context` plumbed into the parsers. |
 
 ---
 
@@ -192,18 +205,18 @@ credentials never leave the device; and (for the EU) the legal basis for those l
 
 1. **API 36 target** (blocker) — decide whether to bump `compileSdk`/`targetSdk` to 36 before the Nov 1 2026 extension. Requires installing `android-36` and a device pass for Android 16 behavior.
 2. **Release signing** (blocker) — add a release signing config sourced from env/`local.properties` (never committed). Play rejects debug-signed builds.
-3. **Libgen preset source** (policy) — decide: remove the `Libgen` chip, or keep it. The neutral rights notice is in place but does not remove the risk.
+3. **Libgen preset source** — **FIXED** in `616a0e3` (removed). Only legitimate public-domain sources remain.
 4. **Audible/audnex chapter lookup** (privacy) — decide whether to gate it behind a setting (like `onlineCoverLookup`) or disclose it in Data Safety + privacy policy.
 5. **`gradle.properties` Windows JDK path** — remove from the committed file so CI on Linux/macOS works.
 6. **Handoff repository** — ~~replace `runBlocking` inside `db.runInTransaction`~~ **FIXED** in `45a31bd` (`db.withTransaction`). Still worth a device pass of the ebook↔audio handoff; no unit test covers it.
-7. **Torrent Settings toggles** — wire `wifiOnly`/`chargingOnly`/`batteryMinPercent`/background into the worker, or hide the controls. Currently misleading.
+7. **Torrent Settings toggles** — **FIXED** in `d8f6044` (`applyUserSettings()` now reads the prefs on start and on change).
 8. **Torrent engine lifecycle** — `stop()` on the main thread, non-volatile `running`, `sessionManager` not cleared on stop, repeated `start()` can create a second `SessionManager`.
 9. **ProGuard keeps / APK size** — validate trimming with a release smoke test before shipping.
 10. **`TorrentEngine.pauseAll`** now pauses native handles, but the UI "Pause all"/"Resume all" should be manually verified on device.
-11. **Stuck torrents** — a malformed `.torrent` or unparseable magnet leaves a row with `infoHash == null` that is re-added every ~2 s and never reaches a `FAILED` state (no user-visible error). Consider a retry cap / terminal failure. (`TorrentEngine.tickMain`, scout F32/F33.)
-12. **Base32 magnets** — 32-char base32 infohashes are accepted but never converted to hex, so they never match. (`TorrentEngine.parseMagnet`, scout F34.)
-13. **`deleteDownload(withFiles = true)`** does `File(dl.savePath).deleteRecursively()` without guarding the shared `filesDir/shelf_torrents` root; the UI currently always passes `false`. Add a root guard before enabling file deletion. (scout F39.)
-14. **Torrent notification has no content intent** (`PendingIntent`), so tapping it does nothing. (scout F46.)
+11. **Stuck torrents** — **FIXED** in `da4e037` (retry cap → `FAILED`).
+12. **Base32 magnets** — **FIXED** in `da4e037` (converted to hex).
+13. **`deleteDownload(withFiles = true)`** — **FIXED** in `da4e037` (root guard).
+14. **Torrent notification has no content intent** — **FIXED** in `da4e037`.
 15. **Low storage** — only the WorkManager `setRequiresStorageNotLow` constraint applies; the running engine does not react to the device filling up. (scout F14.)
 
 ---
@@ -258,4 +271,12 @@ f51d35b fix(privacy): remove debug telemetry that POSTed to a LAN server
 85ff8f4 fix(play): drop unused Bluetooth permissions and harden backup rules
 d20e06f fix(torrent): actually pause downloads, guard crashes, neutral rights notice
 45a31bd perf(data): use Room withTransaction in the handoff path
+616a0e3 fix(play): remove Libgen from the torrent preset sources
+b5dd0a7 fix(network): permit cleartext HTTP for user LAN sources
+da4e037 fix(torrent): cap start retries, base32 magnets, safe delete, notif intent
+d8f6044 fix(torrent): make the background/network/charging/battery settings work
+ac261ff ui: torrent settings use the lime accent; 48dp Home empty-state link
+ebe7d52 perf(release): strip verbose/info logging with R8
+ab8a46f i18n: localize reader bookmark HUD and torrent tracker status
+e042b3c i18n: remove hardcoded Norwegian fallbacks in core/designsystem
 ```
