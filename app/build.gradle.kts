@@ -14,8 +14,8 @@ android {
         applicationId = "com.bookrio"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.0-readium8"
+        versionCode = 11
+        versionName = "1.0.0-readium9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
