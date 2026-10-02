@@ -32,6 +32,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,7 +73,7 @@ private const val SNAP_MINUTES = 5
 /** Fraction of the dial radius that is a "dead zone": gestures there are ignored. */
 private const val DEAD_ZONE_FRACTION = 0.26f
 
-private val DialSize = 180.dp
+private val DialSize = 168.dp
 
 /** The presets the players offer today; callers may override. */
 private val DefaultPresets = listOf(5, 15, 30, 45, 60, 90)
@@ -149,6 +150,9 @@ fun SleepTimerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // Open fully expanded so the Start/Set button is always visible; the
+        // default partially-expanded anchor hid it behind a drag.
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = OmarchyColors.Panel,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = { BottomSheetDefaults.DragHandle(color = OmarchyColors.Hairline) }
@@ -157,9 +161,9 @@ fun SleepTimerSheet(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 28.dp),
+                .padding(bottom = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
                 title,
