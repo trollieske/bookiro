@@ -125,6 +125,7 @@
     <!-- Sleep timer -->
     <string name="pod_sleep_a11y">Søvntimer</string>
     <string name="pod_sleep_title">Søvntimer</string>
+    <string name="pod_sleep_unit">min</string>
     <string name="pod_sleep_active">⏱ Aktiv nedtælling: %1$d min %2$d sek</string>
     <string name="pod_sleep_off">Slå fra</string>
     <string name="pod_sleep_custom_min">Brugerdefineret tid (minutter)</string>

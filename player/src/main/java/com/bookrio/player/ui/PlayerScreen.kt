@@ -47,6 +47,8 @@ import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.HandoffPrecisionEntity
 import com.bookrio.data.repository.HandoffRepository
 import com.bookrio.data.repository.ResolvedHandoff
+import com.bookrio.designsystem.components.SleepTimerSheet
+import com.bookrio.designsystem.theme.OmarchyColors
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfFonts
 import com.bookrio.designsystem.theme.ShelfTypography
@@ -216,22 +218,23 @@ fun PlayerScreen(
                     }
                     if (state.sleepTimerRemainingMs > 0L) {
                         // Aktiv søvntimer: kompakt live-nedtelling øverst til høyre.
-                        // Én linje, HUD-stil, åpner eksisterende søvntimer-kontroller ved trykk.
+                        // Én linje, HUD-stil, åpner søvntimer-hjulet ved trykk.
                         Surface(
                             onClick = { showSleep = true },
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color.Black.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(50),
+                            color = OmarchyColors.Accent.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, OmarchyColors.Accent.copy(alpha = 0.35f)),
                             modifier = Modifier.padding(end = 6.dp)
                         ) {
                             Text(
                                 "☾ ${formatSleepCountdown(state.sleepTimerRemainingMs / 1000L)}",
                                 style = ShelfTypography.LabelMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
+                                color = OmarchyColors.Accent,
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Clip,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         }
                     } else {
@@ -631,8 +634,14 @@ fun PlayerScreen(
 
     if (showSleep) {
         SleepTimerSheet(
-            current = state.sleepTimerMinutes,
+            currentMinutes = state.sleepTimerMinutes,
             remainingMs = state.sleepTimerRemainingMs,
+            title = stringResource(R.string.ply_sleep_title),
+            presetsLabel = stringResource(R.string.ply_sleep_presets),
+            startLabel = stringResource(R.string.ply_sleep_set),
+            offLabel = stringResource(R.string.ply_sleep_turn_off_timer),
+            minuteUnit = stringResource(R.string.ply_sleep_unit),
+            minuteFormatter = { mins -> ctx.getString(R.string.ply_sleep_minutes, mins) },
             onDismiss = { showSleep = false },
             onPick = { mins -> scope.launch { vm.setSleepTimer(mins) }; showSleep = false }
         )
@@ -932,102 +941,6 @@ private fun formatDuration(totalSeconds: Long): String {
     val m = (s % 3600L) / 60L
     val sec = s % 60L
     return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SleepTimerSheet(
-    current: Int?,
-    remainingMs: Long,
-    onDismiss: () -> Unit,
-    onPick: (Int?) -> Unit
-) {
-    var customText by remember { mutableStateOf("") }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text(stringResource(R.string.ply_sleep_title), style = ShelfTypography.TitleLarge, fontWeight = FontWeight.Bold)
-
-            if (remainingMs > 0L) {
-                val sec = remainingMs / 1000L
-                val m = sec / 60L
-                val s = sec % 60L
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            stringResource(R.string.ply_sleep_active, m, s),
-                            style = ShelfTypography.BodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        TextButton(onClick = { onPick(null) }) {
-                            Text(stringResource(R.string.ply_sleep_off), color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-            }
-
-            // Custom Time Input Field
-            Text(stringResource(R.string.ply_sleep_custom_min), style = ShelfTypography.LabelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = customText,
-                    onValueChange = { customText = it.filter { c -> c.isDigit() }.take(3) },
-                    placeholder = { Text(stringResource(R.string.ply_sleep_hint)) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Button(
-                    onClick = {
-                        val mins = customText.toIntOrNull()
-                        if (mins != null && mins > 0) {
-                            onPick(mins)
-                        }
-                    },
-                    enabled = customText.toIntOrNull()?.let { it > 0 } == true
-                ) {
-                    Text(stringResource(R.string.ply_sleep_set))
-                }
-            }
-
-            Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.ply_sleep_presets), style = ShelfTypography.LabelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            val options = listOf(null, 5, 10, 15, 30, 45, 60, 90)
-            options.forEach { mins ->
-                val label = if (mins == null) stringResource(R.string.ply_sleep_turn_off_timer) else stringResource(R.string.ply_sleep_minutes, mins)
-                val selected = current == mins
-                OutlinedButton(
-                    onClick = { onPick(mins) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Text(label, style = ShelfTypography.BodyMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-                }
-            }
-            Spacer(Modifier.height(32.dp))
-        }
-    }
 }
 
 private fun dbgPlayerUi(hypothesisId: String, msg: String, data: String) {
