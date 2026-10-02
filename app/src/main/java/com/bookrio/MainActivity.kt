@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,6 +73,7 @@ import com.bookrio.ftp.ui.FtpBrowserScreen
 import com.bookrio.ftp.ui.FtpConnectionScreen
 import com.bookrio.ftp.ui.FtpSourceDetailsScreen
 import com.bookrio.ftp.ui.FtpSourcesScreen
+import com.bookrio.app.ui.HomeScreen
 import com.bookrio.app.ui.RemoteTransfersScreen
 import com.bookrio.smb.ui.SmbScreen
 import com.bookrio.webdav.ui.WebdavScreen
@@ -110,12 +113,28 @@ class MainActivity : AppCompatActivity() {
 private sealed class BottomNavItem(
     val route: String,
     @StringRes val labelRes: Int,
-    val icon: ImageVector
+    val icon: ImageVector,
+    /** Renders the Bookiro brand mark instead of a Material icon. */
+    val brand: Boolean = false
 ) {
     object Books : BottomNavItem(ShelfDestinations.Books.route, R.string.nav_books, Icons.Default.AutoStories)
     object Audiobooks : BottomNavItem(ShelfDestinations.Audiobooks.route, R.string.shelf_audiobooks, Icons.Default.Headphones)
+    object Home : BottomNavItem(ShelfDestinations.Home.route, R.string.nav_home, Icons.Default.Home, brand = true)
     object Podcasts : BottomNavItem(ShelfDestinations.Podcasts.route, com.bookrio.podcast.R.string.pod_nav_title, Icons.Default.Podcasts)
     object Settings : BottomNavItem(ShelfDestinations.Settings.route, R.string.nav_settings, Icons.Filled.Settings)
+}
+
+@Composable
+private fun NavItemIcon(item: BottomNavItem, label: String) {
+    if (item.brand) {
+        Image(
+            painter = painterResource(com.bookrio.designsystem.R.drawable.bookrio_mark),
+            contentDescription = label,
+            modifier = Modifier.size(22.dp)
+        )
+    } else {
+        Icon(item.icon, contentDescription = label)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,12 +155,19 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
         return
     }
 
-    val defaultStart = if (hasSeenOnboardingState == true) ShelfDestinations.Books.route else ShelfDestinations.Onboarding.route
+    val defaultStart = if (hasSeenOnboardingState == true) ShelfDestinations.Home.route else ShelfDestinations.Onboarding.route
     val startDest = initialRoute ?: defaultStart
-    val items = listOf(BottomNavItem.Books, BottomNavItem.Audiobooks, BottomNavItem.Podcasts, BottomNavItem.Settings)
+    val items = listOf(
+        BottomNavItem.Books,
+        BottomNavItem.Audiobooks,
+        BottomNavItem.Home,
+        BottomNavItem.Podcasts,
+        BottomNavItem.Settings
+    )
     val showBottomRoutes = setOf(
         ShelfDestinations.Books.route,
         ShelfDestinations.Audiobooks.route,
+        ShelfDestinations.Home.route,
         ShelfDestinations.Podcasts.route,
         ShelfDestinations.Settings.route
     )
@@ -254,9 +280,9 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                                                         Text(if (tabCount > 99) "99+" else tabCount.toString())
                                                     }
                                                 }
-                                            ) { Icon(item.icon, contentDescription = itemLabel) }
+                                            ) { NavItemIcon(item, itemLabel) }
                                         } else {
-                                            Icon(item.icon, contentDescription = itemLabel)
+                                            NavItemIcon(item, itemLabel)
                                         }
                                     },
                                     label = if (selected) { { Text(itemLabel, style = com.bookrio.designsystem.theme.ShelfTypography.LabelMedium, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) } } else null,
@@ -327,6 +353,20 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onFtpClick = { navController.navigate(ShelfDestinations.Sources.route) },
                     onSettingsClick = { navController.navigate(ShelfDestinations.Settings.route) },
                     onNavVisibilityChange = { libraryNavVisible = it }
+                )
+            }
+            composable(ShelfDestinations.Home.route) {
+                HomeScreen(
+                    onOpenBook = { id, isAudio ->
+                        navController.navigate(
+                            if (isAudio) ShelfDestinations.Player.routeFor(id)
+                            else ShelfDestinations.Reader.routeFor(id)
+                        )
+                    },
+                    onOpenEpisode = { episodeId ->
+                        navController.navigate(ShelfDestinations.PodcastPlayer.routeFor(episodeId))
+                    },
+                    onOpenImport = { navController.navigate(ShelfDestinations.Import.route) }
                 )
             }
             composable(ShelfDestinations.Podcasts.route) {

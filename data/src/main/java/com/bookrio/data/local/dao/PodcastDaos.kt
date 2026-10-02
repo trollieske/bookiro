@@ -27,6 +27,20 @@ data class PodcastFeedSummary(
     val lastSyncStatus: String?
 )
 
+/** Read model for the newest episodes across all followed feeds (Home tab). */
+data class PodcastLatestEpisode(
+    val episodeId: Long,
+    val feedId: Long,
+    val episodeTitle: String,
+    val feedTitle: String,
+    val artworkUrl: String?,
+    val publishedAt: Long?,
+    val durationMs: Long?,
+    val positionMs: Long,
+    val isCompleted: Boolean,
+    val lastPlayedAt: Long?
+)
+
 /** Read model for a resumable podcast episode (multi-episode resume). */
 data class PodcastResumeItem(
     val episodeId: Long,
@@ -146,6 +160,29 @@ interface PodcastEpisodeDao {
         """
     )
     fun observeResumeItems(limit: Int = 25): Flow<List<PodcastResumeItem>>
+
+    /**
+     * Newest episodes across every followed feed, read-only and cross-feed.
+     * Used by the Home tab's "Latest episodes" section; playback progress is
+     * exposed so the caller can hide episodes already shown in the resume list.
+     */
+    @Query(
+        """
+        SELECT e.id AS episodeId, e.feed_id AS feedId, e.title AS episodeTitle,
+               f.title AS feedTitle, COALESCE(e.artwork_url, f.artwork_url) AS artworkUrl,
+               e.published_at AS publishedAt, e.duration_ms AS durationMs,
+               COALESCE(p.position_ms, 0) AS positionMs,
+               COALESCE(p.is_completed, 0) AS isCompleted,
+               p.last_played_at AS lastPlayedAt
+        FROM podcast_episodes e
+        JOIN podcast_feeds f ON f.id = e.feed_id
+        LEFT JOIN podcast_playback p ON p.episode_id = e.id
+        WHERE f.is_followed = 1
+        ORDER BY COALESCE(e.published_at, 0) DESC, e.id DESC
+        LIMIT :limit
+        """
+    )
+    fun observeLatestEpisodes(limit: Int = 25): Flow<List<PodcastLatestEpisode>>
 }
 
 @Dao

@@ -261,4 +261,18 @@
     <string name="transfers_pause">Пауза</string>
     <string name="transfers_resume">Продовжити</string>
     <string name="transfers_cancel">Скасувати</string>
+
+    <string name="nav_home">Головна</string>
+    <string name="home_streak">Серія з %1$d днів</string>
+    <string name="home_status_in_progress">%1$d у процесі</string>
+    <string name="home_status_ebooks">%1$d книжки</string>
+    <string name="home_status_audiobooks">%1$d аудіокниги</string>
+    <string name="home_status_podcasts">%1$d подкасти</string>
+    <string name="home_section_latest_episodes">Останні епізоди</string>
+    <string name="home_empty_title">Тут поки нічого немає</string>
+    <string name="home_empty_body">Почніть книжку або підпишіться на подкаст — вони з\'являться тут.</string>
+    <string name="home_empty_import">Імпортувати книжки</string>
+    <string name="home_not_started">Не розпочато</string>
+    <string name="home_duration_hm">%1$d год %2$d хв</string>
+    <string name="home_duration_m">%1$d хв</string>
 </resources>
