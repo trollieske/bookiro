@@ -24,6 +24,9 @@
     <string name="rdr_contents">Contenido</string>
     <string name="rdr_themes">Temas</string>
     <string name="rdr_bookmark">Marcador</string>
+    <string name="rdr_bookmark_saved">Marcador guardado</string>
+    <string name="rdr_bookmark_removed">Marcador eliminado</string>
+    <string name="rdr_page_n">Página %1$d</string>
     <string name="rdr_lock">Bloquear</string>
     <string name="rdr_locked">Bloqueado</string>
     <string name="rdr_go_back">Volver</string>

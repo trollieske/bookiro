@@ -24,6 +24,9 @@
     <string name="rdr_contents">Innehåll</string>
     <string name="rdr_themes">Teman</string>
     <string name="rdr_bookmark">Bokmärke</string>
+    <string name="rdr_bookmark_saved">Bokmärke sparat</string>
+    <string name="rdr_bookmark_removed">Bokmärke borttaget</string>
+    <string name="rdr_page_n">Sida %1$d</string>
     <string name="rdr_lock">Lås</string>
     <string name="rdr_locked">Låst</string>
     <string name="rdr_go_back">Gå tillbaka</string>

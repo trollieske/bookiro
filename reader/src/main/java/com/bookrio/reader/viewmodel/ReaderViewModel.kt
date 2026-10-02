@@ -244,21 +244,23 @@ class ReaderViewModel(
                     .getByBookSectionPage(bookId, BookmarkTypeEntity.GENERIC, chapterIdx, page)
                 if (existing != null) {
                     db.bookmarkDao().delete(existing)
-                    "Bokmerke fjernet"
+                    getApplication<Application>().getString(R.string.rdr_bookmark_removed)
                 } else {
                     val chapterTitle = state.chapters.getOrNull(chapterIdx)?.title
+                    val app = getApplication<Application>()
+                    val chapterLabel = app.getString(R.string.rdr_chapter, chapterIdx + 1)
                     db.bookmarkDao().insert(
                         BookmarkEntity(
                             bookId = bookId,
                             type = BookmarkTypeEntity.GENERIC,
-                            title = chapterTitle?.let { "Chap ${chapterIdx + 1}: $it" },
-                            snippet = "Page ${page + 1}",
+                            title = chapterTitle?.let { "$chapterLabel: $it" },
+                            snippet = app.getString(R.string.rdr_page_n, page + 1),
                             pageIndex = page,
                             chapterIndex = chapterIdx,
                             positionPercent = pct.coerceIn(0f, 1f),
                         )
                     )
-                    "Bokmerke lagret"
+                    app.getString(R.string.rdr_bookmark_saved)
                 }
             }.onSuccess { _bookmarkHudMessage.value = it }
         }

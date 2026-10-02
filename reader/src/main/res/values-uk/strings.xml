@@ -24,6 +24,9 @@
     <string name="rdr_contents">Зміст</string>
     <string name="rdr_themes">Оформлення</string>
     <string name="rdr_bookmark">Закладка</string>
+    <string name="rdr_bookmark_saved">Закладку збережено</string>
+    <string name="rdr_bookmark_removed">Закладку видалено</string>
+    <string name="rdr_page_n">Сторінка %1$d</string>
     <string name="rdr_lock">Заблокувати</string>
     <string name="rdr_locked">Заблоковано</string>
     <string name="rdr_go_back">Назад</string>
