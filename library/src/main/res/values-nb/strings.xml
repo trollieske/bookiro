@@ -13,11 +13,18 @@
     <string name="lib_empty_desc">Legg til e-bøker og lydbøker ved å importere filer fra enheten eller synkronisere fra FTP/seedbox.</string>
     <string name="lib_sync_button">Synkroniser fra FTP / Seedbox</string>
     <string name="lib_import_button">Importer fra enhet</string>
-    <string name="lib_sort_shelf">Hylle</string>
     <string name="lib_sort_series">Serie</string>
     <string name="lib_sort_author">Forfatter</string>
-    <string name="lib_sort_recent">Nylig</string>
+    <string name="lib_sort_recent">Nylig spilt</string>
     <string name="lib_sort_title">Tittel</string>
-    <string name="lib_sort_added">Lagt til</string>
+    <string name="lib_sort_added">Nylig lagt til</string>
     <string name="lib_remaining">%1$s igjen</string>
+
+    <string name="lib_item_count">%1$d elementer</string>
+    <string name="lib_sort_sheet_title">Sorter biblioteket</string>
+    <string name="lib_sort_direction">Retning</string>
+    <string name="lib_dir_az">A–Å</string>
+    <string name="lib_dir_za">Å–A</string>
+    <string name="lib_dir_oldest">Eldste først</string>
+    <string name="lib_dir_newest">Nyeste først</string>
 </resources>

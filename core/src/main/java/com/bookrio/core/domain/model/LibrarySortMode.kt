@@ -1,7 +1,9 @@
 package com.bookrio.core.domain.model
 
 /**
- * Library sort modes for the visible Sort Rail (in rail order).
+ * Library sort modes. [HYLLE] is a legacy "Shelf" grouping kept only so stored
+ * preferences can be migrated; it is never shown in the UI. The visible modes
+ * are [visible]: Recently played · Recently added · Title · Author · Series.
  * Pure domain model — shared by data (persistence) and library (sorting).
  */
 enum class LibrarySortMode(val storage: String) {
@@ -14,7 +16,7 @@ enum class LibrarySortMode(val storage: String) {
 
     val label: String
         get() = when (this) {
-            HYLLE -> "Hylle"
+            HYLLE -> "Serie" // legacy alias; never rendered
             SERIE -> "Serie"
             FORFATTER -> "Forfatter"
             NYLIG -> "Nylig"
@@ -23,9 +25,23 @@ enum class LibrarySortMode(val storage: String) {
         }
 
     companion object {
-        /** Default and fallback for invalid legacy values is always HYLLE. */
-        fun from(storage: String?): LibrarySortMode =
-            entries.firstOrNull { it.storage == storage } ?: HYLLE
+        /** Modes presented in the sort sheet, most useful first. */
+        val visible: List<LibrarySortMode> = listOf(NYLIG, LAGT_TIL, TITTEL, FORFATTER, SERIE)
+
+        /** Sensible first-run default: newest additions first. */
+        val DEFAULT: LibrarySortMode = LAGT_TIL
+
+        /**
+         * Maps stored (possibly legacy) values. The old "Shelf" mode sorted
+         * series-first, so it migrates to [SERIE]; the legacy keys
+         * "date_added"/"progress" map onto their modern equivalents.
+         */
+        fun from(storage: String?): LibrarySortMode = when (storage) {
+            "hylle" -> SERIE
+            "date_added" -> LAGT_TIL
+            "progress" -> NYLIG
+            else -> entries.firstOrNull { it.storage == storage } ?: DEFAULT
+        }
     }
 }
 

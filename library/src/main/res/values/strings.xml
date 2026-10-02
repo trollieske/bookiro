@@ -13,12 +13,19 @@
     <string name="lib_empty_desc">Add ebooks and audiobooks by importing files from your device or syncing from FTP/seedbox.</string>
     <string name="lib_sync_button">Sync from FTP / seedbox</string>
     <string name="lib_import_button">Import from device</string>
-    <string name="lib_sort_shelf">Shelf</string>
     <string name="lib_sort_series">Series</string>
     <string name="lib_sort_author">Author</string>
-    <string name="lib_sort_recent">Recent</string>
+    <string name="lib_sort_recent">Recently played</string>
     <string name="lib_sort_title">Title</string>
     <string name="lib_view_toggle_a11y">Toggle grid or list view</string>
-    <string name="lib_sort_added">Date added</string>
+    <string name="lib_sort_added">Recently added</string>
     <string name="lib_remaining">%1$s left</string>
+
+    <string name="lib_item_count">%1$d items</string>
+    <string name="lib_sort_sheet_title">Sort library</string>
+    <string name="lib_sort_direction">Direction</string>
+    <string name="lib_dir_az">A–Z</string>
+    <string name="lib_dir_za">Z–A</string>
+    <string name="lib_dir_oldest">Oldest first</string>
+    <string name="lib_dir_newest">Newest first</string>
 </resources>

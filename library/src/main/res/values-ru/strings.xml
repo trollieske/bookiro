@@ -13,11 +13,18 @@
     <string name="lib_empty_desc">Добавляйте электронные и аудиокниги, импортируя файлы с устройства или синхронизируясь с FTP/seedbox.</string>
     <string name="lib_sync_button">Синхронизировать с FTP / seedbox</string>
     <string name="lib_import_button">Импортировать с устройства</string>
-    <string name="lib_sort_shelf">Полка</string>
     <string name="lib_sort_series">Серия</string>
     <string name="lib_sort_author">Автор</string>
-    <string name="lib_sort_recent">Недавние</string>
+    <string name="lib_sort_recent">Недавно прослушано</string>
     <string name="lib_sort_title">Название</string>
-    <string name="lib_sort_added">Когда добавлена</string>
+    <string name="lib_sort_added">Недавно добавлено</string>
     <string name="lib_remaining">Осталось %1$s</string>
+
+    <string name="lib_item_count">%1$d элементов</string>
+    <string name="lib_sort_sheet_title">Сортировать библиотеку</string>
+    <string name="lib_sort_direction">Порядок</string>
+    <string name="lib_dir_az">А–Я</string>
+    <string name="lib_dir_za">Я–А</string>
+    <string name="lib_dir_oldest">Сначала старые</string>
+    <string name="lib_dir_newest">Сначала новые</string>
 </resources>

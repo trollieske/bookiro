@@ -53,11 +53,14 @@ enum class BookFormat(val ext: Set<String>, val isAudio: Boolean) {
 }
 
 enum class LibraryViewType(val storageKey: String) {
-    SHELF("shelf"), GRID("grid"), LIST("list");
+    GRID("grid"), LIST("list");
 
     companion object {
-        fun fromStorage(key: String?): LibraryViewType =
-            key?.let { k -> entries.firstOrNull { it.storageKey == k } } ?: SHELF
+        /** Only grid and list exist; the legacy "shelf" value renders as grid. */
+        fun fromStorage(key: String?): LibraryViewType = when (key) {
+            "list" -> LIST
+            else -> GRID
+        }
     }
 }
 

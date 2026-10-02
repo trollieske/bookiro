@@ -13,8 +13,7 @@ import com.bookrio.core.domain.model.SortDirection
  * and feeds them through [LibrarySorter.sort]; UI state is derived from the
  * result — no fake state.
  *
- * Sort modes (visible Sort Rail, in this order):
- *   HYLLE (default) · SERIE · FORFATTER · NYLIG · TITTEL · LAGT_TIL
+ * Sort modes (visible sort sheet): NYLIG · LAGT_TIL · TITTEL · FORFATTER · SERIE
  */
 
 /**
@@ -211,41 +210,62 @@ object LibrarySorter {
         return if (direction == SortDirection.DESC) base.asReversed() else base
     }
 
-    // ── HYLLE section labels ─────────────────────────────────────────────────
+    // ── Section labels (Series / Author grouping) ────────────────────────────
 
     /**
-     * Minimal full-width section labels for HYLLE mode only.
-     * Series group  → "SERIE · FORFATTER"
-     * Author group  → "FORFATTER" (skipped for single-book groups to avoid noise)
+     * Full-width section labels for the two grouping modes:
+     *  - [LibrarySortMode.SERIE]: one label per series group ("SERIES · AUTHOR");
+     *    series-less books fall back to author groups, and single-book author
+     *    groups stay unlabeled to avoid noise.
+     *  - [LibrarySortMode.FORFATTER]: one label per author group (always labeled —
+     *    grouping by author is the point of the mode).
      * Returns a list parallel to [sorted]; null = no label before that book.
      */
-    fun sectionLabels(sorted: List<SortBook>): List<String?> {
+    fun sectionLabels(sorted: List<SortBook>, mode: LibrarySortMode): List<String?> {
         if (sorted.isEmpty()) return emptyList()
+        if (mode != LibrarySortMode.SERIE && mode != LibrarySortMode.FORFATTER) {
+            return List(sorted.size) { null }
+        }
         val labels = arrayOfNulls<String>(sorted.size)
-        var prevKey: String? = null
 
-        // Pre-compute group sizes per key so one-book author groups stay unlabeled.
-        val groupSizes = HashMap<String, Int>()
-        sorted.forEach { b ->
-            val key = groupKey(b) ?: return@forEach
-            groupSizes[key] = (groupSizes[key] ?: 0) + 1
+        if (mode == LibrarySortMode.FORFATTER) {
+            var prev: String? = null
+            sorted.forEachIndexed { i, b ->
+                if (!isValidAuthor(b.author)) {
+                    labels[i] = null
+                    prev = null
+                    return@forEachIndexed
+                }
+                val key = displayAuthor(b).lowercase(Locale.ROOT)
+                if (key != prev) {
+                    labels[i] = displayAuthor(b).uppercase(Locale.ROOT)
+                    prev = key
+                }
+            }
+            return labels.toList()
         }
 
+        // SERIE: series groups first, author fallback for series-less books.
+        var prevKey: String? = null
+        val groupSizes = HashMap<String, Int>()
+        sorted.forEach { b ->
+            val key = seriesGroupKey(b) ?: return@forEach
+            groupSizes[key] = (groupSizes[key] ?: 0) + 1
+        }
         sorted.forEachIndexed { i, b ->
-            val key = groupKey(b)
+            val key = seriesGroupKey(b)
             val label = when {
                 key == null -> null
                 key != prevKey -> {
                     val size = groupSizes[key] ?: 1
-                    val isSeries = isValidSeries(b.series)
-                    // Series groups always labeled; author labels skipped for 1-book groups.
-                    if (!isSeries && size < 2) null
-                    else if (isSeries) {
+                    if (isValidSeries(b.series)) {
                         val author = displayAuthor(b)
                         val seriesName = displaySeries(b)
                         if (isValidAuthor(b.author)) "$seriesName · $author".uppercase(Locale.ROOT)
                         else seriesName.uppercase(Locale.ROOT)
-                    } else displayAuthor(b).uppercase(Locale.ROOT)
+                    } else if (size >= 2) {
+                        displayAuthor(b).uppercase(Locale.ROOT)
+                    } else null
                 }
                 else -> null
             }
@@ -255,10 +275,9 @@ object LibrarySorter {
         return labels.toList()
     }
 
-    private fun groupKey(b: SortBook): String? {
-        val series = displaySeries(b)
-        if (isValidSeries(b.series)) return "s:" + series.lowercase(Locale.ROOT)
+    private fun seriesGroupKey(b: SortBook): String? {
+        if (isValidSeries(b.series)) return "s:" + displaySeries(b).lowercase(Locale.ROOT)
         if (isValidAuthor(b.author)) return "a:" + displayAuthor(b).lowercase(Locale.ROOT)
-        return null // unknown series/author → no label, appears last
+        return null
     }
 }

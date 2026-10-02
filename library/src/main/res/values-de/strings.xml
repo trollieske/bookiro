@@ -13,11 +13,18 @@
     <string name="lib_empty_desc">Füge E-Books und Hörbücher hinzu, indem du Dateien von deinem Gerät importierst oder von FTP/Seedbox synchronisierst.</string>
     <string name="lib_sync_button">Von FTP / Seedbox synchronisieren</string>
     <string name="lib_import_button">Vom Gerät importieren</string>
-    <string name="lib_sort_shelf">Regal</string>
     <string name="lib_sort_series">Serie</string>
     <string name="lib_sort_author">Autor</string>
-    <string name="lib_sort_recent">Zuletzt</string>
+    <string name="lib_sort_recent">Zuletzt gehört</string>
     <string name="lib_sort_title">Titel</string>
-    <string name="lib_sort_added">Hinzugefügt</string>
+    <string name="lib_sort_added">Zuletzt hinzugefügt</string>
     <string name="lib_remaining">%1$s übrig</string>
+
+    <string name="lib_item_count">%1$d Einträge</string>
+    <string name="lib_sort_sheet_title">Bibliothek sortieren</string>
+    <string name="lib_sort_direction">Richtung</string>
+    <string name="lib_dir_az">A–Z</string>
+    <string name="lib_dir_za">Z–A</string>
+    <string name="lib_dir_oldest">Älteste zuerst</string>
+    <string name="lib_dir_newest">Neueste zuerst</string>
 </resources>

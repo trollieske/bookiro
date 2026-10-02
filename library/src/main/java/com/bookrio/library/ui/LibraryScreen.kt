@@ -1,22 +1,21 @@
 package com.bookrio.library.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -25,9 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -82,6 +80,7 @@ fun LibraryScreen(
     LaunchedEffect(mode) { vm.setMode(mode) }
     var search by rememberSaveable { mutableStateOf("") }
     var showResumeSheet by rememberSaveable { mutableStateOf(false) }
+    var showSortSheet by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -257,12 +256,11 @@ fun LibraryScreen(
                         .background(LibHairline)
                 )
 
-                // Sort Rail: alltid synlig over rutenettet, i begge faner.
-                SortRail(
-                    activeMode = ui.sortMode,
-                    direction = ui.direction,
-                    onSelect = { vm.setSortMode(it) },
-                    onToggleDirection = { vm.toggleSortDirection() }
+                // Kompakt sorteringskontroll; selve valgene bor i et sheet.
+                SortBar(
+                    mode = ui.sortMode,
+                    itemCount = booksToDisplay.size,
+                    onClick = { showSortSheet = true }
                 )
 
                 // Fortsett-linje: waybar/tmux-stil. Monospace, lavkontrast, full bredde, ikke kort.
@@ -288,16 +286,22 @@ fun LibraryScreen(
                     } else if (ui.viewType == LibraryViewType.LIST) {
                         LazyColumn(
                             state = listState,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                         ) {
-                            items(ui.gridEntries) { entry ->
+                            itemsIndexed(
+                                ui.gridEntries,
+                                key = { index, entry -> gridEntryKey(index, entry) }
+                            ) { _, entry ->
                                 when (entry) {
                                     is GridEntry.SectionLabel -> SectionLabel(entry.text)
-                                    is GridEntry.BookEntry -> BookListRow(
-                                        book = entry.book,
-                                        onClick = { onBookClick(entry.book.id) },
-                                        onLongClick = { onBookLongClick(entry.book.id) }
-                                    )
+                                    is GridEntry.BookEntry -> Column {
+                                        BookListRow(
+                                            book = entry.book,
+                                            onClick = { onBookClick(entry.book.id) },
+                                            onLongClick = { onBookLongClick(entry.book.id) }
+                                        )
+                                        HorizontalDivider(thickness = 0.5.dp, color = LibHairline)
+                                    }
                                 }
                             }
                         }
@@ -309,12 +313,13 @@ fun LibraryScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(
+                            itemsIndexed(
                                 ui.gridEntries,
-                                span = { entry ->
+                                key = { index, entry -> gridEntryKey(index, entry) },
+                                span = { _, entry ->
                                     GridItemSpan(if (entry is GridEntry.SectionLabel) maxLineSpan else 1)
                                 }
-                            ) { entry ->
+                            ) { _, entry ->
                                 when (entry) {
                                     is GridEntry.SectionLabel -> SectionLabel(entry.text)
                                     is GridEntry.BookEntry -> {
@@ -402,85 +407,161 @@ fun LibraryScreen(
                 Spacer(Modifier.navigationBarsPadding())
             }
         }
+
+        if (showSortSheet) {
+            SortSheet(
+                mode = ui.sortMode,
+                direction = ui.direction,
+                onSelectMode = { vm.setSortMode(it) },
+                onSelectDirection = { vm.setSortDirection(it) },
+                onDismiss = { showSortSheet = false }
+            )
+        }
     }
 }
 
-/** Sort Rail: kompakt terminal/HUD-selector over rutenettet. Ingen Material-chips. */
 @Composable
 private fun LibrarySortMode.sortLabel(): String = when (this) {
-    LibrarySortMode.HYLLE -> stringResource(R.string.lib_sort_shelf)
-    LibrarySortMode.SERIE -> stringResource(R.string.lib_sort_series)
+    LibrarySortMode.HYLLE, LibrarySortMode.SERIE -> stringResource(R.string.lib_sort_series)
     LibrarySortMode.FORFATTER -> stringResource(R.string.lib_sort_author)
     LibrarySortMode.NYLIG -> stringResource(R.string.lib_sort_recent)
     LibrarySortMode.TITTEL -> stringResource(R.string.lib_sort_title)
     LibrarySortMode.LAGT_TIL -> stringResource(R.string.lib_sort_added)
 }
 
+/** Stable lazy-list keys: books by id, section labels by position. */
+private fun gridEntryKey(index: Int, entry: GridEntry): Any = when (entry) {
+    is GridEntry.SectionLabel -> "l:$index"
+    is GridEntry.BookEntry -> "b:${entry.book.id}"
+}
+
+/** Collapsed sort control: current mode + item count; opens [SortSheet]. */
 @Composable
-private fun SortRail(
-    activeMode: LibrarySortMode,
-    direction: SortDirection,
-    onSelect: (LibrarySortMode) -> Unit,
-    onToggleDirection: () -> Unit
+private fun SortBar(
+    mode: LibrarySortMode,
+    itemCount: Int,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(LibBg)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        LibrarySortMode.entries.forEach { mode ->
-            val active = mode == activeMode
-            Column(
-                modifier = Modifier
-                    .heightIn(min = 44.dp)
-                    .clickable { onSelect(mode) }
-                    .padding(horizontal = 10.dp),
-                verticalArrangement = Arrangement.Center
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = LibPanel,
+            modifier = Modifier.clickable(onClick = onClick)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    mode.sortLabel(),
-                    color = if (active) LibAccent else LibDim,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.drawBehind {
-                        // Aktiv modus: tynn lime-understrek, like bred som etiketten.
-                        if (active) {
-                            drawRect(
-                                color = LibAccent,
-                                topLeft = Offset(0f, size.height + 2.dp.toPx()),
-                                size = Size(size.width, 1.dp.toPx())
-                            )
-                        }
-                    }
-                )
+                Icon(Icons.Default.Sort, contentDescription = null, tint = LibAccent, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(7.dp))
+                Text(mode.sortLabel(), style = ShelfTypography.LabelMedium, color = LibFgBright, maxLines = 1)
+                Spacer(Modifier.width(3.dp))
+                Icon(Icons.Default.ExpandMore, contentDescription = null, tint = LibDim, modifier = Modifier.size(16.dp))
             }
         }
-        // ⇅: kompakt, visuelt adskilt retningHandling.
-        Box(
-            modifier = Modifier
-                .heightIn(min = 44.dp)
-                .padding(start = 6.dp)
-                .background(LibPanel, RoundedCornerShape(4.dp))
-                .clickable { onToggleDirection() }
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        Spacer(Modifier.weight(1f))
+        Text(
+            stringResource(R.string.lib_item_count, itemCount),
+            style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
+            color = LibDim,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun directionLabels(mode: LibrarySortMode): Pair<String, String> = when (mode) {
+    LibrarySortMode.NYLIG, LibrarySortMode.LAGT_TIL ->
+        stringResource(R.string.lib_dir_oldest) to stringResource(R.string.lib_dir_newest)
+    else -> stringResource(R.string.lib_dir_az) to stringResource(R.string.lib_dir_za)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortSheet(
+    mode: LibrarySortMode,
+    direction: SortDirection,
+    onSelectMode: (LibrarySortMode) -> Unit,
+    onSelectDirection: (SortDirection) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = LibPanel,
+        contentColor = LibFg,
+        tonalElevation = 0.dp,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = LibHairline) }
+    ) {
+        Column(Modifier.padding(horizontal = 20.dp)) {
             Text(
-                if (direction == SortDirection.ASC) "↑" else "↓",
-                color = LibAccent,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
-                maxLines = 1,
-                softWrap = false
+                stringResource(R.string.lib_sort_sheet_title),
+                style = ShelfTypography.TitleMedium,
+                color = LibFgBright,
+                fontWeight = FontWeight.Bold
             )
+            Spacer(Modifier.height(6.dp))
+            LibrarySortMode.visible.forEach { m ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onSelectMode(m) }
+                        .padding(horizontal = 4.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        if (m == mode) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = if (m == mode) LibAccent else LibDim,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Text(
+                        m.sortLabel(),
+                        style = ShelfTypography.BodyLarge,
+                        color = if (m == mode) LibFgBright else LibFg
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(thickness = 0.5.dp, color = LibHairline)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                stringResource(R.string.lib_sort_direction).uppercase(),
+                style = ShelfTypography.LabelSmall,
+                color = LibDim
+            )
+            Spacer(Modifier.height(10.dp))
+            val (ascLabel, descLabel) = directionLabels(mode)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DirectionChip(ascLabel, direction == SortDirection.ASC) { onSelectDirection(SortDirection.ASC) }
+                DirectionChip(descLabel, direction == SortDirection.DESC) { onSelectDirection(SortDirection.DESC) }
+            }
+            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.navigationBarsPadding())
         }
+    }
+}
+
+@Composable
+private fun DirectionChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = if (selected) LibAccent.copy(alpha = 0.16f) else LibBg,
+        border = BorderStroke(1.dp, if (selected) LibAccent else LibHairline),
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Text(
+            label,
+            style = ShelfTypography.LabelMedium,
+            color = if (selected) LibAccent else LibDim,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+        )
     }
 }
 
@@ -511,7 +592,7 @@ private fun SectionLabel(text: String) {
     }
 }
 
-/** List-view rad: lite omslag + tittel/forfatter + progresjon. */
+/** List-view row, podcast-quality: cover, title/author, format + progress. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BookListRow(
@@ -523,13 +604,13 @@ private fun BookListRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(width = 46.dp, height = 66.dp)
-                .background(LibHairline, RoundedCornerShape(3.dp))
+                .size(width = 54.dp, height = 80.dp)
+                .background(LibHairline, RoundedCornerShape(4.dp))
         ) {
             val cp = book.coverImagePath
             if (!cp.isNullOrBlank()) {
@@ -541,17 +622,19 @@ private fun BookListRow(
                 )
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 book.title,
                 style = ShelfTypography.BodyLarge,
                 color = LibFgBright,
+                fontWeight = FontWeight.Medium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             val author = book.author.takeIf { it.isNotBlank() }
             if (author != null) {
+                Spacer(Modifier.height(2.dp))
                 Text(
                     author,
                     style = ShelfTypography.BodySmall,
@@ -560,20 +643,29 @@ private fun BookListRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    book.format.name,
+                    style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = LibDim,
+                    maxLines = 1
+                )
+                if (book.progress > 0f) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "${(book.progress * 100).toInt()}%",
+                        style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
+                        color = LibAccent,
+                        maxLines = 1
+                    )
+                }
+            }
             if (book.progress > 0f) {
                 Spacer(Modifier.height(6.dp))
                 ThinProgressBar(progress = book.progress)
             }
         }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            book.format.name,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 10.sp,
-            color = LibDim,
-            maxLines = 1,
-            softWrap = false
-        )
     }
 }
 

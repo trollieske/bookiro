@@ -47,10 +47,10 @@ sealed interface GridEntry {
 
 data class LibraryUiState(
     val query: String = "",
-    val sortMode: LibrarySortMode = LibrarySortMode.HYLLE,
+    val sortMode: LibrarySortMode = LibrarySortMode.DEFAULT,
     val direction: SortDirection = SortDirection.ASC,
     val isLoading: Boolean = true,
-    val viewType: LibraryViewType = LibraryViewType.SHELF,
+    val viewType: LibraryViewType = LibraryViewType.GRID,
     val gridEntries: List<GridEntry> = emptyList(),
     val flatGridBooks: List<BookVisual> = emptyList(),
     val resumeEbooks: List<ResumeItem> = emptyList(),
@@ -168,8 +168,10 @@ class LibraryViewModel(
             val byId = matching.associateBy { it.id }
             val sortedEntities = sorted.mapNotNull { byId[it.id] }
 
-            val showLabels = p.sortMode == LibrarySortMode.HYLLE && p.query.isBlank()
-            val labels = if (showLabels) LibrarySorter.sectionLabels(sorted) else List(sorted.size) { null }
+            // Group labels for the grouping modes only (Series / Author).
+            val showLabels = (p.sortMode == LibrarySortMode.SERIE || p.sortMode == LibrarySortMode.FORFATTER) &&
+                p.query.isBlank()
+            val labels = if (showLabels) LibrarySorter.sectionLabels(sorted, p.sortMode) else List(sorted.size) { null }
 
             val gridEntries = buildList {
                 sortedEntities.forEachIndexed { i, entity ->
@@ -257,7 +259,7 @@ class LibraryViewModel(
 
     fun setMode(m: LibraryMode) { modeFlow.value = m }
 
-    /** Sort Rail: persists per media tab. Default/invalid value is HYLLE. */
+    /** Sort sheet: persists per media tab and applies the mode's natural direction. */
     fun setSortMode(mode: LibrarySortMode) {
         // Apply the mode's natural default direction (newest-first for Recent /
         // Date added, A→Z otherwise) so the first tap is never backwards. The ⇅
@@ -284,7 +286,15 @@ class LibraryViewModel(
         }
     }
 
-    /** Grid ⇄ list view, persisted globally and shared by both shelves. */
+    /** Sets the persisted direction for the current tab explicitly. */
+    fun setSortDirection(direction: SortDirection) {
+        viewModelScope.launch(dispatchers.io) {
+            if (modeFlow.value == LibraryMode.Books) prefs.setBooksSortDirection(direction)
+            else prefs.setAudioSortDirection(direction)
+        }
+    }
+
+    /** Grid ⇄ list view, persisted globally and shared by both tabs. */
     fun setViewType(t: LibraryViewType) {
         viewModelScope.launch(dispatchers.io) { prefs.setLibraryViewType(t) }
     }

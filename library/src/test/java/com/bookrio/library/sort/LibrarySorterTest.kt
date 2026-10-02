@@ -4,6 +4,7 @@ import com.bookrio.core.domain.model.LibrarySortMode
 import com.bookrio.core.domain.model.SortDirection
 import com.bookrio.core.domain.model.defaultDirectionFor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -162,19 +163,27 @@ class LibrarySorterTest {
         assertTrue(newest != oldest)
     }
 
-    // 8. HYLLE is the default for missing/invalid legacy preferences
+    // 8. Default + legacy migration; legacy "Shelf" maps to Series.
     @Test
-    fun `hylle is default for missing or invalid preference values`() {
-        assertEquals(LibrarySortMode.HYLLE, LibrarySortMode.from(null))
-        assertEquals(LibrarySortMode.HYLLE, LibrarySortMode.from(""))
-        assertEquals(LibrarySortMode.HYLLE, LibrarySortMode.from("date_added")) // legacy value
-        assertEquals(LibrarySortMode.HYLLE, LibrarySortMode.from("progress")) // legacy value
+    fun `default sort is recently added and legacy values migrate`() {
+        assertEquals(LibrarySortMode.LAGT_TIL, LibrarySortMode.from(null))
+        assertEquals(LibrarySortMode.LAGT_TIL, LibrarySortMode.from(""))
+        assertEquals(LibrarySortMode.LAGT_TIL, LibrarySortMode.from("date_added")) // legacy value
+        assertEquals(LibrarySortMode.NYLIG, LibrarySortMode.from("progress")) // legacy value
+        assertEquals(LibrarySortMode.SERIE, LibrarySortMode.from("hylle")) // legacy "Shelf"
         assertEquals(LibrarySortMode.TITTEL, LibrarySortMode.from("tittel"))
     }
 
-    // HYLLE section labels: series labeled, author groups labeled, 1-book author groups not
     @Test
-    fun `hylle section labels`() {
+    fun `visible sort modes exclude the legacy shelf and contain the default`() {
+        assertFalse(LibrarySortMode.HYLLE in LibrarySortMode.visible)
+        assertTrue(LibrarySortMode.DEFAULT in LibrarySortMode.visible)
+        assertEquals(5, LibrarySortMode.visible.size)
+    }
+
+    // Section labels: series labeled, author groups labeled, 1-book author groups not
+    @Test
+    fun `series section labels`() {
         val books = listOf(
             book(1, "Vol 1", author = "Stephen King", series = "The Dark Tower", seriesIndex = 1f),
             book(2, "Vol 2", author = "Stephen King", series = "The Dark Tower", seriesIndex = 2f),
@@ -182,8 +191,8 @@ class LibrarySorterTest {
             book(4, "Beta", author = "Jon Fosse"),
             book(5, "Single", author = "Neste Forfatter")
         )
-        val sorted = LibrarySorter.sort(books, LibrarySortMode.HYLLE, SortDirection.ASC)
-        val labels = LibrarySorter.sectionLabels(sorted)
+        val sorted = LibrarySorter.sort(books, LibrarySortMode.SERIE, SortDirection.ASC)
+        val labels = LibrarySorter.sectionLabels(sorted, LibrarySortMode.SERIE)
         val labeled = sorted.mapIndexedNotNull { i, b -> labels[i]?.let { it to b.id } }
         assertTrue(labels.any { it == "THE DARK TOWER · STEPHEN KING" })
         assertTrue(labels.any { it == "JON FOSSE" })
@@ -191,6 +200,21 @@ class LibrarySorterTest {
         assertTrue(labeled.none { (_, id) -> id == 5L })
         // Unknown series/author never produce labels:
         val unknown = listOf(book(9, "Mystery", author = "", series = null))
-        assertEquals(listOf<String?>(null), LibrarySorter.sectionLabels(unknown))
+        assertEquals(listOf<String?>(null), LibrarySorter.sectionLabels(unknown, LibrarySortMode.SERIE))
+    }
+
+    @Test
+    fun `author grouping labels every author group`() {
+        val books = listOf(
+            book(1, "Alfa", author = "Jon Fosse"),
+            book(2, "Beta", author = "Jon Fosse"),
+            book(3, "Single", author = "Neste Forfatter")
+        )
+        val sorted = LibrarySorter.sort(books, LibrarySortMode.FORFATTER, SortDirection.ASC)
+        val labels = LibrarySorter.sectionLabels(sorted, LibrarySortMode.FORFATTER)
+        assertTrue(labels.any { it == "JON FOSSE" })
+        assertTrue(labels.any { it == "NESTE FORFATTER" })
+        // Non-grouping modes never label.
+        assertEquals(List(books.size) { null }, LibrarySorter.sectionLabels(sorted, LibrarySortMode.TITTEL))
     }
 }

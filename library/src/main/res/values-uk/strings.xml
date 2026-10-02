@@ -13,11 +13,18 @@
     <string name="lib_empty_desc">Додавайте електронні та аудіокниги, імпортуючи файли з пристрою або синхронізуючись із FTP/seedbox.</string>
     <string name="lib_sync_button">Синхронізувати з FTP / seedbox</string>
     <string name="lib_import_button">Імпортувати з пристрою</string>
-    <string name="lib_sort_shelf">Полиця</string>
     <string name="lib_sort_series">Серія</string>
     <string name="lib_sort_author">Автор</string>
-    <string name="lib_sort_recent">Нещодавні</string>
+    <string name="lib_sort_recent">Нещодавно прослухано</string>
     <string name="lib_sort_title">Назва</string>
-    <string name="lib_sort_added">Дата додавання</string>
+    <string name="lib_sort_added">Нещодавно додано</string>
     <string name="lib_remaining">Залишилось %1$s</string>
+
+    <string name="lib_item_count">%1$d елементів</string>
+    <string name="lib_sort_sheet_title">Сортувати бібліотеку</string>
+    <string name="lib_sort_direction">Напрямок</string>
+    <string name="lib_dir_az">А–Я</string>
+    <string name="lib_dir_za">Я–А</string>
+    <string name="lib_dir_oldest">Спочатку старі</string>
+    <string name="lib_dir_newest">Спочатку нові</string>
 </resources>

@@ -13,11 +13,18 @@
     <string name="lib_empty_desc">Ajoutez des ebooks et des livres audio en important des fichiers de votre appareil ou en synchronisant depuis FTP/seedbox.</string>
     <string name="lib_sync_button">Synchroniser depuis FTP / seedbox</string>
     <string name="lib_import_button">Importer depuis l\'appareil</string>
-    <string name="lib_sort_shelf">Étagère</string>
     <string name="lib_sort_series">Série</string>
     <string name="lib_sort_author">Auteur</string>
-    <string name="lib_sort_recent">Récents</string>
+    <string name="lib_sort_recent">Lu récemment</string>
     <string name="lib_sort_title">Titre</string>
-    <string name="lib_sort_added">Date d\'ajout</string>
+    <string name="lib_sort_added">Ajouté récemment</string>
     <string name="lib_remaining">%1$s restantes</string>
+
+    <string name="lib_item_count">%1$d éléments</string>
+    <string name="lib_sort_sheet_title">Trier la bibliothèque</string>
+    <string name="lib_sort_direction">Sens</string>
+    <string name="lib_dir_az">A–Z</string>
+    <string name="lib_dir_za">Z–A</string>
+    <string name="lib_dir_oldest">Plus anciens d\'abord</string>
+    <string name="lib_dir_newest">Plus récents d\'abord</string>
 </resources>
