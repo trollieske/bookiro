@@ -71,15 +71,33 @@ class TorrentDownloadWorker(
                 .setConstraints(constraints)
                 .addTag("torrent_run_now")
                 .build()
-            workManager.enqueue(req)
+            // Unique so repeated app launches can never queue a backlog of workers.
+            workManager.enqueueUniqueWork(
+                "torrent_run_now",
+                androidx.work.ExistingWorkPolicy.KEEP,
+                req
+            )
         }
     }
 
     override suspend fun doWork(): Result {
+        val db = ShelfDatabase.getInstance(appContext)
+
+        // Nothing to do: avoid spinning up the native session and a foreground
+        // notification on every app launch. Only continue when a download is
+        // actually pending, running or resumable.
+        val hasWork = runCatching {
+            db.torrentDownloadDao().getAllOnce().any {
+                it.status == DownloadStatusEntity.PENDING ||
+                    it.status == DownloadStatusEntity.RUNNING ||
+                    it.status == DownloadStatusEntity.PAUSED
+            }
+        }.getOrDefault(false)
+        if (!hasWork) return Result.success()
+
         ensureChannel()
         runCatching { setForeground(getForegroundInfo()) }
 
-        val db = ShelfDatabase.getInstance(appContext)
         val engine = TorrentEngine.getInstance(appContext)
         engine.start()
 
@@ -147,22 +165,13 @@ class TorrentDownloadWorker(
     }
 
     private suspend fun pauseActiveDownloads(db: ShelfDatabase, engine: TorrentEngine) {
+        // Use the engine's public pause path so the native libtorrent handle is
+        // actually paused (the old reflection looked up a method that does not
+        // exist and silently left downloads running).
         runCatching {
             val active = db.torrentDownloadDao().getRunning()
             for (dl in active) {
-                db.torrentDownloadDao().setPaused(dl.id, true)
-                db.torrentDownloadDao().update(
-                    dl.copy(status = com.bookrio.data.local.entity.DownloadStatusEntity.PAUSED, isPaused = true)
-                )
-                try {
-                    dl.infoHash?.let { h ->
-                        org.libtorrent4j.Sha1Hash.parseHex(h).let {
-                            engine.javaClass.getDeclaredMethod("sessionManager").apply {
-                                isAccessible = true
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {}
+                runCatching { engine.pauseDownload(dl.id) }
             }
         }
     }

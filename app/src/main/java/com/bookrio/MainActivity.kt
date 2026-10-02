@@ -490,6 +490,9 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 )
             }
             composable(ShelfDestinations.Torrent.route) {
+                // The torrent worker posts its progress notification; ask for
+                // POST_NOTIFICATIONS so it is actually visible on Android 13+.
+                RequestNotificationPermissionIfNeeded()
                 TorrentScreen(
                     onBack = { navController.popBackStack() }
                 )

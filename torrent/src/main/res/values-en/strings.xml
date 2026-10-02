@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="toru_title">Torrent client</string>
+    <string name="toru_rights_notice">Only download content you have the rights to.</string>
     <string name="toru_back">Back</string>
     <string name="toru_torrent_file">.torrent</string>
     <string name="toru_magnet">Magnet</string>

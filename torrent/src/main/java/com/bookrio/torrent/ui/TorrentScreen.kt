@@ -182,6 +182,12 @@ fun TorrentScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.toru_rights_notice),
+                    style = ShelfTypography.BodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(12.dp))
             }
 

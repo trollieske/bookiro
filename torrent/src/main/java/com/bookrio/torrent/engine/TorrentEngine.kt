@@ -588,8 +588,29 @@ class TorrentEngine(
         db.torrentDownloadDao().delete(dl)
     }
 
-    suspend fun pauseAll() = withContext(dispatchers.io) { db.torrentDownloadDao().pauseAll() }
-    suspend fun resumeAll() = withContext(dispatchers.io) { db.torrentDownloadDao().resumeAll() }
+    suspend fun pauseAll() = withContext(dispatchers.io) {
+        // Capture the running set before flipping the DB, then actually pause the
+        // native handles too. Previously only the DB changed and downloads kept
+        // running in the background while the UI claimed they were paused.
+        val running = runCatching { db.torrentDownloadDao().getRunning() }.getOrDefault(emptyList())
+        db.torrentDownloadDao().pauseAll()
+        running.forEach { dl ->
+            dl.infoHash?.let { h ->
+                runCatching { sessionManager?.find(Sha1Hash.parseHex(h))?.pause() }
+            }
+        }
+    }
+
+    suspend fun resumeAll() = withContext(dispatchers.io) {
+        val paused = runCatching { db.torrentDownloadDao().getAllOnce().filter { it.isPaused } }
+            .getOrDefault(emptyList())
+        db.torrentDownloadDao().resumeAll()
+        paused.forEach { dl ->
+            dl.infoHash?.let { h ->
+                runCatching { sessionManager?.find(Sha1Hash.parseHex(h))?.resume() }
+            }
+        }
+    }
 
     /**
      * Safe manual reannounce with a minimum interval. Returns false when the
