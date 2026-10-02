@@ -33,4 +33,6 @@
     <string name="smbu_err_network">Kunne ikke nå serveren</string>
     <string name="smbu_err_timeout">Forbindelsen fik timeout</string>
     <string name="smbu_err_unknown">Noget gik galt</string>
+    <string name="smbu_count_failed">%1$d mislykkedes</string>
+    <string name="smbu_count_queued">%1$d i kø</string>
 </resources>

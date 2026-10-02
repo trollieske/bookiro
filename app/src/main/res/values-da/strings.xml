@@ -39,6 +39,12 @@
     <string name="onboarding_title">Velkommen til Bookiro</string>
     <string name="onboarding_body">Læs og lyt. Lokalt. Uden støj.</string>
     <string name="onboarding_cta">Åbn hylden</string>
+    <string name="onboarding_folder_title">Din biblioteksmappe</string>
+    <string name="onboarding_folder_body">Vælg, hvor Bookiro finder og gemmer dine filer. Intet forlader din enhed.</string>
+    <string name="onboarding_folder_choose">Vælg mappe</string>
+    <string name="onboarding_folder_change">Skift mappe</string>
+    <string name="onboarding_folder_skip">Spring over nu</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Læser</string>
     <string name="settings_sync_storage_title">Lagring &amp; synkronisering</string>
     <string name="settings_sync_section_title">Synkronisering</string>
@@ -276,5 +282,19 @@
     <string name="home_duration_hm">%1$dt %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_empty_sources">Forbind en kilde</string>
+    <string name="home_media_audiobooks">Lydbøger</string>
+    <string name="home_media_ebooks">E-bøger</string>
+    <string name="home_media_podcasts">Podcasts</string>
+    <string name="home_section_listening">Fortsæt med at lytte</string>
+    <string name="home_section_media">Dit indhold</string>
+    <string name="home_section_reading">Fortsæt med at læse</string>
+    <string name="home_section_services">Kilder &amp; værktøjer</string>
+    <string name="home_section_up_next">Næste</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Import</string>
+    <string name="home_service_sources">Kilder</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="home_service_transfers">Overførsler</string>
     <string name="home_empty_browse">Gennemse bibliotek</string>
 </resources>

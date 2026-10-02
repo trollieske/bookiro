@@ -34,4 +34,6 @@
     <string name="wdav_err_network">Fikk ikke kontakt med tjeneren</string>
     <string name="wdav_err_timeout">Tilkoblingen ga tidsavbrudd</string>
     <string name="wdav_err_unknown">Noe gikk galt</string>
+    <string name="wdav_count_failed">%1$d feilet</string>
+    <string name="wdav_count_queued">%1$d i kø</string>
 </resources>

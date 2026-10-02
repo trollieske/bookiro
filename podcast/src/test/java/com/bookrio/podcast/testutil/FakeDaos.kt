@@ -4,6 +4,7 @@ import com.bookrio.data.local.dao.PodcastDownloadDao
 import com.bookrio.data.local.dao.PodcastEpisodeDao
 import com.bookrio.data.local.dao.PodcastFeedDao
 import com.bookrio.data.local.dao.PodcastFeedSummary
+import com.bookrio.data.local.dao.PodcastLatestEpisode
 import com.bookrio.data.local.dao.PodcastPlaybackDao
 import com.bookrio.data.local.dao.PodcastResumeItem
 import com.bookrio.data.local.entity.PodcastDownloadEntity
@@ -100,6 +101,8 @@ class FakePodcastEpisodeDao : PodcastEpisodeDao {
     }
 
     override fun observeResumeItems(limit: Int): Flow<List<PodcastResumeItem>> = flowOf(emptyList())
+
+    override fun observeLatestEpisodes(limit: Int): Flow<List<PodcastLatestEpisode>> = flowOf(emptyList())
 }
 
 class FakePodcastPlaybackDao : PodcastPlaybackDao {

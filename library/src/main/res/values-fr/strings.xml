@@ -27,4 +27,5 @@
     <string name="lib_dir_za">Z–A</string>
     <string name="lib_dir_oldest">Plus anciens d\'abord</string>
     <string name="lib_dir_newest">Plus récents d\'abord</string>
+    <string name="lib_view_toggle_a11y">Basculer entre grille et liste</string>
 </resources>

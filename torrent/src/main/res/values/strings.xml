@@ -83,4 +83,8 @@
     <string name="toru_import_no_books">No books found — use “Choose folder” to point to the right download folder</string>
     <string name="toru_imported_from_folder">Imported %1$d books from the selected folder!</string>
     <string name="toru_import_no_supported">No supported books found in the selected folder</string>
+    <string name="toru_error">Error: %1$s</string>
+    <string name="toru_invalid_infohash">Invalid info hash (must be 40 SHA-1 characters)</string>
+    <string name="toru_invalid_magnet">Invalid magnet link</string>
+    <string name="toru_added">Torrent added</string>
 </resources>

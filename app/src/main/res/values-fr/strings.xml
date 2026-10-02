@@ -39,6 +39,12 @@
     <string name="onboarding_title">Bienvenue sur Bookiro</string>
     <string name="onboarding_body">Lire et écouter. En local. Sans bruit.</string>
     <string name="onboarding_cta">Ouvrir l\'étagère</string>
+    <string name="onboarding_folder_title">Votre dossier de bibliothèque</string>
+    <string name="onboarding_folder_body">Choisissez où Bookiro trouve et stocke vos fichiers. Rien ne quitte votre appareil.</string>
+    <string name="onboarding_folder_choose">Choisir un dossier</string>
+    <string name="onboarding_folder_change">Changer de dossier</string>
+    <string name="onboarding_folder_skip">Passer pour l\'instant</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Lecteur</string>
     <string name="settings_sync_storage_title">Stockage &amp; synchronisation</string>
     <string name="settings_sync_section_title">Synchronisation</string>
@@ -276,5 +282,19 @@
     <string name="home_duration_hm">%1$dh %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_empty_sources">Connecter une source</string>
+    <string name="home_media_audiobooks">Livres audio</string>
+    <string name="home_media_ebooks">Livres numériques</string>
+    <string name="home_media_podcasts">Podcasts</string>
+    <string name="home_section_listening">Continuer l\'écoute</string>
+    <string name="home_section_media">Votre contenu</string>
+    <string name="home_section_reading">Continuer la lecture</string>
+    <string name="home_section_services">Sources et outils</string>
+    <string name="home_section_up_next">À suivre</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Importer</string>
+    <string name="home_service_sources">Sources</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="home_service_transfers">Transferts</string>
     <string name="home_empty_browse">Parcourir la bibliothèque</string>
 </resources>

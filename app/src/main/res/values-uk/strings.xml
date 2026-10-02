@@ -39,6 +39,12 @@
     <string name="onboarding_title">Ласкаво просимо до Bookiro</string>
     <string name="onboarding_body">Читайте та слухайте. Локально. Без зайвого шуму.</string>
     <string name="onboarding_cta">Відкрити полицю</string>
+    <string name="onboarding_folder_title">Ваша папка бібліотеки</string>
+    <string name="onboarding_folder_body">Виберіть, де Bookiro знаходить і зберігає ваші файли. Дані не залишають пристрій.</string>
+    <string name="onboarding_folder_choose">Вибрати папку</string>
+    <string name="onboarding_folder_change">Змінити папку</string>
+    <string name="onboarding_folder_skip">Пропустити</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Читач</string>
     <string name="settings_sync_storage_title">Сховище та синхронізація</string>
     <string name="settings_sync_section_title">Синхронізація</string>
@@ -276,5 +282,19 @@
     <string name="home_duration_hm">%1$d год %2$d хв</string>
     <string name="home_duration_m">%1$d хв</string>
 
+    <string name="home_empty_sources">Підключити джерело</string>
+    <string name="home_media_audiobooks">Аудіокниги</string>
+    <string name="home_media_ebooks">Книги</string>
+    <string name="home_media_podcasts">Подкасти</string>
+    <string name="home_section_listening">Продовжити слухати</string>
+    <string name="home_section_media">Ваші матеріали</string>
+    <string name="home_section_reading">Продовжити читати</string>
+    <string name="home_section_services">Джерела та інструменти</string>
+    <string name="home_section_up_next">Далі</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Імпорт</string>
+    <string name="home_service_sources">Джерела</string>
+    <string name="home_service_torrent">Торент</string>
+    <string name="home_service_transfers">Передачі</string>
     <string name="home_empty_browse">Переглянути бібліотеку</string>
 </resources>

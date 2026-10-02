@@ -27,4 +27,5 @@
     <string name="lib_dir_za">Я–А</string>
     <string name="lib_dir_oldest">Сначала старые</string>
     <string name="lib_dir_newest">Сначала новые</string>
+    <string name="lib_view_toggle_a11y">Переключить вид: сетка или список</string>
 </resources>

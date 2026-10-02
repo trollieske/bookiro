@@ -83,4 +83,8 @@
     <string name="toru_import_no_books">Ingen bøker funnet — bruk «Velg mappe» for å peke til riktig nedlastingsmappe</string>
     <string name="toru_imported_from_folder">Importerte %1$d bøker fra valgt mappe!</string>
     <string name="toru_import_no_supported">Ingen støttede bøker funnet i den valgte mappen</string>
+    <string name="toru_error">Feil: %1$s</string>
+    <string name="toru_invalid_infohash">Ugyldig info-hash (må være 40 tegn SHA-1)</string>
+    <string name="toru_invalid_magnet">Ugyldig magnet-lenke</string>
+    <string name="toru_added">Lagt til torrent</string>
 </resources>

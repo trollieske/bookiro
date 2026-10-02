@@ -82,7 +82,7 @@ class TorrentViewModel(
     fun addMagnet(magnet: String) = viewModelScope.launch(dispatchers.io) {
         val clean = magnet.trim()
         if (!clean.startsWith("magnet:")) {
-            toastFlow.tryEmit("Ugyldig magnet-lenke")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_invalid_magnet))
             return@launch
         }
         val id = engine.addFromMagnet(
@@ -92,7 +92,7 @@ class TorrentViewModel(
             priority = TorrentPriorityEntity.NORMAL
         )
         formState.value = formState.value.copy(magnetInput = "")
-        toastFlow.tryEmit("Lagt til torrent")
+        toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_added))
         id
     }
 
@@ -107,12 +107,12 @@ class TorrentViewModel(
                     saveDir = engine.defaultSaveDir(),
                     autoImport = formState.value.defaultAutoImport
                 )
-                toastFlow.tryEmit("Lagt til torrent")
+                toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_added))
                 runCatching { tmp.delete() }
                 id
             }
         }.getOrElse {
-            toastFlow.tryEmit("Feil: ${it.message}")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_error, it.message))
             null
         }
     }
@@ -120,7 +120,7 @@ class TorrentViewModel(
     fun addInfoHash(hash: String, displayName: String? = null) = viewModelScope.launch(dispatchers.io) {
         val clean = hash.trim().uppercase()
         if (clean.length != 40) {
-            toastFlow.tryEmit("Ugyldig info-hash (må være 40 tegn SHA-1)")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_invalid_infohash))
             return@launch
         }
         val id = engine.addFromInfoHash(
@@ -132,7 +132,7 @@ class TorrentViewModel(
             saveDir = engine.defaultSaveDir(),
             autoImport = formState.value.defaultAutoImport
         )
-        toastFlow.tryEmit("Lagt til torrent")
+        toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_added))
         id
     }
 
@@ -154,7 +154,7 @@ class TorrentViewModel(
 
     fun deleteDownload(id: Long, withFiles: Boolean = false) = viewModelScope.launch(dispatchers.io) {
         engine.deleteDownload(id, withFiles)
-        toastFlow.tryEmit("Fjernet fra liste")
+        toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_removed))
     }
 
     fun reimportTorrent(id: Long) = viewModelScope.launch(dispatchers.io) {

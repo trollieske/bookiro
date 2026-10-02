@@ -83,4 +83,8 @@
     <string name="toru_import_no_books">Keine Bücher gefunden – wählen Sie „Ordner wählen“, um auf den richtigen Download-Ordner zu zeigen</string>
     <string name="toru_imported_from_folder">%1$d Bücher aus dem ausgewählten Ordner importiert!</string>
     <string name="toru_import_no_supported">Keine unterstützten Bücher im ausgewählten Ordner gefunden</string>
+    <string name="toru_error">Fehler: %1$s</string>
+    <string name="toru_invalid_infohash">Ungültiger Info-Hash (muss 40 SHA-1-Zeichen haben)</string>
+    <string name="toru_invalid_magnet">Ungültiger Magnet-Link</string>
+    <string name="toru_added">Torrent hinzugefügt</string>
 </resources>

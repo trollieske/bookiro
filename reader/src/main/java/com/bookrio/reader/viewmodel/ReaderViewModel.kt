@@ -12,6 +12,7 @@ import com.bookrio.data.local.entity.BookTypeEntity
 import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.data.prefs.UserPreferencesRepository
+import com.bookrio.reader.R
 import com.bookrio.reader.engine.BookLoaderEngine
 import com.bookrio.reader.engine.PageIndexMath
 import com.bookrio.reader.engine.ReaderBookState
@@ -67,7 +68,7 @@ class ReaderViewModel(
                 val restoredPage = existing?.pageIndex ?: 0
                 val mergedError = engineState.error
                     ?: if (engineState.chapters.isEmpty() && engineState.bookTitle.isNotBlank())
-                        "Fant ingen lesbare kapitler i boken. Filen kan være skadet, tom, eller ha et støttet format som ikke kunne tolkes."
+                        getApplication<Application>().getString(R.string.rdr_error_no_readable_chapters)
                     else null
 
                 engineState.copy(
@@ -87,8 +88,8 @@ class ReaderViewModel(
             }.onFailure { t ->
                 val prior = _state.value
                 _state.value = prior.copy(
-                    error = t.message ?: "Kan ikke åpne boken (ukjent feil)",
-                    bookTitle = prior.bookTitle.ifBlank { "Kan ikke åpne bok" },
+                    error = t.message ?: getApplication<Application>().getString(R.string.rdr_error_cannot_open_book_unknown),
+                    bookTitle = prior.bookTitle.ifBlank { getApplication<Application>().getString(R.string.rdr_error_cannot_open_book) },
                 )
             }
         }
