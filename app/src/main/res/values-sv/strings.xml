@@ -261,4 +261,18 @@
     <string name="transfers_pause">Pausa</string>
     <string name="transfers_resume">Återuppta</string>
     <string name="transfers_cancel">Avbryt</string>
+
+    <string name="nav_home">Hem</string>
+    <string name="home_streak">%1$d dagars streck</string>
+    <string name="home_status_in_progress">%1$d pågår</string>
+    <string name="home_status_ebooks">%1$d e-böcker</string>
+    <string name="home_status_audiobooks">%1$d ljudböcker</string>
+    <string name="home_status_podcasts">%1$d poddar</string>
+    <string name="home_section_latest_episodes">Senaste avsnitten</string>
+    <string name="home_empty_title">Inget här ännu</string>
+    <string name="home_empty_body">Starta en bok eller följ en podd så dyker den upp här.</string>
+    <string name="home_empty_import">Importera böcker</string>
+    <string name="home_not_started">Inte startad</string>
+    <string name="home_duration_hm">%1$dt %2$dm</string>
+    <string name="home_duration_m">%1$dm</string>
 </resources>

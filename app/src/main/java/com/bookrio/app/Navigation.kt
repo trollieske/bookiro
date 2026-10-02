@@ -8,6 +8,7 @@ sealed class ShelfDestinations(val route: String) {
     object Library : ShelfDestinations("library")
     object Books : ShelfDestinations("books")
     object Audiobooks : ShelfDestinations("audiobooks")
+    object Home : ShelfDestinations("home")
     object Player : ShelfDestinations("player/{bookId}") {
         fun routeFor(bookId: Long) = "player/$bookId"
     }

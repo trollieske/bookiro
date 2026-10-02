@@ -261,4 +261,18 @@
     <string name="transfers_pause">Пауза</string>
     <string name="transfers_resume">Продолжить</string>
     <string name="transfers_cancel">Отмена</string>
+
+    <string name="nav_home">Главная</string>
+    <string name="home_streak">Серия из %1$d дней</string>
+    <string name="home_status_in_progress">%1$d в процессе</string>
+    <string name="home_status_ebooks">%1$d книги</string>
+    <string name="home_status_audiobooks">%1$d аудиокниги</string>
+    <string name="home_status_podcasts">%1$d подкасты</string>
+    <string name="home_section_latest_episodes">Последние выпуски</string>
+    <string name="home_empty_title">Здесь пока ничего нет</string>
+    <string name="home_empty_body">Начните книгу или подпишитесь на подкаст — они появятся здесь.</string>
+    <string name="home_empty_import">Импортировать книги</string>
+    <string name="home_not_started">Не начато</string>
+    <string name="home_duration_hm">%1$d ч %2$d мин</string>
+    <string name="home_duration_m">%1$d мин</string>
 </resources>
