@@ -170,6 +170,11 @@
     <string name="lan_done_found">Analyse terminée. %1$d source(s) possible(s) trouvée(s) – touchez pour ouvrir / ajouter.</string>
     <string name="lan_confidence">%1$d%% probable</string>
 
+    <string name="lan_type_ftp">Serveur FTP</string>
+    <string name="lan_type_smb">Partage de fichiers SMB/Windows</string>
+    <string name="lan_type_webdav">WebDAV (possiblement Nextcloud)</string>
+    <string name="lan_type_calibre">Serveur de livres Calibre</string>
+    <string name="lan_type_http">Serveur HTTP (peut-être une bibliothèque)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Les résultats s\'affichent ici lorsque l\'auto-synchronisation s\'exécute.</string>
     <string name="ip_source_sync">Sync</string>

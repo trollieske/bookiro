@@ -171,6 +171,11 @@
     <string name="lan_done_found">Scan complete. %1$d possible source(s) found – tap to open / add.</string>
     <string name="lan_confidence">%1$d%% likely</string>
 
+    <string name="lan_type_ftp">FTP server</string>
+    <string name="lan_type_smb">SMB / Windows file share</string>
+    <string name="lan_type_webdav">WebDAV (possibly Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre book server</string>
+    <string name="lan_type_http">HTTP server (possibly a library)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Results are shown here when auto-sync runs.</string>
     <string name="ip_source_sync">Sync</string>

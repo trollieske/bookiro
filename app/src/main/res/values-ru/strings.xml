@@ -170,6 +170,11 @@
     <string name="lan_done_found">Сканирование завершено. Найдено возможных источников: %1$d – нажмите, чтобы открыть/добавить.</string>
     <string name="lan_confidence">Вероятность %1$d%%</string>
 
+    <string name="lan_type_ftp">FTP-сервер</string>
+    <string name="lan_type_smb">SMB / файловый ресурс Windows</string>
+    <string name="lan_type_webdav">WebDAV (возможно Nextcloud)</string>
+    <string name="lan_type_calibre">Сервер книг Calibre</string>
+    <string name="lan_type_http">HTTP-сервер (возможно, библиотека)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Здесь появятся результаты, когда запустится автосинхронизация.</string>
     <string name="ip_source_sync">Синхр.</string>

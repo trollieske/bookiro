@@ -170,6 +170,11 @@
     <string name="lan_done_found">Skannings klar. %1$d möjliga källa(or) hittade – tryck för att öppna/lägga till.</string>
     <string name="lan_confidence">%1$d%% troligt</string>
 
+    <string name="lan_type_ftp">FTP-server</string>
+    <string name="lan_type_smb">SMB/Windows-filresurs</string>
+    <string name="lan_type_webdav">WebDAV (möjligen Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre-bokserver</string>
+    <string name="lan_type_http">HTTP-server (möjligen ett bibliotek)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Resultat visas här när auto-synk körs.</string>
     <string name="ip_source_sync">Synk</string>
