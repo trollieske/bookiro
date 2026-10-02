@@ -125,6 +125,7 @@
     <!-- Sleep timer -->
     <string name="pod_sleep_a11y">Таймер сна</string>
     <string name="pod_sleep_title">Таймер сна</string>
+    <string name="pod_sleep_unit">мин</string>
     <string name="pod_sleep_active">⏱ Активный отсчёт: %1$d мин %2$d с</string>
     <string name="pod_sleep_off">Выключить</string>
     <string name="pod_sleep_custom_min">Своё время (минуты)</string>

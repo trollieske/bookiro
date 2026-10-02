@@ -14,6 +14,7 @@
     <string name="ply_speed_title">Playback speed</string>
     <string name="ply_close">Close</string>
     <string name="ply_sleep_title">Sleep timer</string>
+    <string name="ply_sleep_unit">min</string>
     <string name="ply_sleep_active">⏱️ Active countdown: %1$d min %2$d sec</string>
     <string name="ply_sleep_off">Turn off</string>
     <string name="ply_sleep_custom_min">Custom time (minutes)</string>

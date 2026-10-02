@@ -37,7 +37,6 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.BookEntity
-import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.player.AudiobookNowPlaying
 import com.bookrio.player.engine.AudiobookChapter
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -773,15 +772,22 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 // just-retired timeline keeps id + token, so the final hand-off
                 // persist still lands.
                 val target = loadedTimeline.progressTarget(timeline) ?: return@withContext
-                saveProgress(target, pct)
+                saveProgress(target, pct, positionMs = pos)
             }
         }
     }
 
-    private suspend fun saveProgress(bookId: Long, pct: Float) {
+    private suspend fun saveProgress(bookId: Long, pct: Float, positionMs: Long? = null) {
         if (bookId <= 0L) return
-        db?.progressDao()?.insertOrReplace(
-            ReadingProgressEntity(bookId = bookId, progressPercent = pct)
+        val dao = db?.progressDao() ?: return
+        val now = System.currentTimeMillis()
+        // Load-modify-upsert: `insertOrReplace` on the unique book_id would
+        // otherwise null out position_ms / chapter fields and make
+        // "continue listening" show the full duration as still remaining.
+        dao.upsertForBook(
+            bookId = bookId,
+            updater = { existing -> audioProgressRow(existing, bookId, pct, positionMs, now) },
+            creator = { audioProgressRow(null, bookId, pct, positionMs, now) }
         )
     }
 

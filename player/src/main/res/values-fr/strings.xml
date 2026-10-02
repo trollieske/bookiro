@@ -14,6 +14,7 @@
     <string name="ply_speed_title">Vitesse de lecture</string>
     <string name="ply_close">Fermer</string>
     <string name="ply_sleep_title">Minuteur de sommeil</string>
+    <string name="ply_sleep_unit">min</string>
     <string name="ply_sleep_active">⏱️ Compte à rebours actif : %1$d min %2$d s</string>
     <string name="ply_sleep_off">Désactiver</string>
     <string name="ply_sleep_custom_min">Durée personnalisée (minutes)</string>
