@@ -417,10 +417,15 @@ class AudiobookEngine(
         // 2) MediaStore: finn «<base>.cue» (samme mappe hvis mulig), bygg dokument-URI
         //    innenfor det allerede gitte treet.
         val prefix = docId.substringBefore(':') + ":" // f.eks. "msf:"
-        for (collection in listOf(
-            android.provider.MediaStore.Downloads.getContentUri("external"),
-            android.provider.MediaStore.Files.getContentUri("external"),
-        )) {
+        // MediaStore.Downloads exists only on API 29+; referencing it on older
+        // devices throws NoClassDefFoundError. Fall back to MediaStore.Files.
+        val collections = buildList {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                add(android.provider.MediaStore.Downloads.getContentUri("external"))
+            }
+            add(android.provider.MediaStore.Files.getContentUri("external"))
+        }
+        for (collection in collections) {
             runCatching {
                 ctx.contentResolver.query(
                     collection,

@@ -30,6 +30,7 @@ import androidx.media3.session.MediaConstants
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -64,6 +65,7 @@ private data class ActiveItemSpec(
     val clipEndMs: Long?
 )
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AudiobookPlaybackService : MediaLibraryService() {
 
     companion object {
@@ -272,7 +274,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 customCommand: SessionCommand,
                 args: Bundle
             ): ListenableFuture<SessionResult> {
-                val p = player ?: return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                val p = player ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 return when (customCommand.customAction) {
                     CMD_SPEED -> {
                         val speed = args.getFloat("speed", 1.0f).coerceIn(0.5f, 2f)
@@ -296,7 +298,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                         }
                         Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                     }
-                    else -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                    else -> Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 }
             }
 
@@ -322,13 +324,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     return@libraryFuture LibraryResult.ofItem(buildLibraryRootItem(), null)
                 }
                 val dao = db?.bookDao()
-                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 val bookId = AudiobookLibraryTree.bookIdOf(mediaId)
-                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 val book = dao.getById(bookId)?.takeIf { !it.isDeleted }
-                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 val entry = AudiobookLibraryTree.itemForMediaId(mediaId, listOf(book))
-                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 LibraryResult.ofItem(
                     entryToMediaItem(entry, coverBytesFor(entry.bookId, entry.coverPath)),
                     null
@@ -344,13 +346,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 params: LibraryParams?
             ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = libraryFuture {
                 val dao = db?.bookDao()
-                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 // Exact children of the requested parent: root -> audiobooks, a book
                 // id -> nothing (books are playable leaves; chapters are NOT
                 // browsable, the engine owns one chapter timeline per book), anything
                 // else -> error. Previously every parent returned the whole library.
                 val entries = AudiobookLibraryTree.childrenOf(parentId, dao.getAllOnce())
-                    ?: return@libraryFuture LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 val items = AudiobookLibraryTree.page(entries, page, pageSize).map { entry ->
                     entryToMediaItem(entry, coverBytesFor(entry.bookId, entry.coverPath))
                 }
@@ -1011,7 +1013,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 future.set(block())
             } catch (t: Throwable) {
                 Log.e(TAG, "media library callback failed", t)
-                future.set(LibraryResult.ofError<T>(LibraryResult.RESULT_ERROR_UNKNOWN))
+                future.set(LibraryResult.ofError<T>(SessionError.ERROR_UNKNOWN))
             }
         }
         return future

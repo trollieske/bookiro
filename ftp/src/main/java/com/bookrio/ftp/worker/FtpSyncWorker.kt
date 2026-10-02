@@ -1,5 +1,6 @@
 package com.bookrio.ftp.worker
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -138,6 +139,7 @@ class FtpSyncWorker(
             WorkManager.getInstance(context).cancelUniqueWork(uniqueName(serverId))
         }
 
+        @SuppressLint("RestrictedApi")
         suspend fun isRunning(context: Context, serverId: Long): Boolean {
             val info = WorkManager.getInstance(context)
                 .getWorkInfosForUniqueWork(uniqueName(serverId))
@@ -146,6 +148,7 @@ class FtpSyncWorker(
         }
 
         /** True only while the worker is actually executing (not ENQUEUED/backoff). */
+        @SuppressLint("RestrictedApi")
         suspend fun isExecuting(context: Context, serverId: Long): Boolean {
             val info = WorkManager.getInstance(context)
                 .getWorkInfosForUniqueWork(uniqueName(serverId))

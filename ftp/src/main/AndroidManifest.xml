@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- NetworkTransport / TransferPolicy read the active network to pick
+         concurrency; lint requires the permission in the library manifest. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!--
         Pause/Cancel on the sync notification. Not exported: only the app's own
         PendingIntent can start it.
