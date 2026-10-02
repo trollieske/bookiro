@@ -38,7 +38,14 @@
     <string name="settings_title">Settings</string>
     <string name="onboarding_title">Welcome to Bookiro</string>
     <string name="onboarding_body">Read and listen. Local. No noise.</string>
-    <string name="onboarding_cta">Open the shelf</string>
+    <string name="onboarding_cta">Enter Bookiro</string>
+    <string name="onboarding_folder_title">Your library folder</string>
+    <string name="onboarding_folder_body">Choose where Bookiro finds and stores your files. Nothing leaves your device.</string>
+    <string name="onboarding_folder_choose">Choose folder</string>
+    <string name="onboarding_folder_change">Change folder</string>
+    <string name="onboarding_folder_skip">Skip for now</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
+
     <string name="settings_reader">Reader</string>
     <string name="settings_sync_storage_title">Storage &amp; sync</string>
     <string name="settings_sync_section_title">Sync</string>
@@ -276,5 +283,19 @@
     <string name="home_duration_hm">%1$dh %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_section_reading">Continue reading</string>
+    <string name="home_section_listening">Continue listening</string>
+    <string name="home_section_up_next">Up next</string>
+    <string name="home_section_media">Your media</string>
+    <string name="home_section_services">Sources &amp; tools</string>
+    <string name="home_media_ebooks">Ebooks</string>
+    <string name="home_media_audiobooks">Audiobooks</string>
+    <string name="home_media_podcasts">Podcasts</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="home_service_import">Import</string>
+    <string name="home_service_sources">Sources</string>
+    <string name="home_service_transfers">Transfers</string>
+    <string name="home_empty_sources">Connect a source</string>
     <string name="home_empty_browse">Browse library</string>
 </resources>

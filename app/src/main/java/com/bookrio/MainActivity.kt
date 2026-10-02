@@ -366,8 +366,14 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onOpenEpisode = { episodeId ->
                         navController.navigate(ShelfDestinations.PodcastPlayer.routeFor(episodeId))
                     },
+                    onOpenEbooks = { navController.navigate(ShelfDestinations.Books.route) },
+                    onOpenAudiobooks = { navController.navigate(ShelfDestinations.Audiobooks.route) },
+                    onOpenPodcasts = { navController.navigate(ShelfDestinations.Podcasts.route) },
                     onOpenImport = { navController.navigate(ShelfDestinations.Import.route) },
-                    onOpenLibrary = { navController.navigate(ShelfDestinations.Books.route) }
+                    onOpenFtp = { navController.navigate(ShelfDestinations.Ftp.route) },
+                    onOpenTorrent = { navController.navigate(ShelfDestinations.Torrent.route) },
+                    onOpenSources = { navController.navigate(ShelfDestinations.Sources.route) },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
             }
             composable(ShelfDestinations.Podcasts.route) {
@@ -577,7 +583,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
             composable(ShelfDestinations.Onboarding.route) {
                 OnboardingScreen(
                     onDone = {
-                        navController.navigate(ShelfDestinations.Books.route) {
+                        navController.navigate(ShelfDestinations.Home.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     }

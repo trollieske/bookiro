@@ -1,6 +1,8 @@
 package com.bookrio.library.util
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,5 +47,48 @@ class AudiobookNormalizerTest {
         val b = AudiobookNormalizer.computeGroupKey(title, author, "/some/path/track-002.mp3")
         assertTrue(a == b)
         assertTrue(AudiobookNormalizer.hasStrongIdentity(title, author))
+    }
+
+    @Test
+    fun `guesses author from an author-title folder when it differs from the narrator`() {
+        assertEquals(
+            "Terry Pratchett",
+            AudiobookNormalizer.guessAuthorFromName(
+                "Terry Pratchett - Discworld 01 - The Colour of Magic",
+                "Stephen Briggs"
+            )
+        )
+    }
+
+    @Test
+    fun `does not guess when the first segment already is the artist`() {
+        assertNull(
+            AudiobookNormalizer.guessAuthorFromName("Terry Pratchett - Mort", "Terry Pratchett")
+        )
+    }
+
+    @Test
+    fun `does not guess from a bare title or track prefix`() {
+        assertNull(AudiobookNormalizer.guessAuthorFromName("Mort", "Stephen Briggs"))
+        assertNull(AudiobookNormalizer.guessAuthorFromName("01 - Mort", "Stephen Briggs"))
+        assertNull(AudiobookNormalizer.guessAuthorFromName(null, "Stephen Briggs"))
+    }
+
+    @Test
+    fun `never treats an article-led title as an author`() {
+        assertNull(AudiobookNormalizer.guessAuthorFromName("The Martian - Andy Weir", "Andy Weir"))
+        assertNull(
+            AudiobookNormalizer.guessAuthorFromName("The Expanse - Leviathan Wakes", "James S. A. Corey")
+        )
+        assertNull(AudiobookNormalizer.guessAuthorFromName("The Odyssey - Homer", "Homer"))
+    }
+
+    @Test
+    fun `known-author gate accepts a real author and rejects a series name`() {
+        assertTrue(EbookFilenameParser.isKnownAuthor("Terry Pratchett"))
+        assertTrue(EbookFilenameParser.isKnownAuthor("pratchett"))
+        assertFalse(EbookFilenameParser.isKnownAuthor("Harry Potter"))
+        assertFalse(EbookFilenameParser.isKnownAuthor("The Expanse"))
+        assertFalse(EbookFilenameParser.isKnownAuthor(null))
     }
 }

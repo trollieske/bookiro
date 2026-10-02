@@ -383,7 +383,10 @@ class BookImportRepository(
             }.toMap()
 
         var detectedAlbum: String? = null
-        var detectedAuthor: String? = null
+        // Explicit ALBUMARTIST (normally the author) vs ARTIST (often the narrator).
+        var detectedAuthorTag: String? = null
+        var detectedArtist: String? = null
+        var detectedNarrator: String? = null
 
         val parsedTracks = mutableListOf<ParsedTrack>()
 
@@ -401,10 +404,14 @@ class BookImportRepository(
             if (detectedAlbum.isNullOrBlank() && !meta?.album.isNullOrBlank()) {
                 detectedAlbum = meta?.album
             }
-            val detectedAlbumArtist = meta?.albumArtist?.takeIf { it.isNotBlank() }
-                ?: meta?.author?.takeIf { it.isNotBlank() }
-            if (detectedAuthor.isNullOrBlank() && detectedAlbumArtist != null) {
-                detectedAuthor = detectedAlbumArtist
+            if (detectedAuthorTag.isNullOrBlank()) {
+                detectedAuthorTag = meta?.albumArtist?.takeIf { it.isNotBlank() }
+            }
+            if (detectedArtist.isNullOrBlank()) {
+                detectedArtist = meta?.author?.takeIf { it.isNotBlank() }
+            }
+            if (detectedNarrator.isNullOrBlank()) {
+                detectedNarrator = meta?.narrator?.takeIf { it.isNotBlank() }
             }
 
             val trackTitle = meta?.title?.takeIf { it.isNotBlank() && it != name }
@@ -437,7 +444,20 @@ class BookImportRepository(
 
         val rawFolder = AudiobookNormalizer.extractCanonicalFolderName(folderName.ifBlank { files.firstOrNull()?.second })
         val titleCandidate = detectedAlbum?.ifBlank { null } ?: AudiobookNormalizer.normalizeTitle(rawFolder)
-        val authorCandidate = detectedAuthor.orEmpty()
+        // Prefer the explicit author tag; then an ARTIST value that we know was
+        // stripped of a narrator credit; then a confident name parse; then a
+        // filename/folder guess only when it names a *known* author; and only
+        // last the raw ARTIST value. An unknown guess never outranks a real tag.
+        val parsedFolderAuthor = runCatching { EbookFilenameParser.parse(rawFolder) }
+            .getOrNull()?.author?.takeIf { it.isNotBlank() }
+        val knownGuess = AudiobookNormalizer.guessAuthorFromName(rawFolder, detectedArtist)
+            ?.takeIf { EbookFilenameParser.isKnownAuthor(it) }
+        val strippedArtist = detectedArtist?.takeIf { detectedNarrator != null }
+        val authorCandidate = detectedAuthorTag?.takeIf { it.isNotBlank() }
+            ?: strippedArtist
+            ?: parsedFolderAuthor
+            ?: knownGuess
+            ?: detectedArtist.orEmpty()
         val groupKey = AudiobookNormalizer.computeGroupKey(titleCandidate, authorCandidate, rawFolder)
 
         val existingBooks = db.bookDao().getAllOnce().filter { it.type == BookTypeEntity.AUDIOBOOK && !it.isDeleted }
@@ -587,6 +607,52 @@ class BookImportRepository(
 
     suspend fun consolidateFragmentedAudiobooks(): Int = audiobookHealMutex.withLock {
         consolidateFragmentedAudiobooksLocked()
+    }
+
+    /**
+     * Idempotent repair for books that an older build filed under the narrator
+     * because the ARTIST tag was used as the author. Strips a recognisable
+     * narrator credit ("(innlest av …)", "read by …") and, when the file/folder
+     * name carries a safer author hint, re-derives the author from it. Uses the
+     * silent metadata update so it never touches last_modified_at / library order.
+     */
+    suspend fun repairNarratorAuthors(): Int = withContext(dispatchers.io) {
+        var fixed = 0
+        try {
+            val books = db.bookDao().getAllOnce().filter { !it.isDeleted }
+            for (b in books) {
+                val split = com.bookrio.core.parse.NarratorTags.split(b.author)
+                val nameHint = AudiobookNormalizer.extractCanonicalFolderName(b.filePath)
+                // Only trust a filename guess when it names a known author and is
+                // not just the book title — otherwise repair could corrupt a
+                // correct author with a series/title prefix.
+                val guessed = if (b.type == BookTypeEntity.AUDIOBOOK) {
+                    AudiobookNormalizer.guessAuthorFromName(nameHint, b.author)
+                        ?.takeIf { EbookFilenameParser.isKnownAuthor(it) }
+                        ?.takeIf { AudiobookNormalizer.normalizeString(it) != AudiobookNormalizer.normalizeString(b.title) }
+                } else null
+                val newAuthor = split.author.takeIf { it.isNotBlank() && it != b.author }
+                    ?: guessed
+                    ?: continue
+                if (newAuthor == b.author) continue
+                db.bookDao().enrichMetadataSilently(
+                    id = b.id,
+                    title = b.title,
+                    sortTitle = b.sortTitle,
+                    author = newAuthor,
+                    sortAuthor = normalizeForSort(newAuthor),
+                    isbn = b.isbn,
+                    publisher = b.publisher,
+                    publishedDate = b.publishedDate,
+                    description = b.description
+                )
+                fixed++
+                Log.i(TAG, "[REPAIR_AUTHOR] id=${b.id} '$b.author' -> '$newAuthor'")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "[REPAIR_AUTHOR] failed", t)
+        }
+        fixed
     }
 
     private suspend fun consolidateFragmentedAudiobooksLocked(): Int = withContext(dispatchers.io) {
@@ -997,7 +1063,7 @@ class BookImportRepository(
                 val meta = parser.parse(ctx, uri, name, sizeBytes, streamProvider)
                 val nameNoExt = filenameWithoutExtension(name)
                 val title = meta?.title?.takeIf { it.isNotBlank() } ?: nameNoExt
-                val author = meta?.author ?: ""
+                val author = com.bookrio.core.parse.NarratorTags.split(meta?.author).author
                 val pageCount = meta?.pageCount
                     ?: meta?.durationMs?.let { (it / 60_000).toInt() }
                     ?: meta?.chapters?.size?.takeIf { it > 0 }

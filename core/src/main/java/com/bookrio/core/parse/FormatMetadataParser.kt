@@ -203,8 +203,8 @@ class TextMetadataParser : FormatMetadataParser {
 
 class AudioMetadataParser : FormatMetadataParser {
     companion object {
-        // MIDERTIDIG PÅ for live feilsøking på telefon — skru AV før release!
-        private const val AUDIO_META_DIAG = true
+        // Off for release; flip locally when diagnosing tag parsing on-device.
+        private const val AUDIO_META_DIAG = false
         private const val AUDIO_META_TAG = "AudioMeta"
     }
 
@@ -279,23 +279,41 @@ class AudioMetadataParser : FormatMetadataParser {
             }
 
             val album = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM)
-            val albumArtist = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
-            val artist = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                ?: albumArtist
+            val albumArtistRaw = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                ?.takeIf { it.isNotBlank() }
+            val artistRaw = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                ?.takeIf { it.isNotBlank() }
             val trackTitle = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)
             val durStr = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
             val durationMs = durStr?.toLongOrNull() ?: streamDurMs
+
+            // Audiobook tags are inconsistent: ALBUMARTIST is usually the author
+            // while ARTIST is the narrator. Keep them distinct and strip an
+            // embedded "(innlest av …)" / "read by …" credit instead of filing
+            // the book under the narrator.
+            val primary = albumArtistRaw ?: artistRaw
+            val split = NarratorTags.split(primary)
+            val explicitArtistSplit = artistRaw?.let { NarratorTags.split(it) }
+            val narrator = when {
+                albumArtistRaw != null && artistRaw != null &&
+                    !albumArtistRaw.equals(artistRaw, ignoreCase = true) ->
+                    explicitArtistSplit?.narrator
+                        ?: explicitArtistSplit?.author?.takeIf { it.isNotBlank() }
+                        ?: artistRaw
+                else -> split.narrator
+            }
 
             val fallback = fallbackMetadata(filename)
             return fallback.copy(
                 title = trackTitle?.takeIf { it.isNotBlank() }
                     ?: album?.takeIf { it.isNotBlank() }
                     ?: fallback.title,
-                author = artist?.takeIf { it.isNotBlank() } ?: fallback.author,
+                author = split.author.takeIf { it.isNotBlank() } ?: fallback.author,
                 durationMs = durationMs,
                 chapters = embeddedChapters,
                 album = album?.takeIf { it.isNotBlank() },
-                albumArtist = albumArtist?.takeIf { it.isNotBlank() } ?: artist?.takeIf { it.isNotBlank() }
+                albumArtist = albumArtistRaw,
+                narrator = narrator?.trim()?.takeIf { it.isNotBlank() }
             )
         } catch (_: Exception) {
             return fallbackMetadata(filename).copy(durationMs = streamDurMs, chapters = embeddedChapters)
