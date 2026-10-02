@@ -200,6 +200,11 @@ credentials never leave the device; and (for the EU) the legal basis for those l
 8. **Torrent engine lifecycle** — `stop()` on the main thread, non-volatile `running`, `sessionManager` not cleared on stop, repeated `start()` can create a second `SessionManager`.
 9. **ProGuard keeps / APK size** — validate trimming with a release smoke test before shipping.
 10. **`TorrentEngine.pauseAll`** now pauses native handles, but the UI "Pause all"/"Resume all" should be manually verified on device.
+11. **Stuck torrents** — a malformed `.torrent` or unparseable magnet leaves a row with `infoHash == null` that is re-added every ~2 s and never reaches a `FAILED` state (no user-visible error). Consider a retry cap / terminal failure. (`TorrentEngine.tickMain`, scout F32/F33.)
+12. **Base32 magnets** — 32-char base32 infohashes are accepted but never converted to hex, so they never match. (`TorrentEngine.parseMagnet`, scout F34.)
+13. **`deleteDownload(withFiles = true)`** does `File(dl.savePath).deleteRecursively()` without guarding the shared `filesDir/shelf_torrents` root; the UI currently always passes `false`. Add a root guard before enabling file deletion. (scout F39.)
+14. **Torrent notification has no content intent** (`PendingIntent`), so tapping it does nothing. (scout F46.)
+15. **Low storage** — only the WorkManager `setRequiresStorageNotLow` constraint applies; the running engine does not react to the device filling up. (scout F14.)
 
 ---
 
