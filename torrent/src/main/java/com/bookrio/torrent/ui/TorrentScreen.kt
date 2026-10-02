@@ -127,7 +127,6 @@ fun TorrentScreen(
             val openSearches = remember {
                 listOf(
                     "Internet Archive" to "https://archive.org/search?query=%s&and[]=mediatype%3A%22texts%22",
-                    "Libgen" to "https://libgen.is/search.php?req=%s",
                     "Standard Ebooks (OPDS)" to "https://standardebooks.org/ebooks/?query=%s",
                     "Project Gutenberg" to "https://www.gutenberg.org/ebooks/search/?query=%s"
                 )
