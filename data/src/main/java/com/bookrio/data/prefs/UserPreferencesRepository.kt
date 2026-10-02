@@ -12,7 +12,9 @@ import com.bookrio.core.domain.model.DarkModePref
 import com.bookrio.core.domain.model.LibrarySortMode
 import com.bookrio.core.domain.model.LibraryViewType
 import com.bookrio.core.domain.model.SortDirection
+import com.bookrio.core.domain.model.defaultDirectionFor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "shelf_prefs")
@@ -93,11 +95,15 @@ class UserPreferencesRepository(private val context: Context) {
     /** Global podcast playback speed, remembered across episodes. */
     val podcastSpeed: Flow<Float> = store.map { (it[Keys.PODCAST_SPEED_MILLIS] ?: 1000) / 1000f }
 
-    // ---- Sort rail (persisted per media tab; default HYLLE / mode-default direction) ----
+    // ---- Sort (persisted per media tab; direction falls back to the mode default) ----
     val booksSortMode: Flow<LibrarySortMode> = store.map { LibrarySortMode.from(it[Keys.SORT_MODE_BOOKS]) }
     val audioSortMode: Flow<LibrarySortMode> = store.map { LibrarySortMode.from(it[Keys.SORT_MODE_AUDIO]) }
-    val booksSortDirection: Flow<SortDirection> = store.map { SortDirection.from(it[Keys.SORT_DIR_BOOKS]) }
-    val audioSortDirection: Flow<SortDirection> = store.map { SortDirection.from(it[Keys.SORT_DIR_AUDIO]) }
+    val booksSortDirection: Flow<SortDirection> = combine(booksSortMode, store) { mode, p ->
+        p[Keys.SORT_DIR_BOOKS]?.let { SortDirection.from(it) } ?: defaultDirectionFor(mode)
+    }
+    val audioSortDirection: Flow<SortDirection> = combine(audioSortMode, store) { mode, p ->
+        p[Keys.SORT_DIR_AUDIO]?.let { SortDirection.from(it) } ?: defaultDirectionFor(mode)
+    }
 
     // ---- (Legacy Leserytme/goal keys remain dormant in the DataStore file) ----
 
