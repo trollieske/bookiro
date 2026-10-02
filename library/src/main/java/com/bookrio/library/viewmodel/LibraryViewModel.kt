@@ -276,15 +276,10 @@ class LibraryViewModel(
         }
     }
 
-    /** ⇅ toggles the persisted direction for the current tab. */
-    fun toggleSortDirection() {
-        viewModelScope.launch(dispatchers.io) {
-            val isBooks = modeFlow.value == LibraryMode.Books
-            val current = (if (isBooks) prefs.booksSortDirection else prefs.audioSortDirection).firstOrNull()
-            val next = if (current == SortDirection.ASC) SortDirection.DESC else SortDirection.ASC
-            if (isBooks) prefs.setBooksSortDirection(next) else prefs.setAudioSortDirection(next)
-        }
-    }
+    /*
+     * Direction is chosen explicitly from the sort sheet; the old ⇅ toggle is
+     * gone, so there is no toggleSortDirection() here anymore.
+     */
 
     /** Sets the persisted direction for the current tab explicitly. */
     fun setSortDirection(direction: SortDirection) {

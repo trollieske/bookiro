@@ -14,10 +14,10 @@
 	"children": [
 		{
 			"name": "reviewer-2",
-			"paneId": "wJ:p1E",
+			"paneId": null,
 			"sessionFile": "/home/ck3k/Work/wt-qol/.pi-subagents/runs/r-20a84bbb/reviewer-2.jsonl",
 			"ownerToken": "a2e64c5a798be3a6",
-			"state": "working",
+			"state": "retired",
 			"spawnedAt": "2026-10-02T07:40:24.088Z",
 			"agent": "reviewer",
 			"kind": "pi",
@@ -70,7 +70,8 @@
 						"severity": "required"
 					}
 				]
-			}
+			},
+			"retiredAt": "2026-10-02T08:16:26.010Z"
 		}
 	],
 	"budget": {
@@ -79,5 +80,5 @@
 		"granted": 0
 	},
 	"createdAt": "2026-10-02T07:40:16.621Z",
-	"updatedAt": "2026-10-02T08:10:27.550Z"
+	"updatedAt": "2026-10-02T08:16:26.010Z"
 }

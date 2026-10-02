@@ -89,6 +89,7 @@ fun HomeScreen(
     onOpenBook: (Long, Boolean) -> Unit,
     onOpenEpisode: (Long) -> Unit,
     onOpenImport: () -> Unit,
+    onOpenLibrary: () -> Unit,
     vmFactory: ViewModelProvider.Factory? = null,
     vm: HomeViewModel = viewModel(factory = vmFactory ?: homeVmFactory())
 ) {
@@ -117,7 +118,8 @@ fun HomeScreen(
             !state.hasSections -> item(key = "home-empty") {
                 HomeEmptyState(
                     showImport = !state.hasLibrary,
-                    onOpenImport = onOpenImport
+                    onOpenImport = onOpenImport,
+                    onOpenLibrary = onOpenLibrary
                 )
             }
 
@@ -515,7 +517,7 @@ private fun HomeEpisodeRow(
 }
 
 @Composable
-private fun HomeEmptyState(showImport: Boolean, onOpenImport: () -> Unit) {
+private fun HomeEmptyState(showImport: Boolean, onOpenImport: () -> Unit, onOpenLibrary: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -565,6 +567,20 @@ private fun HomeEmptyState(showImport: Boolean, onOpenImport: () -> Unit) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
+        } else {
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onOpenLibrary,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HomeAccent,
+                    contentColor = Color.Black
+                )
+            ) {
+                Text(
+                    text = stringResource(R.string.home_empty_browse),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -578,9 +594,11 @@ private fun continueDetail(item: HomeContinueItem): String {
 
 @Composable
 private fun audiobookDetail(item: HomeAudiobookItem): String {
-    if (!item.inProgress) return stringResource(R.string.home_not_started)
+    // Not started (and never a Continue candidate) -> explicit label.
+    if (item.progressPercent <= 0f) return stringResource(R.string.home_not_started)
     val pct = (item.progressPercent * 100f).roundToInt().coerceIn(0, 100)
-    val remaining = item.remainingMs?.let { remainingLabel(it) }
+    // Finished books are not candidates, so no remaining label.
+    val remaining = if (item.progressPercent < 0.99f) item.remainingMs?.let { remainingLabel(it) } else null
     return if (remaining != null) "$pct% · $remaining" else "$pct%"
 }
 

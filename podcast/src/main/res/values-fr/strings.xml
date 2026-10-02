@@ -126,10 +126,6 @@
     <string name="pod_sleep_a11y">Minuteur de sommeil</string>
     <string name="pod_sleep_title">Minuteur de sommeil</string>
     <string name="pod_sleep_unit">min</string>
-    <string name="pod_sleep_active">⏱ Compte à rebours actif : %1$d min %2$d s</string>
-    <string name="pod_sleep_off">Désactiver</string>
-    <string name="pod_sleep_custom_min">Durée personnalisée (minutes)</string>
-    <string name="pod_sleep_hint">Ex. 25</string>
     <string name="pod_sleep_set">Définir le minuteur</string>
     <string name="pod_sleep_presets">Choix rapides</string>
     <string name="pod_sleep_turn_off_timer">Désactiver le minuteur de sommeil</string>

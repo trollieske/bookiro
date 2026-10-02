@@ -15,10 +15,6 @@
     <string name="ply_close">Fermer</string>
     <string name="ply_sleep_title">Minuteur de sommeil</string>
     <string name="ply_sleep_unit">min</string>
-    <string name="ply_sleep_active">⏱️ Compte à rebours actif : %1$d min %2$d s</string>
-    <string name="ply_sleep_off">Désactiver</string>
-    <string name="ply_sleep_custom_min">Durée personnalisée (minutes)</string>
-    <string name="ply_sleep_hint">p. ex. 25</string>
     <string name="ply_sleep_set">Définir le minuteur</string>
     <string name="ply_sleep_presets">Choix rapides</string>
     <string name="ply_sleep_turn_off_timer">Désactiver le minuteur de sommeil</string>

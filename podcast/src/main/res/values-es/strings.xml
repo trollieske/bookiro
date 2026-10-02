@@ -126,10 +126,6 @@
     <string name="pod_sleep_a11y">Temporizador de sueño</string>
     <string name="pod_sleep_title">Temporizador de sueño</string>
     <string name="pod_sleep_unit">min</string>
-    <string name="pod_sleep_active">⏱ Cuenta atrás activa: %1$d min %2$d s</string>
-    <string name="pod_sleep_off">Desactivar</string>
-    <string name="pod_sleep_custom_min">Tiempo personalizado (minutos)</string>
-    <string name="pod_sleep_hint">P. ej. 25</string>
     <string name="pod_sleep_set">Establecer temporizador</string>
     <string name="pod_sleep_presets">Opciones rápidas</string>
     <string name="pod_sleep_turn_off_timer">Desactivar temporizador de sueño</string>

@@ -200,7 +200,8 @@ class PlayerViewModel(
         val positionMs = if (durationMs > 0L) np.positionMs else current.currentMs
         val percent = if (durationMs > 0L) positionMs.toFloat() / durationMs.toFloat() else current.percent
         val sleepMinutes = if (np.sleepTimerRemainingMs > 0L) {
-            (np.sleepTimerRemainingMs / 60_000L).toInt().coerceAtLeast(1)
+            // Round UP so reopening an active timer does not shorten it (90 min -> 89).
+            ((np.sleepTimerRemainingMs + 59_999L) / 60_000L).toInt().coerceAtLeast(1)
         } else {
             null
         }

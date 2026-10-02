@@ -15,10 +15,6 @@
     <string name="ply_close">Schließen</string>
     <string name="ply_sleep_title">Schlaftimer</string>
     <string name="ply_sleep_unit">Min.</string>
-    <string name="ply_sleep_active">⏱️ Aktiver Countdown: %1$d Min. %2$d Sek.</string>
-    <string name="ply_sleep_off">Ausschalten</string>
-    <string name="ply_sleep_custom_min">Eigene Zeit (Minuten)</string>
-    <string name="ply_sleep_hint">z. B. 25</string>
     <string name="ply_sleep_set">Timer einstellen</string>
     <string name="ply_sleep_presets">Schnellauswahl</string>
     <string name="ply_sleep_turn_off_timer">Schlaftimer ausschalten</string>

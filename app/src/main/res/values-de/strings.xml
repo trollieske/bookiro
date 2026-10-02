@@ -275,4 +275,6 @@
     <string name="home_not_started">Nicht begonnen</string>
     <string name="home_duration_hm">%1$d Std. %2$d Min.</string>
     <string name="home_duration_m">%1$d Min.</string>
+
+    <string name="home_empty_browse">Bibliothek durchsuchen</string>
 </resources>

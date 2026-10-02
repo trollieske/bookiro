@@ -275,4 +275,6 @@
     <string name="home_not_started">Не розпочато</string>
     <string name="home_duration_hm">%1$d год %2$d хв</string>
     <string name="home_duration_m">%1$d хв</string>
+
+    <string name="home_empty_browse">Переглянути бібліотеку</string>
 </resources>

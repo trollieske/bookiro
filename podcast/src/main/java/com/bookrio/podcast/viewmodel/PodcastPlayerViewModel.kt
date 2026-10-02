@@ -139,7 +139,8 @@ class PodcastPlayerViewModel(
         // Ignore a stale snapshot from a different episode than this screen shows.
         if (current.episodeId > 0L && np.episodeId != current.episodeId) return
         val sleepMinutes = if (np.sleepTimerRemainingMs > 0L) {
-            (np.sleepTimerRemainingMs / 60_000L).toInt().coerceAtLeast(1)
+            // Round UP so reopening an active timer does not shorten it (90 min -> 89).
+            ((np.sleepTimerRemainingMs + 59_999L) / 60_000L).toInt().coerceAtLeast(1)
         } else {
             null
         }

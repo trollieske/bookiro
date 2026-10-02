@@ -366,7 +366,8 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onOpenEpisode = { episodeId ->
                         navController.navigate(ShelfDestinations.PodcastPlayer.routeFor(episodeId))
                     },
-                    onOpenImport = { navController.navigate(ShelfDestinations.Import.route) }
+                    onOpenImport = { navController.navigate(ShelfDestinations.Import.route) },
+                    onOpenLibrary = { navController.navigate(ShelfDestinations.Books.route) }
                 )
             }
             composable(ShelfDestinations.Podcasts.route) {

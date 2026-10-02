@@ -15,10 +15,6 @@
     <string name="ply_close">Luk</string>
     <string name="ply_sleep_title">Søvntimer</string>
     <string name="ply_sleep_unit">min</string>
-    <string name="ply_sleep_active">⏱️ Aktiv nedtælling: %1$d min %2$d sek</string>
-    <string name="ply_sleep_off">Slå fra</string>
-    <string name="ply_sleep_custom_min">Brugerdefineret tid (minutter)</string>
-    <string name="ply_sleep_hint">F.eks. 25</string>
     <string name="ply_sleep_set">Indstil timer</string>
     <string name="ply_sleep_presets">Hurtigvalg</string>
     <string name="ply_sleep_turn_off_timer">Slå søvntimeren fra</string>

@@ -275,4 +275,6 @@
     <string name="home_not_started">Sin empezar</string>
     <string name="home_duration_hm">%1$dh %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
+
+    <string name="home_empty_browse">Explorar biblioteca</string>
 </resources>

@@ -126,10 +126,6 @@
     <string name="pod_sleep_a11y">Таймер сну</string>
     <string name="pod_sleep_title">Таймер сну</string>
     <string name="pod_sleep_unit">хв</string>
-    <string name="pod_sleep_active">⏱ Активний відлік: %1$d хв %2$d с</string>
-    <string name="pod_sleep_off">Вимкнути</string>
-    <string name="pod_sleep_custom_min">Власний час (хвилини)</string>
-    <string name="pod_sleep_hint">Напр. 25</string>
     <string name="pod_sleep_set">Задати таймер</string>
     <string name="pod_sleep_presets">Швидкий вибір</string>
     <string name="pod_sleep_turn_off_timer">Вимкнути таймер сну</string>

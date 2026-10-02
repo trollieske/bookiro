@@ -15,10 +15,6 @@
     <string name="ply_close">Stäng</string>
     <string name="ply_sleep_title">Sömnfunktion</string>
     <string name="ply_sleep_unit">min</string>
-    <string name="ply_sleep_active">⏱️ Aktiv nedräkning: %1$d min %2$d sek</string>
-    <string name="ply_sleep_off">Stäng av</string>
-    <string name="ply_sleep_custom_min">Egen tid (minuter)</string>
-    <string name="ply_sleep_hint">T.ex. 25</string>
     <string name="ply_sleep_set">Ställ in timer</string>
     <string name="ply_sleep_presets">Snabbval</string>
     <string name="ply_sleep_turn_off_timer">Stäng av sömnfunktionen</string>

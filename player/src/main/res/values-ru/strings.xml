@@ -15,10 +15,6 @@
     <string name="ply_close">Закрыть</string>
     <string name="ply_sleep_title">Таймер сна</string>
     <string name="ply_sleep_unit">мин</string>
-    <string name="ply_sleep_active">⏱️ Активный отсчёт: %1$d мин %2$d с</string>
-    <string name="ply_sleep_off">Выключить</string>
-    <string name="ply_sleep_custom_min">Своё время (минуты)</string>
-    <string name="ply_sleep_hint">напр. 25</string>
     <string name="ply_sleep_set">Установить таймер</string>
     <string name="ply_sleep_presets">Быстрый выбор</string>
     <string name="ply_sleep_turn_off_timer">Выключить таймер сна</string>

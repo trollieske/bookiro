@@ -275,4 +275,6 @@
     <string name="home_not_started">Ikke startet</string>
     <string name="home_duration_hm">%1$dt %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
+
+    <string name="home_empty_browse">Gennemse bibliotek</string>
 </resources>

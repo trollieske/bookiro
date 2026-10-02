@@ -15,10 +15,6 @@
     <string name="ply_close">Close</string>
     <string name="ply_sleep_title">Sleep timer</string>
     <string name="ply_sleep_unit">min</string>
-    <string name="ply_sleep_active">⏱️ Active countdown: %1$d min %2$d sec</string>
-    <string name="ply_sleep_off">Turn off</string>
-    <string name="ply_sleep_custom_min">Custom time (minutes)</string>
-    <string name="ply_sleep_hint">e.g. 25</string>
     <string name="ply_sleep_set">Set timer</string>
     <string name="ply_sleep_presets">Quick picks</string>
     <string name="ply_sleep_turn_off_timer">Turn off sleep timer</string>
