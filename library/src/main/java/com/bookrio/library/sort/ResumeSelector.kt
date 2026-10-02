@@ -52,6 +52,9 @@ object ResumeSelector {
             .filter { !it.isDeleted }
             .filter { it.isAudio == wantAudio }
             .filter { it.dateFinished == null }
+            // A finished book stays finished even when the preserved position is > 0
+            // (the audio progress fix now keeps positionMs instead of wiping it).
+            .filter { it.progressPercent < COMPLETED_THRESHOLD }
             .filter { it.progressPercent in 0.0001f..COMPLETED_THRESHOLD || it.positionMs > 0L }
             .filter { it.lastActivity > 0L }
             .sortedWith(

@@ -108,6 +108,19 @@ class ResumeSelectorTest {
         assertEquals(listOf(4L), candidates.map { it.bookId })
     }
 
+    @Test
+    fun `finished audio with a preserved position is still excluded`() {
+        val candidates = ResumeSelector.select(
+            listOf(
+                rb(1, isAudio = true, progress = 1.0f, positionMs = 7_200_000L, lastActivity = 9000L),
+                rb(2, isAudio = true, progress = 0.995f, positionMs = 7_000_000L, lastActivity = 8000L),
+                rb(3, isAudio = true, progress = 0f, positionMs = 500_000L, lastActivity = 7000L)
+            ),
+            wantAudio = true
+        )
+        assertEquals(listOf(3L), candidates.map { it.bookId })
+    }
+
     // 14. New activity replaces primary candidate deterministically
     @Test
     fun `new activity replaces primary deterministically`() {
