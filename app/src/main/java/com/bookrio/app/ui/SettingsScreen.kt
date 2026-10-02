@@ -1252,7 +1252,7 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     Icons.Default.SwapHoriz, null,
-                                    tint = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(26.dp)
                                 )
                                 Spacer(Modifier.width(10.dp))
@@ -1316,8 +1316,8 @@ fun SettingsScreen(
                                     valueRange = 0f..100f,
                                     steps = 19,
                                     colors = SliderDefaults.colors(
-                                        thumbColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
-                                        activeTrackColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6).copy(alpha = 0.6f)
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     )
                                 )
                             }
