@@ -12,8 +12,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- No BLUETOOTH / BLUETOOTH_CONNECT: playback routes through the system
+         media session, and the app never talks to BluetoothAdapter directly. -->
 
     <uses-feature
         android:name="android.hardware.type.automotive"

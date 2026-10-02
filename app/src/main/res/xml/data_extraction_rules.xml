@@ -4,9 +4,13 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
         <exclude domain="sharedpref" path="com.bookrio_ftp_plain.xml" />
+        <exclude domain="sharedpref" path="shelf_smb_servers_enc.xml" />
+        <exclude domain="sharedpref" path="shelf_webdav_servers_enc.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
         <exclude domain="sharedpref" path="com.bookrio_ftp_plain.xml" />
+        <exclude domain="sharedpref" path="shelf_smb_servers_enc.xml" />
+        <exclude domain="sharedpref" path="shelf_webdav_servers_enc.xml" />
     </device-transfer>
 </data-extraction-rules>
