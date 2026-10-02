@@ -58,7 +58,7 @@ class PdfRealParser {
                     ParsedChapter(
                         index = 0,
                         title = "Feil",
-                        htmlContent = "<div style=\"padding:12px;background:white;color:red;\">Kunne ikke åpne PDFen.</div>",
+                        htmlContent = "<div style=\"padding:12px;background:white;color:red;\">Could not open the PDF.</div>",
                         startByte = 0,
                         byteLength = 0
                     )
@@ -147,7 +147,7 @@ class PdfRealParser {
                     ParsedChapter(
                         index = 0,
                         title = "Feil",
-                        htmlContent = "<div style=\"padding:12px;background:white;color:red;\">Kunne ikke åpne PDFen.</div>",
+                        htmlContent = "<div style=\"padding:12px;background:white;color:red;\">Could not open the PDF.</div>",
                         startByte = 0,
                         byteLength = 0
                     )
@@ -166,7 +166,7 @@ class PdfRealParser {
                     ParsedChapter(
                         index = 0,
                         title = "Feil",
-                        htmlContent = "<div style=\"padding:12px;background:white;color:red;\">Kunne ikke åpne PDFen.</div>",
+                        htmlContent = "<div style=\"padding:12px;background:white;color:red;\">Could not open the PDF.</div>",
                         startByte = 0,
                         byteLength = 0
                     )

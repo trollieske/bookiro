@@ -248,7 +248,7 @@ fun BookSpine(
                 ) {
                     Icon(
                         Icons.Default.CloudDownload,
-                        contentDescription = "Ikke lastet ned",
+                        contentDescription = "Not downloaded",
                         tint = Color.White,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
