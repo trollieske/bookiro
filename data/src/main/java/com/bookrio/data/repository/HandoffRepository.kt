@@ -5,8 +5,8 @@ import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.dao.WorkWithEditions
 import com.bookrio.data.local.entity.*
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 data class ResolvedHandoff(
@@ -271,9 +271,12 @@ class HandoffRepository(
         manual: Boolean
     ): EditionLinkResult {
         var result: EditionLinkResult? = null
-        db.runInTransaction {
-            val existingEbook = runBlocking { editionDao.getByBookId(ebook.id) }
-            val existingAudio = runBlocking { editionDao.getByBookId(audiobook.id) }
+        // Room's suspend transaction. The previous `db.runInTransaction { runBlocking { ... } }`
+        // blocked the IO thread inside the transaction and could deadlock against the
+        // query executor on the ebook<->audio handoff path.
+        db.withTransaction {
+            val existingEbook = editionDao.getByBookId(ebook.id)
+            val existingAudio = editionDao.getByBookId(audiobook.id)
 
             val workId = when {
                 existingEbook != null -> existingEbook.workId
@@ -281,22 +284,20 @@ class HandoffRepository(
                 else -> {
                     val canonical = WorkMatcher.normalizeTitle(ebook.title).ifBlank { audiobook.title.lowercase() }.trim()
                     val auth = WorkMatcher.normalizeAuthor(ebook.author).ifBlank { audiobook.author }
-                    runBlocking {
-                        workDao.insert(
-                            WorkEntity(
-                                canonicalTitle = canonical.ifBlank { ebook.title },
-                                canonicalAuthor = auth.ifBlank { ebook.author },
-                                isbn = WorkMatcher.normalizeIsbn(ebook.isbn) ?: WorkMatcher.normalizeIsbn(audiobook.isbn),
-                                series = ebook.series ?: audiobook.series,
-                                seriesIndex = ebook.seriesIndex ?: audiobook.seriesIndex
-                            )
+                    workDao.insert(
+                        WorkEntity(
+                            canonicalTitle = canonical.ifBlank { ebook.title },
+                            canonicalAuthor = auth.ifBlank { ebook.author },
+                            isbn = WorkMatcher.normalizeIsbn(ebook.isbn) ?: WorkMatcher.normalizeIsbn(audiobook.isbn),
+                            series = ebook.series ?: audiobook.series,
+                            seriesIndex = ebook.seriesIndex ?: audiobook.seriesIndex
                         )
-                    }
+                    )
                 }
             }
             val created = existingEbook == null && existingAudio == null
-            val eId = runBlocking { editionDao.ensureEditionForBook(workId, ebook.id, EditionTypeEntity.EBOOK, match, manual) }
-            val aId = runBlocking { editionDao.ensureEditionForBook(workId, audiobook.id, EditionTypeEntity.AUDIOBOOK, match, manual) }
+            val eId = editionDao.ensureEditionForBook(workId, ebook.id, EditionTypeEntity.EBOOK, match, manual)
+            val aId = editionDao.ensureEditionForBook(workId, audiobook.id, EditionTypeEntity.AUDIOBOOK, match, manual)
             result = EditionLinkResult(
                 workId = workId,
                 createdNewWork = created,
