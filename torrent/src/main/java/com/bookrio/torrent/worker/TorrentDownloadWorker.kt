@@ -10,14 +10,28 @@ import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.DownloadStatusEntity
+import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.torrent.engine.TorrentEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 class TorrentDownloadWorker(
     private val appContext: Context,
@@ -28,56 +42,51 @@ class TorrentDownloadWorker(
         const val CHANNEL_ID = "torrent_channel"
         const val NOTIF_ID = 3004
         private const val WORK_NAME = "shelf_torrent_worker"
+        private const val RUN_NOW_NAME = "torrent_run_now"
 
-        fun schedule(context: Context) {
-            val workManager = androidx.work.WorkManager.getInstance(context)
-            val wifiOnly = true
-            val chargingOnly = false
-            val constraints = androidx.work.Constraints.Builder()
-                .setRequiredNetworkType(
-                    if (wifiOnly) androidx.work.NetworkType.UNMETERED
-                    else androidx.work.NetworkType.CONNECTED
-                )
+        /**
+         * Applies the user's torrent background / network / charging settings to
+         * WorkManager. Called on app start and whenever a setting changes, so the
+         * Settings toggles actually control background downloads (they used to be
+         * written but never read).
+         */
+        fun applyUserSettings(context: Context) {
+            val app = context.applicationContext
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runCatching { applyUserSettingsInternal(app) }
+            }
+        }
+
+        private suspend fun applyUserSettingsInternal(app: Context) {
+            val prefs = UserPreferencesRepository(app)
+            val wm = WorkManager.getInstance(app)
+            val enabled = runCatching { prefs.torrentBackgroundEnabled.first() }.getOrDefault(false)
+            if (!enabled) {
+                wm.cancelUniqueWork(WORK_NAME)
+                wm.cancelUniqueWork(RUN_NOW_NAME)
+                return
+            }
+            val wifiOnly = runCatching { prefs.torrentWifiOnly.first() }.getOrDefault(true)
+            val chargingOnly = runCatching { prefs.torrentChargingOnly.first() }.getOrDefault(false)
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
                 .setRequiresStorageNotLow(true)
                 .setRequiresCharging(chargingOnly)
                 .build()
 
-            val req = androidx.work.PeriodicWorkRequestBuilder<TorrentDownloadWorker>(
-                15, java.util.concurrent.TimeUnit.MINUTES
-            )
+            val periodic = PeriodicWorkRequestBuilder<TorrentDownloadWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .addTag(WORK_NAME)
                 .build()
+            // UPDATE so network / charging changes apply immediately.
+            wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodic)
 
-            workManager.enqueueUniquePeriodicWork(
-                WORK_NAME,
-                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
-                req
-            )
-        }
-
-        fun runNow(context: Context) {
-            val workManager = androidx.work.WorkManager.getInstance(context)
-            val wifiOnly = true
-            val chargingOnly = false
-            val constraints = androidx.work.Constraints.Builder()
-                .setRequiredNetworkType(
-                    if (wifiOnly) androidx.work.NetworkType.UNMETERED
-                    else androidx.work.NetworkType.CONNECTED
-                )
-                .setRequiresStorageNotLow(true)
-                .setRequiresCharging(chargingOnly)
-                .build()
-            val req = androidx.work.OneTimeWorkRequestBuilder<TorrentDownloadWorker>()
-                .setConstraints(constraints)
-                .addTag("torrent_run_now")
-                .build()
             // Unique so repeated app launches can never queue a backlog of workers.
-            workManager.enqueueUniqueWork(
-                "torrent_run_now",
-                androidx.work.ExistingWorkPolicy.KEEP,
-                req
-            )
+            val oneTime = OneTimeWorkRequestBuilder<TorrentDownloadWorker>()
+                .setConstraints(constraints)
+                .addTag(RUN_NOW_NAME)
+                .build()
+            wm.enqueueUniqueWork(RUN_NOW_NAME, ExistingWorkPolicy.KEEP, oneTime)
         }
     }
 
@@ -96,6 +105,12 @@ class TorrentDownloadWorker(
         }.getOrDefault(false)
         if (!hasWork) return Result.success()
 
+        // Honour the user's runtime limits (settings were previously ignored).
+        val prefs = UserPreferencesRepository(appContext)
+        val wifiOnly = runCatching { prefs.torrentWifiOnly.first() }.getOrDefault(true)
+        val chargingOnly = runCatching { prefs.torrentChargingOnly.first() }.getOrDefault(false)
+        val minBattery = runCatching { prefs.torrentMinBatteryPct.first() }.getOrDefault(20)
+
         ensureChannel()
         runCatching { setForeground(getForegroundInfo()) }
 
@@ -106,10 +121,6 @@ class TorrentDownloadWorker(
         val start = System.currentTimeMillis()
 
         while (System.currentTimeMillis() - start < timeoutMs) {
-            val wifiOnly = true
-            val chargingOnly = false
-            val minBattery = 15
-
             // Check mid-flight runtime constraints
             val batteryOk = isBatteryOk(appContext, minBattery)
             val chargingOk = !chargingOnly || isCharging(appContext)

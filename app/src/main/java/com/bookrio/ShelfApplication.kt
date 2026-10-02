@@ -77,8 +77,7 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
         MediaScannerWorker.schedule(this)
         FtpPeriodicSyncWorker.schedule(this)
         runCatching { FtpSyncCoordinator.start(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.schedule(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.runNow(this) }
+        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(this) }
         runCatching { com.bookrio.podcast.worker.PodcastFeedSyncWorker.schedulePeriodic(this) }
     }
 

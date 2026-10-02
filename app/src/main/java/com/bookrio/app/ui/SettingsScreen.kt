@@ -301,18 +301,22 @@ class SettingsViewModel(
 
     fun setTorrentBackgroundEnabled(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentBackgroundEnabled(b)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setTorrentWifiOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentWifiOnly(b)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setTorrentChargingOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentChargingOnly(b)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setTorrentMinBattery(pct: Int) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentMinBatteryPct(pct)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setLibraryFormatFilter(b: Boolean) = viewModelScope.launch(dispatchers.io) {
