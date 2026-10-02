@@ -64,6 +64,9 @@ class TorrentEngine(
         /** Upper bound of interrupted imports retried per engine start. */
         private const val MAX_IMPORT_RETRIES_PER_START = 5
 
+        /** Give up adding a download to the session after this many failed ticks. */
+        private const val MAX_SESSION_ADD_RETRIES = 10
+
         @Volatile
         private var INSTANCE: TorrentEngine? = null
 
@@ -350,7 +353,14 @@ class TorrentEngine(
         return urls
     }
 
-    private suspend fun addToSession(sm: SessionManager, dl: TorrentDownloadEntity) = withContext(dispatchers.io) {
+    /**
+     * Adds/attaches a download to the libtorrent session.
+     *
+     * @return true when the download was accepted (and a handle/infohash exists),
+     *   false when it could not be started. The caller uses this to cap retries so
+     *   a corrupt `.torrent` or malformed magnet cannot be retried forever.
+     */
+    private suspend fun addToSession(sm: SessionManager, dl: TorrentDownloadEntity): Boolean = withContext(dispatchers.io) {
         try {
             val saveDir = if (dl.savePath.contains("emulated") || dl.savePath.contains("/storage/")) {
                 defaultSaveDir()
@@ -365,7 +375,14 @@ class TorrentEngine(
                     // that would leak the infohash before the private flag is known.
                     sm.download(dl.sourceData, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
                     val hash = dl.infoHash ?: extractInfoHashFromMagnet(dl.sourceData)
-                    if (hash != null) hashToId[hash.uppercase()] = dl.id
+                    if (hash != null) {
+                        hashToId[hash.uppercase()] = dl.id
+                        true
+                    } else {
+                        // No btih in the magnet: nothing libtorrent can track.
+                        Log.w(TAG, "magnet without info hash for dl=${dl.id}")
+                        false
+                    }
                 }
                 TorrentSourceTypeEntity.TORRENT_FILE -> {
                     val torrentBytes = dl.sourceData.fromBase64()
@@ -384,22 +401,26 @@ class TorrentEngine(
                         try { applyPrivateTorrentFlags(handle, isPriv) } catch (_: Throwable) {}
                         try { handle.forceReannounce() } catch (_: Throwable) {}
                     }
+                    true
                 }
                 TorrentSourceTypeEntity.INFO_HASH -> {
                     val magnet = buildMagnetFromHash(dl.sourceData, dl.displayName, dl.trackersJson)
                     sm.download(magnet, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
                     hashToId[dl.sourceData.uppercase()] = dl.id
+                    true
                 }
                 else -> {
-                    // HTTP_URL or unknown â€” treat as magnet/url string
+                    // HTTP_URL or unknown — treat as magnet/url string
                     sm.download(dl.sourceData, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
                     val hash = dl.infoHash
                     if (hash != null) hashToId[hash.uppercase()] = dl.id
                     Log.w(TAG, "Unknown source type ${dl.sourceType} for dl=${dl.id}")
+                    true
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "addToSession failed for dl=${dl.id}", e)
+            false
         }
     }
 
@@ -583,9 +604,24 @@ class TorrentEngine(
         val dl = db.torrentDownloadDao().getById(id) ?: return@withContext
         cancelDownload(id)
         if (withFiles) {
-            runCatching { File(dl.savePath).deleteRecursively() }
+            runCatching { deleteDownloadFiles(dl.savePath) }
         }
         db.torrentDownloadDao().delete(dl)
+    }
+
+    /**
+     * Delete a torrent's files, but only when the target is a real path strictly
+     * inside this app's private torrent directory. Guards against a blank or
+     * `content://` save path (SAF folder chosen by the user), the shared root, and
+     * any path outside the app so a bad row can never wipe unrelated data.
+     */
+    private fun deleteDownloadFiles(savePath: String?) {
+        if (savePath.isNullOrBlank() || savePath.startsWith("content://") || savePath.startsWith("file://")) return
+        val root = runCatching { defaultSaveDir().canonicalFile }.getOrNull() ?: return
+        val target = runCatching { File(savePath).canonicalFile }.getOrNull() ?: return
+        val rootPrefix = root.path + File.separator
+        if (!target.path.startsWith(rootPrefix)) return
+        target.deleteRecursively()
     }
 
     suspend fun pauseAll() = withContext(dispatchers.io) {
@@ -668,8 +704,22 @@ class TorrentEngine(
                 try { sm.find(Sha1Hash.parseHex(hash))?.isValid == true } catch (_: Exception) { false }
             } else false
             if (!alreadyInSession) {
+                // Cap retries so a corrupt .torrent / malformed magnet cannot be
+                // re-added every 2s forever (battery/network drain, permanent spinner).
+                if (dl.retryCount >= MAX_SESSION_ADD_RETRIES) {
+                    db.torrentDownloadDao().update(dl.copy(status = DownloadStatusEntity.FAILED))
+                    continue
+                }
                 db.torrentDownloadDao().update(dl.copy(status = DownloadStatusEntity.RUNNING, isPaused = false))
-                addToSession(sm, dl)
+                val accepted = addToSession(sm, dl)
+                if (!accepted) {
+                    db.torrentDownloadDao().update(
+                        dl.copy(
+                            status = DownloadStatusEntity.RUNNING,
+                            retryCount = dl.retryCount + 1
+                        )
+                    )
+                }
             }
         }
     }
@@ -973,12 +1023,42 @@ class TorrentEngine(
 
     private fun extractInfoHashFromMagnet(magnet: String): String? {
         val xt = "xt=urn:btih:"
-        val idx = magnet.indexOf(xt)
+        val idx = magnet.lowercase().indexOf(xt)
         if (idx < 0) return null
         val after = magnet.substring(idx + xt.length)
         val end = after.indexOfFirst { it == '&' || it == ' ' }.let { if (it < 0) after.length else it }
         val hash = after.substring(0, end)
-        return if (hash.length == 40 || hash.length == 32) hash.uppercase() else null
+        return when {
+            hash.length == 40 && hash.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' } -> hash.uppercase()
+            // BitTorrent also allows a 32-char base32 infohash. Convert it to hex so
+            // it can match Sha1Hash.parseHex(); previously it was stored verbatim and
+            // never matched, leaving the download stuck retrying forever.
+            hash.length == 32 -> base32ToHex(hash)
+            else -> null
+        }
+    }
+
+    /** RFC 4648 base32 (no padding) -> lowercase 40-char SHA-1 hex, or null. */
+    private fun base32ToHex(input: String): String? {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+        val s = input.uppercase().trimEnd('=')
+        if (s.length != 32) return null
+        var buffer = 0L
+        var bits = 0
+        val bytes = ArrayList<Byte>(20)
+        for (c in s) {
+            val v = alphabet.indexOf(c)
+            if (v < 0) return null
+            buffer = (buffer shl 5) or v.toLong()
+            bits += 5
+            while (bits >= 8) {
+                bits -= 8
+                bytes.add(((buffer shr bits) and 0xFF).toByte())
+            }
+            buffer = if (bits > 0) buffer and ((1L shl bits) - 1) else 0L
+        }
+        if (bytes.size != 20) return null
+        return bytes.joinToString("") { "%02X".format(it) }
     }
 
     private fun extractNameFromMagnet(magnet: String): String? {
