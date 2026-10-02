@@ -33,4 +33,6 @@
     <string name="smbu_err_network">Fikk ikke kontakt med tjeneren</string>
     <string name="smbu_err_timeout">Tilkoblingen ga tidsavbrudd</string>
     <string name="smbu_err_unknown">Noe gikk galt</string>
+    <string name="smbu_count_failed">%1$d feilet</string>
+    <string name="smbu_count_queued">%1$d i kø</string>
 </resources>

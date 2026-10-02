@@ -83,4 +83,8 @@
     <string name="toru_import_no_books">No se encontraron libros: usa «Elegir carpeta» para indicar la carpeta de descargas correcta</string>
     <string name="toru_imported_from_folder">¡%1$d libros importados desde la carpeta seleccionada!</string>
     <string name="toru_import_no_supported">No se encontraron libros compatibles en la carpeta seleccionada</string>
+    <string name="toru_error">Error: %1$s</string>
+    <string name="toru_invalid_infohash">Info-hash no válido (debe tener 40 caracteres SHA-1)</string>
+    <string name="toru_invalid_magnet">Enlace magnet no válido</string>
+    <string name="toru_added">Torrent añadido</string>
 </resources>

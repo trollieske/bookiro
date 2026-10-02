@@ -83,4 +83,8 @@
     <string name="toru_import_no_books">Книг не знайдено — скористайтеся «Вибрати папку», щоб указати теку завантажень</string>
     <string name="toru_imported_from_folder">Імпортовано книг із вибраної папки: %1$d!</string>
     <string name="toru_import_no_supported">У вибраній папці не знайдено підтримуваних книг</string>
+    <string name="toru_error">Помилка: %1$s</string>
+    <string name="toru_invalid_infohash">Недійсний info-hash (має містити 40 символів SHA-1)</string>
+    <string name="toru_invalid_magnet">Недійсне magnet-посилання</string>
+    <string name="toru_added">Торент додано</string>
 </resources>

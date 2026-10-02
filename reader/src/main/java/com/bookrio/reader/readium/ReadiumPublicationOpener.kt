@@ -2,6 +2,7 @@ package com.bookrio.reader.readium
 
 import android.content.Context
 import android.util.Log
+import com.bookrio.reader.R
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.getOrElse
 import org.readium.r2.shared.util.asset.AssetRetriever
@@ -25,7 +26,7 @@ internal object ReadiumPublicationOpener {
     suspend fun open(context: Context, filePath: String): Result<Publication> {
         val file = File(filePath)
         if (!file.canRead()) {
-            return Result.failure(IllegalStateException("Filen kan ikke leses: $filePath"))
+            return Result.failure(IllegalStateException(context.getString(R.string.rdr_error_cannot_read_file_path, filePath)))
         }
         return runCatching {
             val httpClient = DefaultHttpClient()
@@ -39,11 +40,11 @@ internal object ReadiumPublicationOpener {
             val opener = PublicationOpener(parser)
             val asset = assetRetriever.retrieve(file).getOrElse { error ->
                 Log.e(TAG, "asset retrieve failed: $error")
-                error("Kan ikke lese boken: $error")
+                error(context.getString(R.string.rdr_error_cannot_read_book, error))
             }
             opener.open(asset, allowUserInteraction = true).getOrElse { error ->
                 Log.e(TAG, "publication open failed: $error")
-                error("Kan ikke åpne boken: $error")
+                error(context.getString(R.string.rdr_error_cannot_open_book_reason, error))
             }
         }
     }

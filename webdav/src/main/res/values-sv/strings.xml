@@ -34,4 +34,6 @@
     <string name="wdav_err_network">Kunde inte nå servern</string>
     <string name="wdav_err_timeout">Anslutningen tog timeout</string>
     <string name="wdav_err_unknown">Något gick fel</string>
+    <string name="wdav_count_failed">%1$d misslyckades</string>
+    <string name="wdav_count_queued">%1$d i kö</string>
 </resources>

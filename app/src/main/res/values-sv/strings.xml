@@ -39,6 +39,12 @@
     <string name="onboarding_title">Välkommen till Bookiro</string>
     <string name="onboarding_body">Läs och lyssna. Lokalt. Utan brus.</string>
     <string name="onboarding_cta">Öppna hyllan</string>
+    <string name="onboarding_folder_title">Din biblioteksmapp</string>
+    <string name="onboarding_folder_body">Välj var Bookiro hittar och lagrar dina filer. Inget lämnar din enhet.</string>
+    <string name="onboarding_folder_choose">Välj mapp</string>
+    <string name="onboarding_folder_change">Byt mapp</string>
+    <string name="onboarding_folder_skip">Hoppa över nu</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Läsare</string>
     <string name="settings_sync_storage_title">Lagring &amp; synkronisering</string>
     <string name="settings_sync_section_title">Synkronisering</string>
@@ -276,5 +282,19 @@
     <string name="home_duration_hm">%1$dt %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_empty_sources">Anslut en källa</string>
+    <string name="home_media_audiobooks">Ljudböcker</string>
+    <string name="home_media_ebooks">E-böcker</string>
+    <string name="home_media_podcasts">Poddar</string>
+    <string name="home_section_listening">Fortsätt lyssna</string>
+    <string name="home_section_media">Ditt innehåll</string>
+    <string name="home_section_reading">Fortsätt läsa</string>
+    <string name="home_section_services">Källor och verktyg</string>
+    <string name="home_section_up_next">Härnäst</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Importera</string>
+    <string name="home_service_sources">Källor</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="home_service_transfers">Överföringar</string>
     <string name="home_empty_browse">Bläddra i biblioteket</string>
 </resources>

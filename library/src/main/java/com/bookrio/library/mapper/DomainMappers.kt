@@ -186,8 +186,8 @@ object DomainMappers {
             ?: filesDir?.let { java.io.File(it, "covers/book_${book.id}.webp") }?.takeIf { it.exists() }?.absolutePath
         return BookVisual(
             id = book.id,
-            title = book.title.ifBlank { "(Uten tittel)" },
-            author = book.author.ifBlank { "(Ukjent forfatter)" },
+            title = book.title.ifBlank { "—" },
+            author = book.author,
             spineColor = spine,
             spineTextColor = pickTextColorFor(spine),
             coverImagePath = resolvedCover,

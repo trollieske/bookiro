@@ -27,4 +27,5 @@
     <string name="lib_dir_za">Z–A</string>
     <string name="lib_dir_oldest">Más antiguos primero</string>
     <string name="lib_dir_newest">Más recientes primero</string>
+    <string name="lib_view_toggle_a11y">Cambiar entre cuadrícula y lista</string>
 </resources>

@@ -46,11 +46,9 @@ import com.bookrio.designsystem.components.BookCoverCard
 import com.bookrio.designsystem.components.BookVisual
 import com.bookrio.designsystem.theme.ShelfTypography
 import com.bookrio.library.R
-import com.bookrio.library.sort.ResumeSelector
 import com.bookrio.library.viewmodel.GridEntry
 import com.bookrio.library.viewmodel.LibraryMode
 import com.bookrio.library.viewmodel.LibraryViewModel
-import com.bookrio.library.viewmodel.ResumeItem
 
 // Omarchy-inspirert bibliotek-krom: svart base, lime-aksent, ingen hevede kort.
 private val LibBg = com.bookrio.designsystem.theme.OmarchyColors.Bg
@@ -78,7 +76,6 @@ fun LibraryScreen(
     val ui by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(mode) { vm.setMode(mode) }
     var search by rememberSaveable { mutableStateOf("") }
-    var showResumeSheet by rememberSaveable { mutableStateOf(false) }
     var showSortSheet by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -121,11 +118,6 @@ fun LibraryScreen(
     val booksToDisplay = remember(ui.flatGridBooks) { ui.flatGridBooks.distinctBy { it.id } }
     LaunchedEffect(booksToDisplay.isEmpty(), search, mode) {
         if (booksToDisplay.isEmpty() || search.isNotBlank()) onNavVisibilityChange(true)
-    }
-
-    val resumeCandidates = when (mode) {
-        LibraryMode.Books -> ui.resumeEbooks
-        LibraryMode.Audio -> ui.resumeAudios
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -262,16 +254,7 @@ fun LibraryScreen(
                     onClick = { showSortSheet = true }
                 )
 
-                // Fortsett-linje: waybar/tmux-stil. Monospace, lavkontrast, full bredde, ikke kort.
-                if (resumeCandidates.isNotEmpty()) {
-                    ResumeStrip(
-                        primary = resumeCandidates.first(),
-                        extraCount = resumeCandidates.size - 1,
-                        onClickPrimary = { onBookClick(resumeCandidates.first().bookId) },
-                        onClickMore = { showResumeSheet = true }
-                    )
-                }
-
+                // Fortsett-linjen er flyttet til Home; bibliotekfanene er rene lister.
                 Box(modifier = Modifier.weight(1f)) {
                     if (ui.isLoading) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -341,69 +324,6 @@ fun LibraryScreen(
                         }
                     }
                 }
-            }
-        }
-
-        // +N: enkel mørk bottom sheet med aktive fortsett-kandidater.
-        if (showResumeSheet && resumeCandidates.size > 1) {
-            ModalBottomSheet(
-                onDismissRequest = { showResumeSheet = false },
-                containerColor = LibPanel,
-                contentColor = LibFg,
-                tonalElevation = 0.dp
-            ) {
-                Text(
-                    stringResource(R.string.lib_continue),
-                    style = ShelfTypography.TitleMedium,
-                    color = LibFgBright,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-                resumeCandidates.take(ResumeSelector.MAX_CANDIDATES).forEach { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                showResumeSheet = false
-                                onBookClick(item.bookId)
-                            }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "▸",
-                            color = LibAccent,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(end = 10.dp)
-                        )
-                        AsyncImage(
-                            model = item.coverPath,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(width = 28.dp, height = 38.dp)
-                                .background(LibHairline, RoundedCornerShape(2.dp)),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                item.title,
-                                style = ShelfTypography.BodyMedium,
-                                color = LibFgBright,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                listOfNotNull(item.author.takeIf { it.isNotBlank() }, item.detail).joinToString(" · "),
-                                style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
-                                color = LibDim,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.navigationBarsPadding())
             }
         }
 
@@ -663,57 +583,6 @@ private fun BookListRow(
             if (book.progress > 0f) {
                 Spacer(Modifier.height(6.dp))
                 ThinProgressBar(progress = book.progress)
-            }
-        }
-    }
-}
-
-/** Fortsett-linje: liten monospace, lav kontrast, full bredde. 2px visuell vekt maks. */
-@Composable
-private fun ResumeStrip(
-    primary: ResumeItem,
-    extraCount: Int,
-    onClickPrimary: () -> Unit,
-    onClickMore: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClickPrimary)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "▸",
-            color = LibAccent,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(end = 8.dp)
-        )
-        Text(
-            text = "${primary.title} · ${primary.detail}",
-            style = ShelfTypography.LabelSmall.copy(fontFamily = FontFamily.Monospace),
-            color = LibDim,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
-        )
-        if (extraCount > 0) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .background(LibPanel, RoundedCornerShape(4.dp))
-                    .clickable(onClick = onClickMore)
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    "+$extraCount",
-                    color = LibAccent,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    softWrap = false
-                )
             }
         }
     }

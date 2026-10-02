@@ -66,6 +66,45 @@ object AudiobookNormalizer {
         return clean.replace(Regex("\\s+"), " ")
     }
 
+    private val personNameRegex =
+        Regex("^[\\p{Lu}][\\p{L}.'-]+(?:\\s+[\\p{Lu}][\\p{L}.'-]+){1,3}$")
+
+    private val nameStopWords = setOf(
+        "the", "a", "an", "el", "la", "le", "les", "der", "die", "das",
+        "en", "et", "ei", "det", "den", "de"
+    )
+
+    private val dashSplitRegex = Regex("\\s+[-–—]\\s+")
+
+    /**
+     * Conservative recovery of an audiobook author from a file/folder name that
+     * follows the common rip convention `Author - Title`. Only the first
+     * dash-separated segment is considered, it must look like a person name, and
+     * it must differ from [artistTag] (usually the narrator). Returns null when
+     * the guess is not safe, so callers keep the tag-derived author.
+     */
+    fun guessAuthorFromName(rawName: String?, artistTag: String?): String? {
+        if (rawName.isNullOrBlank()) return null
+        val base = normalizeTitle(rawName)
+        val first = base.split(dashSplitRegex).firstOrNull()?.trim().orEmpty()
+        if (first.isBlank() || !looksLikePersonName(first)) return null
+        val artistNorm = normalizeString(artistTag)
+        if (artistNorm.isNotBlank() && normalizeString(first) == artistNorm) return null
+        return first
+    }
+
+    private fun looksLikePersonName(value: String): Boolean {
+        val s = value.trim()
+        if (s.length !in 4..48) return false
+        if (s.any { it.isDigit() }) return false
+        if (s.lowercase(Locale.ROOT) in genericTitles) return false
+        // Titles such as "The Expanse" / "The Odyssey" start with an article and
+        // must never be mistaken for a person name.
+        val firstWord = s.substringBefore(' ').lowercase(Locale.ROOT)
+        if (firstWord in nameStopWords) return false
+        return personNameRegex.matches(s)
+    }
+
     /**
      * True when [albumOrTitle] is specific enough and [authorOrArtist] is present,
      * i.e. [computeGroupKey] would return a `"<title>_by_<author>"` key. Such a key

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,13 +20,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,9 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -64,7 +71,6 @@ import com.bookrio.R
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.designsystem.theme.OmarchyColors
 import com.bookrio.designsystem.theme.ShelfTypography
-import com.bookrio.library.mapper.DomainMappers
 import com.bookrio.podcast.ui.HudDivider
 import com.bookrio.podcast.ui.HudSectionLabel
 import com.bookrio.podcast.ui.PodcastArtwork
@@ -81,15 +87,25 @@ private val HomeFg = OmarchyColors.Fg
 private val HomeFgBright = OmarchyColors.FgBright
 private val HomePanel = OmarchyColors.Panel
 
-private const val COVER_ASPECT = 1f / 1.52f
-private val CARD_WIDTH = 138.dp
-
+/**
+ * Home is a main menu, not a second library. It surfaces:
+ *  - what the user is currently reading / listening to (activity, not inventory),
+ *  - one-tap entry points to each media type,
+ *  - hot links to every imported service (FTP, torrent, transfers, …).
+ * The full collections and sorting live in the Library tabs.
+ */
 @Composable
 fun HomeScreen(
     onOpenBook: (Long, Boolean) -> Unit,
     onOpenEpisode: (Long) -> Unit,
+    onOpenEbooks: () -> Unit,
+    onOpenAudiobooks: () -> Unit,
+    onOpenPodcasts: () -> Unit,
     onOpenImport: () -> Unit,
-    onOpenLibrary: () -> Unit,
+    onOpenFtp: () -> Unit,
+    onOpenTorrent: () -> Unit,
+    onOpenSources: () -> Unit,
+    onOpenTransfers: () -> Unit,
     vmFactory: ViewModelProvider.Factory? = null,
     vm: HomeViewModel = viewModel(factory = vmFactory ?: homeVmFactory())
 ) {
@@ -115,70 +131,104 @@ fun HomeScreen(
                 }
             }
 
-            !state.hasSections -> item(key = "home-empty") {
+            !state.hasLibrary -> item(key = "home-empty") {
                 HomeEmptyState(
-                    showImport = !state.hasLibrary,
                     onOpenImport = onOpenImport,
-                    onOpenLibrary = onOpenLibrary
+                    onOpenSources = onOpenSources
                 )
             }
 
             else -> {
-                if (state.continueItems.isNotEmpty()) {
-                    item(key = "home-continue") {
-                        HomeContinueSection(
-                            items = state.continueItems,
-                            onOpenBook = onOpenBook
-                        )
+                // ── Continue reading / listening: activity, newest first ──
+                if (state.continueReading.isNotEmpty()) {
+                    item(key = "home-reading-label") {
+                        HomeSectionLabel(stringResource(R.string.home_section_reading))
+                    }
+                    items(
+                        items = state.continueReading,
+                        key = { "home-reading-${it.bookId}" }
+                    ) { item ->
+                        HomeBookRow(item = item, onOpenBook = onOpenBook)
                     }
                 }
-                if (state.audiobooks.isNotEmpty()) {
-                    item(key = "home-audiobooks") {
-                        HomeAudiobooksSection(
-                            items = state.audiobooks,
-                            onOpenBook = onOpenBook
-                        )
+                if (state.continueListening.isNotEmpty()) {
+                    item(key = "home-listening-label") {
+                        HomeSectionLabel(stringResource(R.string.home_section_listening))
+                    }
+                    items(
+                        items = state.continueListening,
+                        key = { "home-listening-${it.bookId}" }
+                    ) { item ->
+                        HomeBookRow(item = item, onOpenBook = onOpenBook)
                     }
                 }
-                if (state.resumeEpisodes.isNotEmpty() || state.latestEpisodes.isNotEmpty()) {
-                    item(key = "home-podcasts-label") {
-                        HudSectionLabel(
-                            text = stringResource(com.bookrio.podcast.R.string.pod_nav_title),
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 2.dp)
-                        )
+
+                // ── Podcasts: continue-listening first, then newest episodes ──
+                if (state.resumeEpisodes.isNotEmpty()) {
+                    item(key = "home-upnext-label") {
+                        HomeSectionLabel(stringResource(R.string.home_section_up_next))
                     }
-                    if (state.resumeEpisodes.isNotEmpty()) {
-                        item(key = "home-resume-label") {
-                            HudSectionLabel(
-                                text = stringResource(com.bookrio.podcast.R.string.pod_resume_title),
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)
-                            )
-                        }
-                        items(
-                            items = state.resumeEpisodes,
-                            key = { "home-ep-resume-${it.episodeId}" }
-                        ) { episode ->
-                            HomeEpisodeRow(episode = episode, onOpenEpisode = onOpenEpisode)
-                        }
+                    items(
+                        items = state.resumeEpisodes,
+                        key = { "home-ep-resume-${it.episodeId}" }
+                    ) { episode ->
+                        HomeEpisodeRow(episode = episode, onOpenEpisode = onOpenEpisode)
                     }
-                    if (state.latestEpisodes.isNotEmpty()) {
-                        item(key = "home-latest-label") {
-                            HudSectionLabel(
-                                text = stringResource(R.string.home_section_latest_episodes),
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
-                            )
-                        }
-                        items(
-                            items = state.latestEpisodes,
-                            key = { "home-ep-latest-${it.episodeId}" }
-                        ) { episode ->
-                            HomeEpisodeRow(episode = episode, onOpenEpisode = onOpenEpisode)
-                        }
+                }
+                if (state.latestEpisodes.isNotEmpty()) {
+                    item(key = "home-latest-label") {
+                        HomeSectionLabel(stringResource(R.string.home_section_latest_episodes))
                     }
+                    items(
+                        items = state.latestEpisodes,
+                        key = { "home-ep-latest-${it.episodeId}" }
+                    ) { episode ->
+                        HomeEpisodeRow(episode = episode, onOpenEpisode = onOpenEpisode)
+                    }
+                }
+
+                // ── Main-menu entry points ──
+                item(key = "home-media-label") {
+                    HomeSectionLabel(
+                        text = stringResource(R.string.home_section_media),
+                        top = 26.dp
+                    )
+                }
+                item(key = "home-media-tiles") {
+                    HomeMediaTiles(
+                        state = state,
+                        onOpenEbooks = onOpenEbooks,
+                        onOpenAudiobooks = onOpenAudiobooks,
+                        onOpenPodcasts = onOpenPodcasts
+                    )
+                }
+
+                item(key = "home-services-label") {
+                    HomeSectionLabel(
+                        text = stringResource(R.string.home_section_services),
+                        top = 26.dp
+                    )
+                }
+                item(key = "home-service-tiles") {
+                    HomeServiceTiles(
+                        onOpenFtp = onOpenFtp,
+                        onOpenTorrent = onOpenTorrent,
+                        onOpenImport = onOpenImport,
+                        onOpenSources = onOpenSources,
+                        onOpenTransfers = onOpenTransfers
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun HomeSectionLabel(text: String, top: androidx.compose.ui.unit.Dp = 18.dp) {
+    HudSectionLabel(
+        text = text,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = top, bottom = 8.dp)
+    )
 }
 
 @Composable
@@ -264,175 +314,252 @@ private fun HomeStatusLine(state: HomeUiState) {
     )
 }
 
+/** One compact "continue" row, shared by ebooks and audiobooks. */
 @Composable
-private fun HomeContinueSection(
-    items: List<HomeContinueItem>,
+private fun HomeBookRow(
+    item: HomeContinueItem,
     onOpenBook: (Long, Boolean) -> Unit
 ) {
-    Column {
-        HudSectionLabel(
-            text = stringResource(com.bookrio.library.R.string.lib_continue),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 10.dp)
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(items, key = { "home-continue-${it.bookId}" }) { item ->
-                BookCard(
-                    title = item.title,
-                    author = item.author,
-                    coverPath = item.coverPath,
-                    spineColor = spineColorOf(item.bookId, item.spineColor),
-                    progressPercent = item.progressPercent,
-                    detail = continueDetail(item),
-                    onClick = { onOpenBook(item.bookId, item.isAudio) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeAudiobooksSection(
-    items: List<HomeAudiobookItem>,
-    onOpenBook: (Long, Boolean) -> Unit
-) {
-    Column {
-        HudSectionLabel(
-            text = stringResource(R.string.shelf_audiobooks),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 10.dp)
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(items, key = { "home-audiobook-${it.bookId}" }) { item ->
-                BookCard(
-                    title = item.title,
-                    author = item.author,
-                    coverPath = item.coverPath,
-                    spineColor = spineColorOf(item.bookId, item.spineColor),
-                    progressPercent = item.progressPercent,
-                    detail = audiobookDetail(item),
-                    onClick = { onOpenBook(item.bookId, true) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BookCard(
-    title: String,
-    author: String,
-    coverPath: String?,
-    spineColor: Color,
-    progressPercent: Float,
-    detail: String,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(CARD_WIDTH)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-    ) {
-        Box(
+    Column(Modifier.fillMaxWidth()) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(COVER_ASPECT)
-                .clip(RoundedCornerShape(6.dp))
-                .background(HomePanel)
+                .clickable { onOpenBook(item.bookId, item.isAudio) }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (!coverPath.isNullOrBlank()) {
-                AsyncImage(
-                    model = coverPath,
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                BookCoverFallback(title = title, author = author, spineColor = spineColor)
+            Box(
+                modifier = Modifier
+                    .size(width = 46.dp, height = 66.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(HomePanel)
+            ) {
+                if (!item.coverPath.isNullOrBlank()) {
+                    AsyncImage(
+                        model = item.coverPath,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        if (item.isAudio) Icons.Default.Headphones else Icons.Default.AutoStories,
+                        contentDescription = null,
+                        tint = HomeDim,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(20.dp)
+                    )
+                }
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = title,
-            style = ShelfTypography.LabelSmall.copy(fontSize = 12.sp, lineHeight = 15.sp),
-            fontWeight = FontWeight.SemiBold,
-            color = HomeFg,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (author.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = author,
-                style = ShelfTypography.LabelSmall,
-                color = HomeDim,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = item.title,
+                    style = ShelfTypography.TitleSmall,
+                    color = HomeFgBright,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (item.author.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = item.author,
+                        style = ShelfTypography.LabelSmall,
+                        color = HomeDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                ThinProgressBar(progress = item.progressPercent)
+                Spacer(Modifier.height(5.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (item.isAudio) Icons.Default.Headphones else Icons.Default.AutoStories,
+                        contentDescription = null,
+                        tint = HomeAccent,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = bookDetail(item),
+                        style = ShelfTypography.LabelSmall,
+                        color = HomeDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = HomeAccent,
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(Modifier.height(6.dp))
-        ThinProgressBar(progress = progressPercent)
-        Spacer(Modifier.height(4.dp))
+        HudDivider(Modifier.padding(horizontal = 16.dp))
+    }
+}
+
+/** Three equal tiles: the app's three media types, one tap away. */
+@Composable
+private fun HomeMediaTiles(
+    state: HomeUiState,
+    onOpenEbooks: () -> Unit,
+    onOpenAudiobooks: () -> Unit,
+    onOpenPodcasts: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        MediaTile(
+            icon = Icons.Default.AutoStories,
+            label = stringResource(R.string.home_media_ebooks),
+            count = state.ebookCount,
+            onClick = onOpenEbooks,
+            modifier = Modifier.weight(1f)
+        )
+        MediaTile(
+            icon = Icons.Default.Headphones,
+            label = stringResource(R.string.home_media_audiobooks),
+            count = state.audiobookCount,
+            onClick = onOpenAudiobooks,
+            modifier = Modifier.weight(1f)
+        )
+        MediaTile(
+            icon = Icons.Default.Podcasts,
+            label = stringResource(R.string.home_media_podcasts),
+            count = state.podcastCount,
+            onClick = onOpenPodcasts,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun MediaTile(
+    icon: ImageVector,
+    label: String,
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(HomePanel)
+            .border(1.dp, HomeHairline, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp, horizontal = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(icon, contentDescription = null, tint = HomeAccent, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = detail,
+            text = count.toString(),
+            style = ShelfTypography.TitleMedium.copy(fontFamily = FontFamily.Monospace),
+            fontWeight = FontWeight.Bold,
+            color = HomeFgBright,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
             style = ShelfTypography.LabelSmall,
             color = HomeDim,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
     }
 }
 
+/** Hot links to every imported service, laid out as a 3+2 grid so nothing is clipped. */
 @Composable
-private fun BookCoverFallback(title: String, author: String, spineColor: Color) {
-    Box(
+private fun HomeServiceTiles(
+    onOpenFtp: () -> Unit,
+    onOpenTorrent: () -> Unit,
+    onOpenImport: () -> Unit,
+    onOpenSources: () -> Unit,
+    onOpenTransfers: () -> Unit
+) {
+    BoxWithConstraints(
         modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        lerp(spineColor, Color.White, 0.20f),
-                        spineColor,
-                        lerp(spineColor, Color.Black, 0.32f)
-                    )
-                )
-            )
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
     ) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .width(4.dp)
-                .background(Color.Black.copy(alpha = 0.25f))
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp)
-        ) {
-            Text(
-                text = title,
-                style = ShelfTypography.LabelSmall.copy(fontSize = 10.sp, lineHeight = 13.sp),
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.95f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.weight(1f))
-            if (author.isNotBlank()) {
-                Text(
-                    text = author,
-                    style = ShelfTypography.LabelSmall.copy(fontSize = 9.sp),
-                    color = Color.White.copy(alpha = 0.75f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        val spacing = 10.dp
+        val tileWidth = (maxWidth - spacing * 2) / 3
+        Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                ServiceTile(
+                    icon = Icons.Default.CloudSync,
+                    label = stringResource(R.string.home_service_ftp),
+                    onClick = onOpenFtp,
+                    modifier = Modifier.width(tileWidth)
+                )
+                ServiceTile(
+                    icon = Icons.Default.Download,
+                    label = stringResource(R.string.home_service_torrent),
+                    onClick = onOpenTorrent,
+                    modifier = Modifier.width(tileWidth)
+                )
+                ServiceTile(
+                    icon = Icons.Default.AddCircleOutline,
+                    label = stringResource(R.string.home_service_import),
+                    onClick = onOpenImport,
+                    modifier = Modifier.width(tileWidth)
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                ServiceTile(
+                    icon = Icons.Default.Storage,
+                    label = stringResource(R.string.home_service_sources),
+                    onClick = onOpenSources,
+                    modifier = Modifier.width(tileWidth)
+                )
+                ServiceTile(
+                    icon = Icons.Default.SwapVert,
+                    label = stringResource(R.string.home_service_transfers),
+                    onClick = onOpenTransfers,
+                    modifier = Modifier.width(tileWidth)
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ServiceTile(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(HomePanel)
+            .border(1.dp, HomeHairline, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(icon, contentDescription = null, tint = HomeFg, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = ShelfTypography.LabelSmall,
+            color = HomeDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -517,11 +644,11 @@ private fun HomeEpisodeRow(
 }
 
 @Composable
-private fun HomeEmptyState(showImport: Boolean, onOpenImport: () -> Unit, onOpenLibrary: () -> Unit) {
+private fun HomeEmptyState(onOpenImport: () -> Unit, onOpenSources: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 56.dp),
+            .padding(horizontal = 32.dp, vertical = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
@@ -553,52 +680,37 @@ private fun HomeEmptyState(showImport: Boolean, onOpenImport: () -> Unit, onOpen
             color = HomeDim,
             textAlign = TextAlign.Center
         )
-        if (showImport) {
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onOpenImport,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = HomeAccent,
-                    contentColor = Color.Black
-                )
-            ) {
-                Text(
-                    text = stringResource(R.string.home_empty_import),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        } else {
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onOpenLibrary,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = HomeAccent,
-                    contentColor = Color.Black
-                )
-            ) {
-                Text(
-                    text = stringResource(R.string.home_empty_browse),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+        Spacer(Modifier.height(20.dp))
+        Button(
+            onClick = onOpenImport,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = HomeAccent,
+                contentColor = Color.Black
+            )
+        ) {
+            Text(
+                text = stringResource(R.string.home_empty_import),
+                fontWeight = FontWeight.SemiBold
+            )
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.home_empty_sources),
+            style = ShelfTypography.LabelMedium,
+            color = HomeAccent,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .clickable(onClick = onOpenSources)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        )
     }
 }
 
 @Composable
-private fun continueDetail(item: HomeContinueItem): String {
+private fun bookDetail(item: HomeContinueItem): String {
     val pct = (item.progressPercent * 100f).roundToInt().coerceIn(0, 100)
+    if (!item.isAudio) return "$pct%"
     val remaining = item.remainingMs?.let { remainingLabel(it) }
-    return if (item.isAudio && remaining != null) "$pct% · $remaining" else "$pct%"
-}
-
-@Composable
-private fun audiobookDetail(item: HomeAudiobookItem): String {
-    // Not started (and never a Continue candidate) -> explicit label.
-    if (item.progressPercent <= 0f) return stringResource(R.string.home_not_started)
-    val pct = (item.progressPercent * 100f).roundToInt().coerceIn(0, 100)
-    // Finished books are not candidates, so no remaining label.
-    val remaining = if (item.progressPercent < 0.99f) item.remainingMs?.let { remainingLabel(it) } else null
     return if (remaining != null) "$pct% · $remaining" else "$pct%"
 }
 
@@ -642,9 +754,6 @@ private fun episodeMeta(context: Context, episode: HomeEpisodeItem): String {
         formatPodcastDuration(context, duration).takeIf { it.isNotBlank() }
     ).joinToString(" · ")
 }
-
-private fun spineColorOf(bookId: Long, stored: Int?): Color =
-    stored?.let { Color(it) } ?: DomainMappers.pickSpineColor(bookId, null)
 
 private fun homeVmFactory(): ViewModelProvider.Factory = viewModelFactory {
     initializer {

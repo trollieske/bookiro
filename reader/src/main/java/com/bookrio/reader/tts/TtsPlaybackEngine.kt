@@ -61,7 +61,7 @@ class TtsPlaybackEngine(
                         scope.launch { playNextParagraph() }
                     }
                     override fun onError(utteranceId: String?) {
-                        _state.value = _state.value.copy(error = "Feil under opplesing")
+                        _state.value = _state.value.copy(error = appCtx.getString(R.string.rdr_error_tts_playback))
                     }
                 })
             }

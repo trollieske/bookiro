@@ -353,6 +353,18 @@ object EbookFilenameParser {
         return if (r.lowercase(Locale.ROOT) == r || r.uppercase(Locale.ROOT) == r) titleCase(r.lowercase(Locale.ROOT)) else r
     }
 
+    /**
+     * True when [raw] names a known author, either in full ("terry pratchett")
+     * or by last name ("pratchett"). Used to gate filename-based author guesses
+     * so a series/title prefix is never mistaken for a person.
+     */
+    fun isKnownAuthor(raw: String?): Boolean {
+        val n = raw?.trim()?.lowercase(Locale.ROOT) ?: return false
+        if (n.isBlank()) return false
+        if (KNOWN_AUTHORS.containsKey(n)) return true
+        return KNOWN_AUTHORS.containsKey(n.substringAfterLast(' '))
+    }
+
     private fun parseBracketContent(bracket: String): ParsedFilename? {
         // Typical: [AuthorLastName, Series 005, BookTitle]
         // Also: [Series 05]    [Discworld 29]  [Author]

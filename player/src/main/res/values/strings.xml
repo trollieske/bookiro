@@ -38,7 +38,7 @@
     <string name="ply_audio_player_upper">AUDIO PLAYER</string>
     <string name="ply_chapter_n">Chapter %1$d</string>
     <string name="ply_chapter_of">Chapter %1$d of %2$d</string>
-    <string name="ply_whole_book_upper">WHOLE BOOK</string>
+    <string name="ply_whole_book_upper">FULL BOOK</string>
     <string name="ply_in_chapter_upper">IN CHAPTER</string>
     <string name="ply_in_chapter">In chapter: %1$s</string>
     <string name="ply_left">%1$s left</string>

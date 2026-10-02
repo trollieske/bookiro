@@ -339,11 +339,10 @@ fun cleanBookTitle(raw: String): String {
 }
 
 fun cleanBookAuthor(raw: String): String {
-    var clean = raw.replace("_", " ").trim()
-    if (clean.isBlank() || clean.contains("Ukjent", ignoreCase = true)) {
-        clean = "Ukjent forfatter"
-    }
-    return clean
+    // Language-neutral: never inject a localized "unknown author" placeholder.
+    // Blank/placeholder authors are simply omitted from the cover.
+    val clean = raw.replace("_", " ").trim()
+    return if (clean.isBlank() || clean.contains("Ukjent", ignoreCase = true)) "" else clean
 }
 
 @Composable

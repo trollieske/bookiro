@@ -111,5 +111,10 @@ data class BookMetadata(
     val durationMs: Long?,
     val chapters: List<ChapterInfo>,
     val album: String? = null,
-    val albumArtist: String? = null
+    val albumArtist: String? = null,
+    /**
+     * Narrator credit if it was carried by the ARTIST tag (audiobooks). Kept
+     * separate so an audiobook is never filed under the narrator's name.
+     */
+    val narrator: String? = null
 )

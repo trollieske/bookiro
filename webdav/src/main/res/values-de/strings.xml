@@ -34,4 +34,6 @@
     <string name="wdav_err_network">Server nicht erreichbar</string>
     <string name="wdav_err_timeout">Zeitüberschreitung der Verbindung</string>
     <string name="wdav_err_unknown">Etwas ist schiefgelaufen</string>
+    <string name="wdav_count_failed">%1$d fehlgeschlagen</string>
+    <string name="wdav_count_queued">%1$d in Warteschlange</string>
 </resources>

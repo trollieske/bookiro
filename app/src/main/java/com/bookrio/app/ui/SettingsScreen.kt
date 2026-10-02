@@ -2,7 +2,6 @@ package com.bookrio.app.ui
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -237,40 +236,7 @@ class SettingsViewModel(
      * ifra i stedet for å melde falsk suksess.
      */
     suspend fun setLibraryFolder(ctx: Context, uri: Uri?): Boolean = withContext(dispatchers.io) {
-        val previous = runCatching { prefs.libraryFolderUri.first() }.getOrNull()
-        if (uri == null) {
-            releasePersistedGrant(ctx, previous)
-            prefs.setLibraryFolderUri(null)
-            return@withContext true
-        }
-        // Skrivetilgang innvilges ikke alltid; fall tilbake til lesetilgang.
-        val granted = runCatching {
-            ctx.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-        }.isSuccess || runCatching {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }.isSuccess
-        if (!granted) return@withContext false
-        if (previous != null && previous != uri.toString()) releasePersistedGrant(ctx, previous)
-        prefs.setLibraryFolderUri(uri.toString())
-        true
-    }
-
-    /** Frigjør en gammel persistabel URI-tilgang så vi ikke lekker opptil grant-taket. */
-    private fun releasePersistedGrant(ctx: Context, uriString: String?) {
-        val parsed = uriString?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: return
-        runCatching {
-            ctx.contentResolver.releasePersistableUriPermission(
-                parsed,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-        }.onFailure {
-            runCatching {
-                ctx.contentResolver.releasePersistableUriPermission(parsed, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        }
+        com.bookrio.app.storage.LibraryFolderStore.setLibraryFolder(ctx, prefs, uri)
     }
 
     fun setFtpSyncEnabled(b: Boolean) = viewModelScope.launch(dispatchers.io) {

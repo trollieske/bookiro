@@ -39,6 +39,12 @@
     <string name="onboarding_title">Willkommen bei Bookiro</string>
     <string name="onboarding_body">Lesen und hören. Lokal. Ohne Ablenkung.</string>
     <string name="onboarding_cta">Regal öffnen</string>
+    <string name="onboarding_folder_title">Dein Bibliotheksordner</string>
+    <string name="onboarding_folder_body">Wähle, wo Bookiro deine Dateien findet und speichert. Nichts verlässt dein Gerät.</string>
+    <string name="onboarding_folder_choose">Ordner wählen</string>
+    <string name="onboarding_folder_change">Ordner ändern</string>
+    <string name="onboarding_folder_skip">Erstmal überspringen</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Reader</string>
     <string name="settings_sync_storage_title">Speicher &amp; Synchronisierung</string>
     <string name="settings_sync_section_title">Synchronisierung</string>
@@ -276,5 +282,19 @@
     <string name="home_duration_hm">%1$d Std. %2$d Min.</string>
     <string name="home_duration_m">%1$d Min.</string>
 
+    <string name="home_empty_sources">Quelle verbinden</string>
+    <string name="home_media_audiobooks">Hörbücher</string>
+    <string name="home_media_ebooks">E-Books</string>
+    <string name="home_media_podcasts">Podcasts</string>
+    <string name="home_section_listening">Weiterhören</string>
+    <string name="home_section_media">Deine Medien</string>
+    <string name="home_section_reading">Weiterlesen</string>
+    <string name="home_section_services">Quellen &amp; Werkzeuge</string>
+    <string name="home_section_up_next">Als Nächstes</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Import</string>
+    <string name="home_service_sources">Quellen</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="home_service_transfers">Übertragungen</string>
     <string name="home_empty_browse">Bibliothek durchsuchen</string>
 </resources>

@@ -27,4 +27,5 @@
     <string name="lib_dir_za">Ö–A</string>
     <string name="lib_dir_oldest">Äldst först</string>
     <string name="lib_dir_newest">Nyast först</string>
+    <string name="lib_view_toggle_a11y">Växla mellan rutnät och lista</string>
 </resources>

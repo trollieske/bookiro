@@ -34,4 +34,6 @@
     <string name="wdav_err_network">Could not reach the server</string>
     <string name="wdav_err_timeout">Connection timed out</string>
     <string name="wdav_err_unknown">Something went wrong</string>
+    <string name="wdav_count_failed">%1$d failed</string>
+    <string name="wdav_count_queued">%1$d queued</string>
 </resources>
