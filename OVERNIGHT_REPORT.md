@@ -102,6 +102,7 @@ Details of B8 (torrent):
 | `460c1db` | FTP UX (reported) | "Sync now" on a large library looked dead because the worker lists the whole remote tree before creating any download row, and the UI only showed transfer counts. `FtpTransferRuntime` now tracks a per-server **preparing** state with a live file count (auto-expiring), reported per folder by `listDirectoryRecursive`/`FtpQueuePlanner`; both the sources list and details screen show a spinner + "Scanning remote folder… N files found" (all 10 locales). |
 | `24b6668` | **Library duplicates (major, reported)** | The scheduled media scan re-imported scoped-storage books every run: the ebook upsert only de-duplicated by `file_path`, which is `null` for SAF imports, so a new row was inserted each scan. On device the library had grown to **1938 rows for ~500 books** (titles repeated 6–26×). Import now also de-duplicates by `file_uri`; a new `deduplicateLibrary()` collapses exact-file rows and same title+author rows (EPUB > PDF > MOBI > … > TXT, progress moved to the survivor, duplicates soft-deleted, idempotent). Audiobooks had no title+author duplicates. |
 | `81ab22f` | Library | Re-imported titles were cleaned (`06 Red Country` → `Red Country`); series indexes parsed as authors (`the 01`) blanked via `BookTitleCleaner` (core, unit-tested) and an author guard. Repairs now run at app start (background warm-up thread), dedup before title cleanup. **On-device: 1938 → 503 active rows, 0 duplicate file uris, 0 `the 01` authors.** |
+| `3371988` | **Audiobooks (major, reported)** | `consolidateFragmentedAudiobooks` grouped by a path hash that is **constant when `filePath` is blank**, so every scoped-storage audiobook with a generic/blank title collapsed into one (taking the first book's title/author) — and it re-inserted the canonical's tracks on each run, multiplying them (e.g. 28 rows for 4 files). Consolidation now only considers audiobooks with a real local `filePath`; it wipes and rebuilds the group's tracks once. New repairs: `repairDuplicateAudioTracks()` (dedup + renumber) and `splitMergedAudiobooks()` (conservative split of clearly-merged books, reusing an existing row per file so re-runs can't duplicate). **On-device: 0 duplicate tracks/books; The Martian 28 rows/51 h → 1 track/10.9 h; Galaphile, His and Hers, And Then There Were None split back out.** |
 
 ---
 
@@ -288,4 +289,10 @@ a0954cb feat(reader): centre book images and tap an illustration to zoom
 460c1db ui(ftp): show a live 'scanning remote folder' phase after Sync now
 24b6668 fix(library): stop duplicate imports and repair existing duplicates
 81ab22f fix(library): run duplicate repair at app start, dedup before title cleanup
+3371988 fix(library): stop merging unrelated audiobooks; repair merged/duplicated tracks
 ```
+
+### 12.1 Artifact
+A debug build of `3371988` is published as a GitHub release:
+`https://github.com/trollieske/bookiro/releases/tag/bookiro-overnight-review-3371988`
+(arm64-v8a + universal debug APKs).
