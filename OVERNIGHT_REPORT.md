@@ -96,6 +96,7 @@ Details of B8 (torrent):
 | `ab8a46f` | i18n | Reader bookmark save/remove HUD and stored bookmark title/snippet were hardcoded Norwegian/English (new `rdr_bookmark_saved`, `rdr_bookmark_removed`, `rdr_page_n` keys, all 10 locales). The torrent summary showed the raw `TrackerState` enum and picked the error colour via `contains("feil")/"error"`; now carries the enum and uses the localized `toru_tr_*` labels. |
 | `e042b3c` | i18n | Removed the last hardcoded Norwegian in `:core`/`:designsystem` (PDF/CBZ parse-failure HTML, MOBI magic-byte exception, not-downloaded cover `contentDescription`) — now English base locale; full resource localization needs `Context` plumbed into the parsers. |
 | `54c3b62` | UI (found on device) | Onboarding and Settings showed the raw MediaStore tree id (e.g. `11365`) instead of the folder name when the library folder is a Downloads/MediaStore tree (`msf:11365`). Now resolves the provider `DISPLAY_NAME` first and falls back to the path parser. Verified on the OnePlus 13: label now reads `BOOKIRO`. |
+| `0efac71` | **Reader (major, found on device)** | **"File not found." on every SAF-imported EPUB.** EPUBs render through Readium, but `ReadiumEpubReaderScreen` required a local `book.filePath` and bailed out immediately for books imported from a library folder, which only have a `content://` `fileUri` (`filePath == null`). `ReadiumPublicationOpener.open()` now takes both path and uri and reads the SAF URI through Readium's ContentResolver factory. Verified on the OnePlus 13: a scoped-storage EPUB now renders real content. |
 
 ---
 
@@ -276,4 +277,5 @@ ebe7d52 perf(release): strip verbose/info logging with R8
 ab8a46f i18n: localize reader bookmark HUD and torrent tracker status
 e042b3c i18n: remove hardcoded Norwegian fallbacks in core/designsystem
 fbbadb7 chore(play): target Android 16 (API 36)
+0efac71 fix(reader): open SAF content:// EPUBs in the Readium reader
 ```
