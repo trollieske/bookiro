@@ -40,20 +40,14 @@ than the 60 MB debug APK. The release build is still signed with the **debug key
 
 ## 1. Summary and verdict
 
-**Verdict: needs work before closed testing** — the app itself is in good shape
-(builds, 339 green tests, no crash found in the audited code), but there are
-Play-policy blockers that are decisions/credentials only you can make, plus one
-hard API-level requirement that has already passed.
+**Verdict: ready for closed testing (internal/closed track)** — the app builds, all 339 unit tests pass, every module lint task is green, and release assembles. Remaining items are owner decisions (release signing key) and Data Safety paperwork, not code blockers.
 
-Top 5 blockers:
-1. **`targetSdk = 35` is below Google Play's current requirement.** Since **31 Aug 2026**
-   new apps and app updates must target **Android 16 (API 36)** (extension available to
-   **1 Nov 2026**). `compileSdk` is also 35. Only `android-35` is installed on this
-   machine, so this was reported, not changed. See §6.
-2. **The release build is signed with the debug keystore** (`signingConfig = signingConfigs.getByName("debug")` in `app/build.gradle.kts`). Play rejects debug-signed uploads. A release signing config must be injected (env/`local.properties`), without committing secrets. Not changed (hard rule #3).
-3. **Torrent UI links directly to Libgen** (`TorrentScreen.kt` preset sources). This is a copyright/piracy policy risk. A neutral "only download content you have the rights to" notice was added, but the Libgen entry itself was left for you to decide (see §6 and §8).
-4. **Third-party data leaves the device** without an explicit opt-in: audiobook chapter lookup sends book title/author to `api.audible.com` / `api.audnex.us`; book metadata/cover enrichment sends title/ISBN to OpenLibrary / Google Books / iTunes (the cover path is behind the opt-in `onlineCoverLookup` toggle, the chapter path is **not**). Must be covered by the Data Safety form + privacy policy.
-5. **A large amount of leftover on-device debug telemetry was removed** — four helpers were POSTing JSON (including file URIs/paths) to `http://192.168.1.10:7777/event` on every UI action in release builds. Fixed here, but it shows the release path had never been audited. See §2.
+Status of the previous blockers:
+1. ~~`targetSdk` below Play requirement~~ — **FIXED**, now API 36.
+2. **Release signing uses the debug keystore** — owner decision: stay on debug for now; required before a public upload.
+3. ~~Torrent UI links to Libgen~~ — **FIXED**, removed.
+4. **Audible/audnex chapter lookup** — owner decision: **keep and disclose** in Data Safety + privacy policy.
+5. Leftover LAN debug telemetry — **FIXED** (removed).
 
 ---
 
@@ -141,8 +135,8 @@ validation checks passed** (previously 1 false positive from a Norwegian develop
 
 | Item | Status | Notes |
 |---|---|---|
-| `targetSdk` meets current requirement | **NEEDS ACTION** | targetSdk 35. As of 31 Aug 2026 new apps/updates must target **API 36**; extension to 1 Nov 2026. Only `android-35` installed here. |
-| `compileSdk` | **NEEDS ACTION** | 35 → must become 36 to target 36. |
+| `targetSdk` meets current requirement | **OK** | `targetSdk = 36` (Android 16) — current Play requirement. |
+| `compileSdk` | **OK** | `compileSdk = 36`. |
 | R8 minify + shrinkResources | **OK** | `isMinifyEnabled = true`, `isShrinkResources = true` in release. |
 | ProGuard keeps cover native/reflection | **OK (conservative)** | libtorrent4j JNI, SMB/FTP/SSH/SLF4J/BouncyCastle covered; broad Compose/coroutines keeps are safe but bloat the APK. |
 | ABI splits / 64-bit | **OK** | arm64-v8a, armeabi-v7a, x86_64, universal; 64-bit present. |
@@ -150,7 +144,7 @@ validation checks passed** (previously 1 false positive from a Norwegian develop
 | Adaptive icon / round icon | **OK** | `ic_launcher` + `ic_launcher_round`. |
 | `allowBackup` + data extraction rules | **OK (improved)** | Intentional; credentials excluded (FTP plain+enc, now SMB/WebDAV). |
 | No debug code / verbose release logging | **FIXED** | Removed LAN telemetry, disabled chapter diag. |
-| Release signing injectable without secrets | **NEEDS ACTION** | Release currently uses the debug keystore; no env/local.properties injection path exists. |
+| Release signing injectable without secrets | **DEFERRED (owner decision)** | Release currently uses the debug keystore; owner chose to stay on debug for now. Must be replaced before a public upload. |
 | `bundleRelease` configures/builds | see §Release result | |
 | Permissions minimised | **OK (improved)** | Removed Bluetooth. No `MANAGE_EXTERNAL_STORAGE`, no storage permissions at all (SAF). |
 | Foreground service types | **OK** | `mediaPlayback` (audio+podcast), `dataSync` (WorkManager host for torrent/FTP). |
@@ -179,7 +173,7 @@ validation checks passed** (previously 1 false positive from a Norwegian develop
 
 - **No accounts, no analytics, no ads, no crash reporting SDK** (verified by dependency scan).
 - **Book metadata enrichment** (only when `onlineCoverLookup` is enabled, default **off**): title/author/ISBN sent to `openlibrary.org`, `covers.openlibrary.org`, `www.googleapis.com` (Books), `itunes.apple.com`.
-- **Audiobook chapter lookup** (runs automatically when an audiobook has a single/generic chapter): book **title + author** sent to `api.audible.com` and `api.audnex.us`. Applies to a third party (Amazon/Audible + audnex). **Not behind the opt-in toggle** — either disclose it or gate it.
+- **Audiobook chapter lookup** (runs automatically when an audiobook has a single/generic chapter): book **title + author** sent to `api.audible.com` and `api.audnex.us`. Applies to a third party (Amazon/Audible + audnex). **Owner decision (2026-10-03): keep the feature and disclose it** in the Data Safety form and privacy policy. No code change.
 - **User-configured servers:** FTP/FTPS/SFTP, SMB, WebDAV, Calibre — credentials stored encrypted (`EncryptedSharedPreferences` / Keystore ciphertext in Room); never logged.
 - **Torrent:** DHT/tracker/peer traffic; download path is app-private storage (`filesDir/shelf_torrents`).
 - **Podcasts:** subscriber RSS URLs and episode streams are fetched directly.
@@ -192,7 +186,7 @@ credentials never leave the device; and (for the EU) the legal basis for those l
 
 ## 7. Skipped or reverted changes and why
 
-- **targetSdk/compileSdk bump to 36** — skipped: only `android-35` installed and Android 16 behavior changes (edge-to-edge etc.) need device testing. Logged as blocker #1.
+- **targetSdk/compileSdk bump to 36** — **DONE** in `fbbadb7`. Android 16 behavior changes (edge-to-edge, large-screen resizability) still need the device pass.
 - **Release signing config** — skipped per hard rule #3 (do not change signing configs). Reported instead.
 - **Trimming the broad ProGuard keeps** — skipped: size optimisation without a release smoke test risks reflection breakage in SMB/WebDAV/torrent.
 - **`HandoffRepository.runBlocking` inside `db.runInTransaction`** — identified as a deadlock/ANR risk in the ebook↔audio handoff path; left as-is because there are no unit/instrumented tests around it and a wrong refactor could break handoff. Flagged in §8.
@@ -203,10 +197,10 @@ credentials never leave the device; and (for the EU) the legal basis for those l
 
 ## 8. Needs human review (ranked)
 
-1. **API 36 target** (blocker) — decide whether to bump `compileSdk`/`targetSdk` to 36 before the Nov 1 2026 extension. Requires installing `android-36` and a device pass for Android 16 behavior.
-2. **Release signing** (blocker) — add a release signing config sourced from env/`local.properties` (never committed). Play rejects debug-signed builds.
+1. ~~**API 36 target** (blocker)~~ — **DONE** in `fbbadb7`. Only remaining question is whether to go further to API 37, which needs an AGP/Gradle upgrade first.
+2. **Release signing** — owner decision: stay on debug for now. Still required before a public upload: add a release signing config sourced from env/`local.properties` (never committed).
 3. **Libgen preset source** — **FIXED** in `616a0e3` (removed). Only legitimate public-domain sources remain.
-4. **Audible/audnex chapter lookup** (privacy) — decide whether to gate it behind a setting (like `onlineCoverLookup`) or disclose it in Data Safety + privacy policy.
+4. **Audible/audnex chapter lookup** (privacy) — owner decision: **keep and disclose** (the feature is valued). Ensure it is covered in the Data Safety form and privacy policy (title + author are sent to `api.audible.com` / `api.audnex.us`).
 5. **`gradle.properties` Windows JDK path** — remove from the committed file so CI on Linux/macOS works.
 6. **Handoff repository** — ~~replace `runBlocking` inside `db.runInTransaction`~~ **FIXED** in `45a31bd` (`db.withTransaction`). Still worth a device pass of the ebook↔audio handoff; no unit test covers it.
 7. **Torrent Settings toggles** — **FIXED** in `d8f6044` (`applyUserSettings()` now reads the prefs on start and on change).
@@ -279,4 +273,5 @@ ac261ff ui: torrent settings use the lime accent; 48dp Home empty-state link
 ebe7d52 perf(release): strip verbose/info logging with R8
 ab8a46f i18n: localize reader bookmark HUD and torrent tracker status
 e042b3c i18n: remove hardcoded Norwegian fallbacks in core/designsystem
+fbbadb7 chore(play): target Android 16 (API 36)
 ```
