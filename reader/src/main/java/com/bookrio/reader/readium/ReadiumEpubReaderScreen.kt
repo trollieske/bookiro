@@ -214,7 +214,8 @@ internal fun ReadiumEpubReaderScreen(
         val book = runCatching { db.bookDao().getById(bookId) }.getOrNull()
         bookTitle = book?.title ?: ""
         val filePath = book?.filePath
-        if (filePath.isNullOrBlank()) {
+        val fileUri = book?.fileUri
+        if (filePath.isNullOrBlank() && fileUri.isNullOrBlank()) {
             error = context.getString(R.string.rdr_error_file_not_found)
             return@LaunchedEffect
         }
@@ -223,7 +224,7 @@ internal fun ReadiumEpubReaderScreen(
         initialLocator = saved?.anchorCfi?.let { json ->
             runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
         }
-        ReadiumPublicationOpener.open(context.applicationContext, filePath)
+        ReadiumPublicationOpener.open(context.applicationContext, filePath, fileUri)
             .onSuccess { pub ->
                 publication = pub
                 chapters = buildBookChapters(pub)
