@@ -74,8 +74,10 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
             runCatching {
                 val repo = com.bookrio.library.data.BookImportRepository(this, database)
                 kotlinx.coroutines.runBlocking {
-                    // Remove duplicates first (big win, leaves a small library), then
-                    // clean the remaining titles/authors.
+                    // Repair audiobook trails first, then de-duplicate (the split can
+                    // create books that a later scan also imported), then clean titles.
+                    repo.repairDuplicateAudioTracks()
+                    repo.splitMergedAudiobooks()
                     repo.deduplicateLibrary()
                     repo.repairTitlesAndAuthors()
                 }
