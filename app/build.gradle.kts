@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.bookrio"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bookrio"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 11
         versionName = "1.0.0-readium9"
 
