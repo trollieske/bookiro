@@ -100,6 +100,8 @@ Details of B8 (torrent):
 | `5f78090` | UI (found on device) | Readium page was inset from the cutout/rounded corners, so the app's black background showed as bars around light/sepia pages. The container is now painted with Readium's own theme background (light `#FFFFFF`, sepia `#FAF4E8`, night `#000000`). Verified in dark and sepia. |
 | `a0954cb` | Reader feature (on device) | Book images could sit off-centre because of the EPUB's own `text-align`/float; a small injected stylesheet centres block images. Tapping an illustration now opens a full-screen zoom viewer (pinch / double-tap / close). Verified on the Shannara map in the OnePlus 13. |
 | `460c1db` | FTP UX (reported) | "Sync now" on a large library looked dead because the worker lists the whole remote tree before creating any download row, and the UI only showed transfer counts. `FtpTransferRuntime` now tracks a per-server **preparing** state with a live file count (auto-expiring), reported per folder by `listDirectoryRecursive`/`FtpQueuePlanner`; both the sources list and details screen show a spinner + "Scanning remote folder… N files found" (all 10 locales). |
+| `24b6668` | **Library duplicates (major, reported)** | The scheduled media scan re-imported scoped-storage books every run: the ebook upsert only de-duplicated by `file_path`, which is `null` for SAF imports, so a new row was inserted each scan. On device the library had grown to **1938 rows for ~500 books** (titles repeated 6–26×). Import now also de-duplicates by `file_uri`; a new `deduplicateLibrary()` collapses exact-file rows and same title+author rows (EPUB > PDF > MOBI > … > TXT, progress moved to the survivor, duplicates soft-deleted, idempotent). Audiobooks had no title+author duplicates. |
+| `81ab22f` | Library | Re-imported titles were cleaned (`06 Red Country` → `Red Country`); series indexes parsed as authors (`the 01`) blanked via `BookTitleCleaner` (core, unit-tested) and an author guard. Repairs now run at app start (background warm-up thread), dedup before title cleanup. **On-device: 1938 → 503 active rows, 0 duplicate file uris, 0 `the 01` authors.** |
 
 ---
 
@@ -284,4 +286,6 @@ fbbadb7 chore(play): target Android 16 (API 36)
 5f78090 ui(reader): fill the letterbox around the Readium page with the theme colour
 a0954cb feat(reader): centre book images and tap an illustration to zoom
 460c1db ui(ftp): show a live 'scanning remote folder' phase after Sync now
+24b6668 fix(library): stop duplicate imports and repair existing duplicates
+81ab22f fix(library): run duplicate repair at app start, dedup before title cleanup
 ```
