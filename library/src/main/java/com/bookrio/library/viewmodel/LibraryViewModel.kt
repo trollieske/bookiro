@@ -72,6 +72,8 @@ class LibraryViewModel(
                     repo.repairNarratorAuthors()
                     repo.consolidateFragmentedAudiobooks()
                     repo.repairOneChapterAudiobooks()
+                    repo.repairTitlesAndAuthors()
+                    repo.deduplicateLibrary()
                 }
             }
             val coversDir = java.io.File(app.filesDir, "covers")

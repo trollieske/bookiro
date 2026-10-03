@@ -333,6 +333,10 @@ object EbookFilenameParser {
     fun resolveAuthor(raw: String): String {
         val r = raw.trim().trim(',', ';', '-', '_', '.').trim()
         if (r.isBlank()) return ""
+        // Series/track indexes such as "THE 01" are not authors.
+        if (r.none { it.isLetter() }) return ""
+        val withoutArticle = r.replace(Regex("(?i)^(the|a|an)\\s+"), "")
+        if (withoutArticle.matches(Regex("^\\d+(?:[.,]\\d+)?$"))) return ""
         val lower = r.lowercase(Locale.ROOT)
         KNOWN_AUTHORS[lower]?.let { return it }
         // Try "last, first" form (e.g. "Herbert, Frank")
