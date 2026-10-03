@@ -97,6 +97,8 @@ Details of B8 (torrent):
 | `e042b3c` | i18n | Removed the last hardcoded Norwegian in `:core`/`:designsystem` (PDF/CBZ parse-failure HTML, MOBI magic-byte exception, not-downloaded cover `contentDescription`) — now English base locale; full resource localization needs `Context` plumbed into the parsers. |
 | `54c3b62` | UI (found on device) | Onboarding and Settings showed the raw MediaStore tree id (e.g. `11365`) instead of the folder name when the library folder is a Downloads/MediaStore tree (`msf:11365`). Now resolves the provider `DISPLAY_NAME` first and falls back to the path parser. Verified on the OnePlus 13: label now reads `BOOKIRO`. |
 | `0efac71` | **Reader (major, found on device)** | **"File not found." on every SAF-imported EPUB.** EPUBs render through Readium, but `ReadiumEpubReaderScreen` required a local `book.filePath` and bailed out immediately for books imported from a library folder, which only have a `content://` `fileUri` (`filePath == null`). `ReadiumPublicationOpener.open()` now takes both path and uri and reads the SAF URI through Readium's ContentResolver factory. Verified on the OnePlus 13: a scoped-storage EPUB now renders real content. |
+| `5f78090` | UI (found on device) | Readium page was inset from the cutout/rounded corners, so the app's black background showed as bars around light/sepia pages. The container is now painted with Readium's own theme background (light `#FFFFFF`, sepia `#FAF4E8`, night `#000000`). Verified in dark and sepia. |
+| `a0954cb` | Reader feature (on device) | Book images could sit off-centre because of the EPUB's own `text-align`/float; a small injected stylesheet centres block images. Tapping an illustration now opens a full-screen zoom viewer (pinch / double-tap / close). Verified on the Shannara map in the OnePlus 13. |
 
 ---
 
@@ -278,4 +280,6 @@ ab8a46f i18n: localize reader bookmark HUD and torrent tracker status
 e042b3c i18n: remove hardcoded Norwegian fallbacks in core/designsystem
 fbbadb7 chore(play): target Android 16 (API 36)
 0efac71 fix(reader): open SAF content:// EPUBs in the Readium reader
+5f78090 ui(reader): fill the letterbox around the Readium page with the theme colour
+a0954cb feat(reader): centre book images and tap an illustration to zoom
 ```
