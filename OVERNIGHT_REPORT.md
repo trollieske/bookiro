@@ -11,6 +11,7 @@ Date: 2026-10-03
 | Check | Result |
 |---|---|
 | `assembleDebug` (all modules) | **BUILD SUCCESSFUL** |
+| On-device clean install (OnePlus 13 / CPH2653, Android 16) | **Installed, launched, onboarding + folder picker verified, no crash** |
 | `testDebugUnitTest` (all modules) | **339 tests, 0 failures, 0 errors** (baseline was also green) |
 | `lintDebug` (every module, incl. `:app`) | **BUILD SUCCESSFUL** — baseline had **26 lint errors** in `:core` (2), `:player` (20), `:ftp` (4) |
 | `assembleRelease` / `bundleRelease` | **BUILD SUCCESSFUL** (see §0.1) |
@@ -94,6 +95,7 @@ Details of B8 (torrent):
 | `ebe7d52` | Perf / privacy | R8 `-assumenosideeffects` strips `Log.v/d/i` from release builds (smaller APK, fewer path/URI strings in logs); `Log.w/e` kept. |
 | `ab8a46f` | i18n | Reader bookmark save/remove HUD and stored bookmark title/snippet were hardcoded Norwegian/English (new `rdr_bookmark_saved`, `rdr_bookmark_removed`, `rdr_page_n` keys, all 10 locales). The torrent summary showed the raw `TrackerState` enum and picked the error colour via `contains("feil")/"error"`; now carries the enum and uses the localized `toru_tr_*` labels. |
 | `e042b3c` | i18n | Removed the last hardcoded Norwegian in `:core`/`:designsystem` (PDF/CBZ parse-failure HTML, MOBI magic-byte exception, not-downloaded cover `contentDescription`) — now English base locale; full resource localization needs `Context` plumbed into the parsers. |
+| `54c3b62` | UI (found on device) | Onboarding and Settings showed the raw MediaStore tree id (e.g. `11365`) instead of the folder name when the library folder is a Downloads/MediaStore tree (`msf:11365`). Now resolves the provider `DISPLAY_NAME` first and falls back to the path parser. Verified on the OnePlus 13: label now reads `BOOKIRO`. |
 
 ---
 
