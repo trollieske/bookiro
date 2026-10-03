@@ -47,6 +47,9 @@
     <string name="ftpu_syncing_progress">Synkroniserer (%1$d/%2$d) • %3$d aktive • %4$s</string>
     <string name="ftpu_state_connected">FORBUNDET</string>
     <string name="ftpu_state_syncing">SYNKRONISERER</string>
+    <string name="ftpu_state_preparing">FORBEREDER</string>
+    <string name="ftpu_preparing_scan">Skanner fjernmappe … %1$d filer fundet</string>
+    <string name="ftpu_preparing_start">Forbereder synkronisering …</string>
     <string name="ftpu_state_paused">PAUSED</string>
     <string name="ftpu_state_retrying">PROVER IGEN</string>
     <string name="ftpu_state_needs_auth">SKAL LOGGE IND</string>

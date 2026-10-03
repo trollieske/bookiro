@@ -47,6 +47,9 @@
     <string name="ftpu_syncing_progress">Synkroniserer (%1$d/%2$d) • %3$d aktive • %4$s</string>
     <string name="ftpu_state_connected">TILKOBLET</string>
     <string name="ftpu_state_syncing">SYNKRONISERER</string>
+    <string name="ftpu_state_preparing">FORBEREDER</string>
+    <string name="ftpu_preparing_scan">Skanner ekstern mappe … %1$d filer funnet</string>
+    <string name="ftpu_preparing_start">Forbereder synkronisering …</string>
     <string name="ftpu_state_paused">PAUSE</string>
     <string name="ftpu_state_retrying">PROVER IGJEN</string>
     <string name="ftpu_state_needs_auth">MA LOGGES INN</string>

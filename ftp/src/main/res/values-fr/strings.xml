@@ -47,6 +47,9 @@
     <string name="ftpu_syncing_progress">Synchronisation (%1$d/%2$d) • %3$d actifs • %4$s</string>
     <string name="ftpu_state_connected">CONNECTE</string>
     <string name="ftpu_state_syncing">SYNCHRONISATION</string>
+    <string name="ftpu_state_preparing">PRÉPARATION</string>
+    <string name="ftpu_preparing_scan">Analyse du dossier distant… %1$d fichiers trouvés</string>
+    <string name="ftpu_preparing_start">Préparation de la synchronisation…</string>
     <string name="ftpu_state_paused">EN PAUSE</string>
     <string name="ftpu_state_retrying">NOUVELLE TENTATIVE</string>
     <string name="ftpu_state_needs_auth">CONNEXION REQUISE</string>

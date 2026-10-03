@@ -47,6 +47,9 @@
     <string name="ftpu_syncing_progress">Синхронізація (%1$d/%2$d) • активних: %3$d • %4$s</string>
     <string name="ftpu_state_connected">ПІДКЛЮЧЕНО</string>
     <string name="ftpu_state_syncing">СИНХРОНІЗАЦІЯ</string>
+    <string name="ftpu_state_preparing">ПІДГОТОВКА</string>
+    <string name="ftpu_preparing_scan">Сканування віддаленої папки… знайдено файлів: %1$d</string>
+    <string name="ftpu_preparing_start">Підготовка синхронізації…</string>
     <string name="ftpu_state_paused">ПАУЗА</string>
     <string name="ftpu_state_retrying">ПОВТОР</string>
     <string name="ftpu_state_needs_auth">ПОТРІБЕН ВХІД</string>

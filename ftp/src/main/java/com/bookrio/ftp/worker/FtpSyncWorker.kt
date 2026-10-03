@@ -47,8 +47,18 @@ class FtpSyncWorker(
         // nothing failed that the user has not explicitly retried.
         val before = graph.transferRepository.counts(serverId)
         if (before.queued == 0 && before.running == 0 && before.paused == 0 && before.failed == 0) {
-            runCatching {
-                FtpQueuePlanner(graph.sourceRepository, graph.transferRepository).plan(source)
+            // Surface the otherwise-silent remote listing so the user can see that
+            // "Sync now" is working on a large library.
+            FtpGraph.runtime.beginPreparing(serverId)
+            try {
+                runCatching {
+                    FtpQueuePlanner(graph.sourceRepository, graph.transferRepository)
+                        .plan(source) { found ->
+                            FtpGraph.runtime.progressPreparing(serverId, found)
+                        }
+                }
+            } finally {
+                FtpGraph.runtime.endPreparing(serverId)
             }
         }
 
