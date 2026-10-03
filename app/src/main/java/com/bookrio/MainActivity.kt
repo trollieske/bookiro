@@ -490,6 +490,9 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                 )
             }
             composable(ShelfDestinations.Torrent.route) {
+                // The torrent worker posts its progress notification; ask for
+                // POST_NOTIFICATIONS so it is actually visible on Android 13+.
+                RequestNotificationPermissionIfNeeded()
                 TorrentScreen(
                     onBack = { navController.popBackStack() }
                 )
@@ -997,7 +1000,16 @@ private fun LanDiscoverySection(
                                     .padding(horizontal = 4.dp, vertical = 8.dp),
                                 headline = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(cand.label, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            when (cand.type) {
+                                                com.bookrio.core.net.DiscoveredSourceType.FTP -> stringResource(R.string.lan_type_ftp)
+                                                com.bookrio.core.net.DiscoveredSourceType.SMB -> stringResource(R.string.lan_type_smb)
+                                                com.bookrio.core.net.DiscoveredSourceType.WEBDAV -> stringResource(R.string.lan_type_webdav)
+                                                com.bookrio.core.net.DiscoveredSourceType.CALIBRE -> stringResource(R.string.lan_type_calibre)
+                                                com.bookrio.core.net.DiscoveredSourceType.HTTP_CANDIDATE -> stringResource(R.string.lan_type_http)
+                                            },
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                         Spacer(Modifier.width(8.dp))
                                         Text(
                                             stringResource(R.string.lan_confidence, cand.confidencePct),

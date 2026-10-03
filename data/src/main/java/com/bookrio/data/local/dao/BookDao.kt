@@ -95,6 +95,12 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE file_path = :path AND is_deleted = 0 LIMIT 1")
     suspend fun getByPath(path: String): BookEntity?
 
+    @Query("SELECT * FROM books WHERE file_uri = :uri AND is_deleted = 0 LIMIT 1")
+    suspend fun getByFileUri(uri: String): BookEntity?
+
+    @Query("UPDATE books SET is_deleted = 1 WHERE id = :id")
+    suspend fun softDelete(id: Long)
+
     @Query("""
         SELECT * FROM books WHERE is_deleted = 0
           AND (title LIKE '%' || :query || '%' OR author LIKE '%' || :query || '%' 

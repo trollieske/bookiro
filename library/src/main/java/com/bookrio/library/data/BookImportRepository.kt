@@ -9,6 +9,7 @@ import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.BookFormat
 import com.bookrio.core.parse.getParserFor
+import com.bookrio.core.parse.BookTitleCleaner
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.AudioTrackEntity
 import com.bookrio.data.local.entity.BookEntity
@@ -247,7 +248,9 @@ class BookImportRepository(
             } else parsed.author
             val author: String = EbookFilenameParser.resolveAuthor(authorFull)
 
-            val title = (if (hasMetaTitle) meta!!.title!!.trim() else "").ifBlank { parsed.title.ifBlank { nameNoExt } }
+            val title = BookTitleCleaner.clean(
+                (if (hasMetaTitle) meta!!.title!!.trim() else "").ifBlank { parsed.title.ifBlank { nameNoExt } }
+            )
             val pageCount = meta?.pageCount
                 ?: meta?.durationMs?.let { (it / 60_000).toInt() }
                 ?: meta?.chapters?.size?.takeIf { it > 0 }
@@ -271,12 +274,14 @@ class BookImportRepository(
                 arr.toString()
             }
 
-            path?.let { p ->
-                val existing = db.bookDao().getByPath(p)
-                if (existing != null) {
-                    Log.d(TAG, "[UPSERT_SKIP] Existing EBOOK found for path=$p, id=${existing.id}")
-                    return@withContext existing.id
-                }
+            // Exact-file dedup: the same local path OR the same SAF uri is already
+            // in the library. Without the uri check every media scan re-imported
+            // scoped-storage files and multiplied the library.
+            val existingExact = path?.let { db.bookDao().getByPath(it) }
+                ?: db.bookDao().getByFileUri(effectiveUri.toString())
+            if (existingExact != null) {
+                Log.d(TAG, "[UPSERT_SKIP] Existing EBOOK for uri=$effectiveUri id=${existingExact.id}")
+                return@withContext existingExact.id
             }
 
             val unsaved = BookEntity(
@@ -655,11 +660,323 @@ class BookImportRepository(
         fixed
     }
 
+    /**
+     * Cleans titles/authors that earlier builds left polluted: leading series
+     * indexes in titles ("01 The Sword of Shannara") and series indexes parsed as
+     * authors ("the 01"). Idempotent and metadata-only (never touches progress).
+     */
+    suspend fun repairTitlesAndAuthors(): Int = withContext(dispatchers.io) {
+        var fixed = 0
+        try {
+            for (b in db.bookDao().getAllOnce().filter { !it.isDeleted }) {
+                val newTitle = BookTitleCleaner.clean(b.title)
+                val newAuthor = if (isSeriesIndexAuthor(b.author)) "" else b.author
+                if (newTitle == b.title && newAuthor == b.author) continue
+                db.bookDao().enrichMetadataSilently(
+                    id = b.id,
+                    title = newTitle,
+                    sortTitle = normalizeForSort(newTitle),
+                    author = newAuthor,
+                    sortAuthor = normalizeForSort(newAuthor),
+                    isbn = b.isbn,
+                    publisher = b.publisher,
+                    publishedDate = b.publishedDate,
+                    description = b.description
+                )
+                fixed++
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "[REPAIR_TITLE] failed", t)
+        }
+        fixed
+    }
+
+    private fun isSeriesIndexAuthor(author: String?): Boolean {
+        val value = author?.trim().orEmpty()
+        if (value.isEmpty()) return false
+        return value.matches(Regex("(?i)^(the|a|an)?\\s*\\d+([.,]\\d+)?$"))
+    }
+
+    /**
+     * Collapses duplicate library rows created by earlier builds:
+     *  1. the exact same file (same `file_uri`/`file_path`) imported repeatedly by
+     *     the scheduled media scan, and
+     *  2. the same book (normalized title + author) present in several files/formats.
+     *
+     * EPUB wins over other formats, then the larger file, then the oldest row.
+     * Reading progress is moved to the survivor, and duplicates are soft-deleted so
+     * no data is destroyed. Idempotent: a second run changes nothing.
+     */
+    suspend fun deduplicateLibrary(): Int = withContext(dispatchers.io) {
+        var removed = 0
+        try {
+            val books = db.bookDao().getAllOnce().filter { !it.isDeleted }
+            if (books.size <= 1) return@withContext 0
+            Log.i(TAG, "[DEDUP] scanning ${books.size} book(s)")
+
+            // Pass 1: the exact same file.
+            val byFile = books.groupBy { book ->
+                book.fileUri?.takeIf { it.isNotBlank() }
+                    ?: book.filePath?.takeIf { it.isNotBlank() }?.let { "path:$it" }
+                    ?: "id:${book.id}"
+            }
+            val survivors = mutableListOf<BookEntity>()
+            for ((_, group) in byFile) {
+                val keep = pickCanonical(group)
+                survivors.add(keep)
+                for (dup in group) {
+                    if (dup.id != keep.id) {
+                        mergeAndSoftDelete(dup, keep)
+                        removed++
+                    }
+                }
+            }
+
+            // Pass 2: same normalized title + author. A real author is required so
+            // unrelated books that only share a generic title are never merged.
+            val byKey = survivors
+                .filter { it.author.isNotBlank() && it.title.isNotBlank() }
+                .groupBy { Triple(it.sortTitle.lowercase(), it.sortAuthor.lowercase(), it.type) }
+            for ((_, group) in byKey) {
+                if (group.size <= 1) continue
+                val keep = pickCanonical(group)
+                for (dup in group) {
+                    if (dup.id != keep.id) {
+                        mergeAndSoftDelete(dup, keep)
+                        removed++
+                    }
+                }
+            }
+            if (removed > 0) Log.i(TAG, "[DEDUP] removed $removed duplicate book row(s)")
+        } catch (t: Throwable) {
+            Log.w(TAG, "[DEDUP] failed", t)
+        }
+        removed
+    }
+
+    private fun pickCanonical(group: List<BookEntity>): BookEntity =
+        group.sortedWith(
+            compareByDescending<BookEntity> { formatPreference(it.format) }
+                .thenByDescending { it.fileSizeBytes }
+                .thenBy { it.id }
+        ).first()
+
+    private fun formatPreference(format: FormatEntity): Int = when (format) {
+        FormatEntity.EPUB -> 100
+        FormatEntity.PDF -> 80
+        FormatEntity.FB2 -> 70
+        FormatEntity.MOBI, FormatEntity.AZW, FormatEntity.AZW3 -> 60
+        FormatEntity.CBZ, FormatEntity.CBR -> 50
+        FormatEntity.HTML -> 40
+        FormatEntity.TXT -> 30
+        else -> 10
+    }
+
+    private suspend fun mergeAndSoftDelete(dup: BookEntity, keep: BookEntity) {
+        runCatching {
+            val dupProgress = db.progressDao().getByBook(dup.id)
+            val keepProgress = db.progressDao().getByBook(keep.id)
+            val keepHasProgress = keepProgress != null &&
+                ((keepProgress.positionMs ?: 0L) > 0L || keepProgress.progressPercent > 0.001f)
+            if (dupProgress != null && !keepHasProgress) {
+                db.progressDao().insertOrReplace(dupProgress.copy(bookId = keep.id))
+            }
+            db.bookDao().softDelete(dup.id)
+        }
+    }
+
+    /**
+     * Removes duplicate `audio_tracks` rows left by earlier consolidation runs
+     * (the canonical's tracks used to be re-appended on every run), renumbers the
+     * survivors and recomputes the book's duration/size.
+     */
+    suspend fun repairDuplicateAudioTracks(): Int = withContext(dispatchers.io) {
+        var fixed = 0
+        try {
+            for (book in db.bookDao().getAllOnce().filter {
+                it.type == BookTypeEntity.AUDIOBOOK && !it.isDeleted
+            }) {
+                val tracks = db.audioTrackDao().getTracksForBook(book.id)
+                if (tracks.size <= 1) continue
+                val seen = HashSet<String>()
+                val keep = tracks.filter { t -> seen.add(t.fileUri ?: t.filePath ?: "id:${t.id}") }
+                if (keep.size == tracks.size) continue
+                db.audioTrackDao().deleteTracksForBook(book.id)
+                var total = 0L
+                var size = 0L
+                keep.forEachIndexed { i, t ->
+                    db.audioTrackDao().insert(t.copy(bookId = book.id, discNumber = 1, trackNumber = i + 1))
+                    total += t.durationMs
+                    size += t.fileSizeBytes
+                }
+                db.bookDao().update(
+                    book.copy(chapterCount = keep.size, durationMs = total, fileSizeBytes = size)
+                )
+                fixed++
+                Log.i(TAG, "[TRACK_DEDUP] book ${book.id} '${book.title}' ${tracks.size} -> ${keep.size} tracks")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "[TRACK_DEDUP] failed", t)
+        }
+        fixed
+    }
+
+    /**
+     * Splits audiobooks that an earlier consolidation wrongly merged. A merged book
+     * is detected conservatively: it holds 2..12 distinct files whose track titles
+     * are all standalone book titles (multi-word, not chapter/roman/part labels),
+     * pairwise dissimilar, and mostly not containing the book's own title. Real
+     * multi-track audiobooks (chapter/CD names, or titles containing the book title)
+     * are left untouched.
+     */
+    suspend fun splitMergedAudiobooks(): Int = withContext(dispatchers.io) {
+        var created = 0
+        try {
+            for (book in db.bookDao().getAllOnce().filter {
+                it.type == BookTypeEntity.AUDIOBOOK && !it.isDeleted
+            }) {
+                val distinct = db.audioTrackDao().getTracksForBook(book.id)
+                    .distinctBy { it.fileUri ?: it.filePath ?: "id:${it.id}" }
+                if (distinct.size !in 2..12) continue
+                val groupsByTitle = distinct.groupBy { it.title?.trim().orEmpty() }.filterKeys { it.isNotBlank() }
+                if (groupsByTitle.size !in 2..12) continue
+                val titles = groupsByTitle.keys.toList()
+                if (!titles.all { looksLikeStandaloneTitle(it) }) continue
+                if (!pairwiseDissimilar(titles)) continue
+                val bookTitle = AudiobookNormalizer.normalizeString(book.title)
+                val containing = titles.count { AudiobookNormalizer.normalizeString(it).contains(bookTitle) }
+                if (bookTitle.isNotBlank() && containing * 2 >= titles.size) continue
+
+                val groups = groupsByTitle.values.sortedByDescending { g -> g.sumOf { it.durationMs } }
+                val keep = groups.firstOrNull { g ->
+                    g.any { AudiobookNormalizer.normalizeString(it.title.orEmpty()) == bookTitle }
+                } ?: groups.first()
+
+                for (g in groups) {
+                    val first = g.first()
+                    val duration = g.sumOf { it.durationMs }
+                    val size = g.sumOf { it.fileSizeBytes }
+                    if (g === keep) {
+                        db.audioTrackDao().deleteTracksForBook(book.id)
+                        g.forEachIndexed { i, t ->
+                            db.audioTrackDao().insert(t.copy(bookId = book.id, discNumber = 1, trackNumber = i + 1))
+                        }
+                        val newTitle = BookTitleCleaner.clean(first.title.orEmpty()).ifBlank { book.title }
+                        db.bookDao().update(
+                            book.copy(
+                                title = newTitle,
+                                sortTitle = normalizeForSort(newTitle),
+                                durationMs = duration,
+                                fileSizeBytes = size,
+                                fileUri = first.fileUri,
+                                filePath = first.filePath,
+                                chapterCount = g.size,
+                                chaptersJson = null,
+                                lastModifiedAt = System.currentTimeMillis()
+                            )
+                        )
+                    } else {
+                        val newTitle = BookTitleCleaner.clean(first.title.orEmpty()).ifBlank { book.title }
+                        // Reuse a book that already owns this file (idempotent re-runs /
+                        // picked up by the import) instead of creating a duplicate.
+                        val existing = first.fileUri
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { db.bookDao().getByFileUri(it) }
+                            ?.takeIf { it.id != book.id }
+                        val targetId = if (existing != null) {
+                            db.bookDao().update(
+                                existing.copy(
+                                    title = newTitle,
+                                    sortTitle = normalizeForSort(newTitle),
+                                    durationMs = duration,
+                                    fileSizeBytes = size,
+                                    chapterCount = g.size,
+                                    chaptersJson = null,
+                                    lastModifiedAt = System.currentTimeMillis()
+                                )
+                            )
+                            db.audioTrackDao().deleteTracksForBook(existing.id)
+                            existing.id
+                        } else {
+                            val newId = db.bookDao().insert(
+                                book.copy(
+                                    id = 0,
+                                    title = newTitle,
+                                    sortTitle = normalizeForSort(newTitle),
+                                    author = "",
+                                    sortAuthor = "",
+                                    durationMs = duration,
+                                    fileSizeBytes = size,
+                                    fileUri = first.fileUri,
+                                    filePath = first.filePath,
+                                    chapterCount = g.size,
+                                    chaptersJson = null,
+                                    coverPath = null,
+                                    lastOpenedAt = null,
+                                    dateFinished = null,
+                                    dateAdded = System.currentTimeMillis(),
+                                    lastModifiedAt = System.currentTimeMillis()
+                                )
+                            )
+                            insertProgressFor(newId)
+                            created++
+                            newId
+                        }
+                        g.forEachIndexed { i, t ->
+                            db.audioTrackDao().insert(t.copy(bookId = targetId, discNumber = 1, trackNumber = i + 1))
+                        }
+                    }
+                }
+                Log.i(TAG, "[SPLIT_MERGED] book ${book.id} '${book.title}' -> ${groups.size} books")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "[SPLIT_MERGED] failed", t)
+        }
+        created
+    }
+
+    private val chapterTitleRegex = Regex(
+        "(?i)^(chapter|chap|ch\\s*\\d+|kapittel|del|part|track|spor|cd|disc|disk|vol|volume|book|bok|prolog|epilog|intro|innhold|forord|etterord)\\b.*"
+    )
+    private val romanOrDigitRegex = Regex("(?i)^(?:[ivxlcdm]+|\\d+)$")
+
+    private fun looksLikeStandaloneTitle(raw: String): Boolean {
+        val t = raw.trim()
+        if (t.length < 8) return false
+        if (t.split(' ').count { it.isNotBlank() } < 2) return false
+        if (chapterTitleRegex.matches(t)) return false
+        if (romanOrDigitRegex.matches(t.substringBefore(' '))) return false
+        return true
+    }
+
+    private fun pairwiseDissimilar(titles: List<String>): Boolean {
+        val tokenSets = titles.map { t ->
+            AudiobookNormalizer.normalizeString(t).split(' ').filter { it.length > 2 }.toSet()
+        }
+        for (i in tokenSets.indices) {
+            for (j in i + 1 until tokenSets.size) {
+                val a = tokenSets[i]
+                val b = tokenSets[j]
+                if (a.isEmpty() || b.isEmpty()) continue
+                val inter = a.count { it in b }
+                val union = (a + b).toSet().size
+                if (union > 0 && inter.toDouble() / union >= 0.5) return false
+            }
+        }
+        return true
+    }
+
     private suspend fun consolidateFragmentedAudiobooksLocked(): Int = withContext(dispatchers.io) {
         var countMerged = 0
         try {
             val allBooks: List<BookEntity> = db.bookDao().getAllOnce()
-            val audiobooks: List<BookEntity> = allBooks.filter { it.type == BookTypeEntity.AUDIOBOOK && !it.isDeleted }
+            // Only audiobooks that live in a real local folder can be fragments of
+            // one book. Scoped-storage (SAF) imports have filePath = null and are
+            // already grouped by folder at import time; consolidating them collapsed
+            // unrelated books into one (they all shared the empty-path group key).
+            val audiobooks: List<BookEntity> = allBooks.filter {
+                it.type == BookTypeEntity.AUDIOBOOK && !it.isDeleted && !it.filePath.isNullOrBlank()
+            }
 
             val grouped = audiobooks.groupBy { book ->
                 AudiobookNormalizer.computeGroupKey(book.title, book.author, book.filePath)
@@ -708,6 +1025,12 @@ class BookImportRepository(
 
                 val duplicates = sortedList.drop(1)
 
+                // Read every group member's tracks first, then wipe the whole group's
+                // track list and rebuild it once. Previously the canonical's tracks
+                // were re-inserted on every consolidation run, multiplying them.
+                val tracksByBook = sortedList.associateWith { db.audioTrackDao().getTracksForBook(it.id) }
+                sortedList.forEach { db.audioTrackDao().deleteTracksForBook(it.id) }
+
                 val allTracks = mutableListOf<JSONObject>()
                 var totalDuration = 0L
                 var totalSize = 0L
@@ -716,7 +1039,7 @@ class BookImportRepository(
                 var mergedTrackNumber = 1
 
                 for (b in sortedList) {
-                    val tracksForB = db.audioTrackDao().getTracksForBook(b.id)
+                    val tracksForB = tracksByBook[b].orEmpty()
                     totalSize += b.fileSizeBytes
 
                     if (tracksForB.isNotEmpty()) {
@@ -1191,6 +1514,8 @@ class BookImportRepository(
             Log.e(TAG, "importFolderTree error", e)
         }
         consolidateFragmentedAudiobooks()
+        // The scan can surface the same title in several files/formats; collapse it.
+        deduplicateLibrary()
         totalImported
     }
 

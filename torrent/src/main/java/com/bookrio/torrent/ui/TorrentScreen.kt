@@ -127,7 +127,6 @@ fun TorrentScreen(
             val openSearches = remember {
                 listOf(
                     "Internet Archive" to "https://archive.org/search?query=%s&and[]=mediatype%3A%22texts%22",
-                    "Libgen" to "https://libgen.is/search.php?req=%s",
                     "Standard Ebooks (OPDS)" to "https://standardebooks.org/ebooks/?query=%s",
                     "Project Gutenberg" to "https://www.gutenberg.org/ebooks/search/?query=%s"
                 )
@@ -182,6 +181,12 @@ fun TorrentScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.toru_rights_notice),
+                    style = ShelfTypography.BodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(12.dp))
             }
 
@@ -388,12 +393,16 @@ private fun TorrentCard(
                         style = ShelfTypography.BodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    val trStatus = stats?.trackerStatus ?: stringResource(R.string.toru_searching)
+                    val trackerState = stats?.trackerState
+                    val trStatus = trackerState?.let { stringResource(trackerStateLabel(it)) }
+                        ?: stringResource(R.string.toru_searching)
+                    val trackerFailed = trackerState != null &&
+                        trackerState !in setOf(TrackerState.OK, TrackerState.ANNOUNCING, TrackerState.WARNING)
                     Spacer(Modifier.height(2.dp))
                     Text(
                         stringResource(R.string.toru_tracker, trStatus),
                         style = ShelfTypography.BodySmall,
-                        color = if (trStatus.contains("feil") || trStatus.contains("error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (trackerFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = { expanded = !expanded }) {

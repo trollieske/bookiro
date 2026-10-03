@@ -26,8 +26,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.net.HttpURLConnection
-import java.net.URL
 
 class PlayerViewModel(
     application: Application,
@@ -229,23 +227,8 @@ class PlayerViewModel(
 
     // #region debug-point shared:player-http
     private fun dbg(hypothesisId: String, msg: String, data: String) {
-        Thread {
-            try {
-                val safeMsg = msg.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-                val safeData = data.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-                val body = """{"sessionId":"ebook-audio-crash","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"PlayerViewModel","msg":"[DEBUG] $safeMsg","data":{"info":"$safeData"},"ts":${System.currentTimeMillis()}}"""
-                val conn = (URL("http://192.168.1.10:7777/event").openConnection() as HttpURLConnection)
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 1500
-                conn.readTimeout = 1500
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.outputStream.use { it.write(body.toByteArray()) }
-                runCatching { conn.inputStream.close() }
-                conn.disconnect()
-            } catch (_: Throwable) {
-            }
-        }.start()
+        // Removed before Play: used to POST diagnostics to a hardcoded LAN debug
+        // server. Intentionally a no-op now.
     }
     // #endregion
 

@@ -75,6 +75,19 @@
     <string name="settings_library_folder_chosen">Carpeta de biblioteca definida</string>
     <string name="settings_online_cover">Búsqueda de portadas en línea</string>
     <string name="settings_online_cover_sub">Buscar portadas en Internet</string>
+    <string name="metadata_refresh_notif_channel">Actualización de metadatos</string>
+    <string name="metadata_refresh_notif_channel_desc">Muestra el progreso mientras se obtienen metadatos y portadas</string>
+    <string name="metadata_refresh_notif_title">Actualizando metadatos…</string>
+    <string name="metadata_refresh_notif_text">%1$d de %2$d</string>
+    <string name="settings_metadata_refresh">Actualizar metadatos y portadas</string>
+    <string name="settings_metadata_refresh_sub">Busca en línea el título, autor y portada correctos.</string>
+    <string name="settings_metadata_refresh_dialog_title">Actualizar desde internet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro consulta Open Library, Google Books e iTunes. Reemplaza portadas genéricas y completa metadatos faltantes o incorrectos. Requiere conexión de red.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Solo libros que parecen incorrectos</string>
+    <string name="settings_metadata_refresh_scope_all">Todos los libros (más lento)</string>
+    <string name="settings_metadata_refresh_start">Iniciar</string>
+    <string name="settings_metadata_refresh_need_online">Activa primero «Búsqueda de portadas en línea».</string>
+    <string name="settings_metadata_refresh_started">Actualización iniciada. Puedes seguir usando la app.</string>
     <string name="settings_about_description">Bookiro: un lector y reproductor de audiolibros privado y sin anuncios</string>
     <string name="action_continue">Continuar</string>
     <string name="action_save">Guardar</string>
@@ -170,6 +183,11 @@
     <string name="lan_done_found">Escaneo completado. Se encontraron %1$d posible(s) fuente(s): toca para abrir/añadir.</string>
     <string name="lan_confidence">%1$d%% probable</string>
 
+    <string name="lan_type_ftp">Servidor FTP</string>
+    <string name="lan_type_smb">Recurso compartido SMB/Windows</string>
+    <string name="lan_type_webdav">WebDAV (posiblemente Nextcloud)</string>
+    <string name="lan_type_calibre">Servidor de libros Calibre</string>
+    <string name="lan_type_http">Servidor HTTP (posiblemente una biblioteca)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Los resultados aparecen aquí cuando se ejecuta la auto-sincronización.</string>
     <string name="ip_source_sync">Sinc.</string>

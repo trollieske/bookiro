@@ -75,6 +75,19 @@
     <string name="settings_library_folder_chosen">Bibliotekmappe valgt</string>
     <string name="settings_online_cover">Online omslagssøgning</string>
     <string name="settings_online_cover_sub">Søg efter omslag på internettet</string>
+    <string name="metadata_refresh_notif_channel">Metadata-opdatering</string>
+    <string name="metadata_refresh_notif_channel_desc">Viser fremdrift, mens metadata og omslag hentes</string>
+    <string name="metadata_refresh_notif_title">Opdaterer metadata …</string>
+    <string name="metadata_refresh_notif_text">%1$d af %2$d</string>
+    <string name="settings_metadata_refresh">Opdater metadata og omslag</string>
+    <string name="settings_metadata_refresh_sub">Slå korrekt titel, forfatter og omslag op online.</string>
+    <string name="settings_metadata_refresh_dialog_title">Opdater fra internettet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro spørger Open Library, Google Books og iTunes. Dette erstatter generiske omslag og udfylder manglende eller forkerte metadata. Kræver netværk.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Kun bøger, der ser forkerte ud</string>
+    <string name="settings_metadata_refresh_scope_all">Alle bøger (langsommere)</string>
+    <string name="settings_metadata_refresh_start">Start</string>
+    <string name="settings_metadata_refresh_need_online">Slå "Online omslagsopslag" til først.</string>
+    <string name="settings_metadata_refresh_started">Opdatering startet. Du kan fortsætte med at bruge appen.</string>
     <string name="settings_about_description">Bookiro – en privat, reklamefri læser og lydbogsafspiller</string>
     <string name="action_continue">Fortsæt</string>
     <string name="action_save">Gem</string>
@@ -170,6 +183,11 @@
     <string name="lan_done_found">Scanning færdig. %1$d mulige kilde(r) fundet – tryk for at åbne/tilføje.</string>
     <string name="lan_confidence">%1$d%% sandsynlig</string>
 
+    <string name="lan_type_ftp">FTP-server</string>
+    <string name="lan_type_smb">SMB/Windows-fildeling</string>
+    <string name="lan_type_webdav">WebDAV (mulig Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre-bogserver</string>
+    <string name="lan_type_http">HTTP-server (mulig bibliotek)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Resultater vises her, når auto-synkronisering kører.</string>
     <string name="ip_source_sync">Synkronisering</string>

@@ -75,6 +75,19 @@
     <string name="settings_library_folder_chosen">Папка библиотеки задана</string>
     <string name="settings_online_cover">Поиск обложек онлайн</string>
     <string name="settings_online_cover_sub">Искать обложки в интернете</string>
+    <string name="metadata_refresh_notif_channel">Обновление метаданных</string>
+    <string name="metadata_refresh_notif_channel_desc">Показывает прогресс загрузки метаданных и обложек</string>
+    <string name="metadata_refresh_notif_title">Обновление метаданных…</string>
+    <string name="metadata_refresh_notif_text">%1$d из %2$d</string>
+    <string name="settings_metadata_refresh">Обновить метаданные и обложки</string>
+    <string name="settings_metadata_refresh_sub">Найти правильное название, автора и обложку в интернете.</string>
+    <string name="settings_metadata_refresh_dialog_title">Обновить из интернета</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro обращается к Open Library, Google Books и iTunes. Заменяет стандартные обложки и дополняет отсутствующие или неверные метаданные. Требуется подключение к сети.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Только книги с явными ошибками</string>
+    <string name="settings_metadata_refresh_scope_all">Все книги (медленнее)</string>
+    <string name="settings_metadata_refresh_start">Начать</string>
+    <string name="settings_metadata_refresh_need_online">Сначала включите «Поиск обложек в интернете».</string>
+    <string name="settings_metadata_refresh_started">Обновление началось. Можно продолжать пользоваться приложением.</string>
     <string name="settings_about_description">Bookiro — частный читатель и плеер аудиокниг без рекламы</string>
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>
@@ -170,6 +183,11 @@
     <string name="lan_done_found">Сканирование завершено. Найдено возможных источников: %1$d – нажмите, чтобы открыть/добавить.</string>
     <string name="lan_confidence">Вероятность %1$d%%</string>
 
+    <string name="lan_type_ftp">FTP-сервер</string>
+    <string name="lan_type_smb">SMB / файловый ресурс Windows</string>
+    <string name="lan_type_webdav">WebDAV (возможно Nextcloud)</string>
+    <string name="lan_type_calibre">Сервер книг Calibre</string>
+    <string name="lan_type_http">HTTP-сервер (возможно, библиотека)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Здесь появятся результаты, когда запустится автосинхронизация.</string>
     <string name="ip_source_sync">Синхр.</string>

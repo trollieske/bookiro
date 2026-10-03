@@ -89,7 +89,8 @@ interface RemoteFileClient : Closeable {
 
     suspend fun listDirectoryRecursive(
         startPath: String,
-        maxDepth: Int = 4
+        maxDepth: Int = 4,
+        onProgress: suspend (filesFound: Int) -> Unit = {}
     ): List<FtpEntry> {
         val result = mutableListOf<FtpEntry>()
         val visited = mutableSetOf<String>()
@@ -110,6 +111,9 @@ interface RemoteFileClient : Closeable {
                     crawl(entry.path, depth + 1)
                 }
             }
+            // Report after each folder so the UI can show live progress while a
+            // large remote library is being listed.
+            onProgress(result.size)
         }
 
         crawl(startPath, 1)

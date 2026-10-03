@@ -1,3 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        :core's LanSourceDiscovery reads the active network / Wi-Fi link to derive
+        the local subnet. Declared here so lint is satisfied in the library module;
+        the app module declares the same permissions for the merged manifest.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 </manifest>

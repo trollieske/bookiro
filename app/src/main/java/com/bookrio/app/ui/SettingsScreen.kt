@@ -45,7 +45,6 @@ import com.bookrio.app.storage.LibraryFolderLauncher
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.DarkModePref
-import com.bookrio.core.storage.LibraryFolderNames
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
@@ -301,18 +300,22 @@ class SettingsViewModel(
 
     fun setTorrentBackgroundEnabled(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentBackgroundEnabled(b)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setTorrentWifiOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentWifiOnly(b)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setTorrentChargingOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentChargingOnly(b)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setTorrentMinBattery(pct: Int) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentMinBatteryPct(pct)
+        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
     }
 
     fun setLibraryFormatFilter(b: Boolean) = viewModelScope.launch(dispatchers.io) {
@@ -405,7 +408,8 @@ private fun LibraryFolderRow(
     onRemove: () -> Unit,
 ) {
     var showActions by remember { mutableStateOf(false) }
-    val label = LibraryFolderNames.treeDocumentPath(uri)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val label = com.bookrio.app.storage.LibraryFolderDisplay.nameFor(context, uri)
     val hasFolder = !uri.isNullOrBlank()
     val notSet = stringResource(R.string.settings_library_folder_not_set)
     val subtitle = label ?: uri ?: notSet
@@ -1248,7 +1252,7 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     Icons.Default.SwapHoriz, null,
-                                    tint = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(26.dp)
                                 )
                                 Spacer(Modifier.width(10.dp))
@@ -1312,8 +1316,8 @@ fun SettingsScreen(
                                     valueRange = 0f..100f,
                                     steps = 19,
                                     colors = SliderDefaults.colors(
-                                        thumbColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
-                                        activeTrackColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6).copy(alpha = 0.6f)
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     )
                                 )
                             }
@@ -1341,6 +1345,97 @@ fun SettingsScreen(
                         Switch(
                             checked = state.onlineCoverLookup,
                             onCheckedChange = { vm.setOnlineCover(it) }
+                        )
+                    }
+
+                    var showMetadataRefreshDialog by rememberSaveable { mutableStateOf(false) }
+                    var metadataRefreshAll by rememberSaveable { mutableStateOf(false) }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showMetadataRefreshDialog = true },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_metadata_refresh),
+                                style = ShelfTypography.BodyLarge
+                            )
+                            Text(
+                                stringResource(R.string.settings_metadata_refresh_sub),
+                                style = ShelfTypography.BodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (showMetadataRefreshDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showMetadataRefreshDialog = false },
+                            title = { Text(stringResource(R.string.settings_metadata_refresh_dialog_title)) },
+                            text = {
+                                Column {
+                                    Text(
+                                        stringResource(R.string.settings_metadata_refresh_dialog_body),
+                                        style = ShelfTypography.BodySmall
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = !metadataRefreshAll,
+                                            onClick = { metadataRefreshAll = false }
+                                        )
+                                        Text(stringResource(R.string.settings_metadata_refresh_scope_suspects))
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = metadataRefreshAll,
+                                            onClick = { metadataRefreshAll = true }
+                                        )
+                                        Text(stringResource(R.string.settings_metadata_refresh_scope_all))
+                                    }
+                                    if (!state.onlineCoverLookup) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            stringResource(R.string.settings_metadata_refresh_need_online),
+                                            style = ShelfTypography.BodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        val target = if (metadataRefreshAll) {
+                                            com.bookrio.app.workers.MetadataRefreshWorker.SCOPE_ALL
+                                        } else {
+                                            com.bookrio.app.workers.MetadataRefreshWorker.SCOPE_SUSPECTS
+                                        }
+                                        com.bookrio.app.workers.MetadataRefreshWorker.enqueue(ctx, target)
+                                        showMetadataRefreshDialog = false
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                ctx.getString(R.string.settings_metadata_refresh_started)
+                                            )
+                                        }
+                                    },
+                                    enabled = state.onlineCoverLookup
+                                ) {
+                                    Text(stringResource(R.string.settings_metadata_refresh_start))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showMetadataRefreshDialog = false }) {
+                                    Text(stringResource(R.string.action_cancel))
+                                }
+                            }
                         )
                     }
                 }

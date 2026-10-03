@@ -33,6 +33,7 @@ import java.util.Locale
 fun sourceStatusLabel(status: SourceStatus): String = stringResource(
     when (status) {
         SourceStatus.CONNECTED -> R.string.ftpu_state_connected
+        SourceStatus.PREPARING -> R.string.ftpu_state_preparing
         SourceStatus.SYNCING -> R.string.ftpu_state_syncing
         SourceStatus.PAUSED -> R.string.ftpu_state_paused
         SourceStatus.RETRYING -> R.string.ftpu_state_retrying
@@ -46,6 +47,7 @@ fun sourceStatusLabel(status: SourceStatus): String = stringResource(
 @Composable
 fun sourceStatusColor(status: SourceStatus): Color = when (status) {
     SourceStatus.CONNECTED -> MaterialTheme.colorScheme.primary
+    SourceStatus.PREPARING -> MaterialTheme.colorScheme.primary
     SourceStatus.SYNCING -> MaterialTheme.colorScheme.primary
     SourceStatus.PAUSED -> MaterialTheme.colorScheme.tertiary
     SourceStatus.RETRYING -> MaterialTheme.colorScheme.tertiary

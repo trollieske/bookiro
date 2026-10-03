@@ -24,6 +24,9 @@
     <string name="rdr_contents">Содержание</string>
     <string name="rdr_themes">Оформление</string>
     <string name="rdr_bookmark">Закладка</string>
+    <string name="rdr_bookmark_saved">Закладка сохранена</string>
+    <string name="rdr_bookmark_removed">Закладка удалена</string>
+    <string name="rdr_page_n">Страница %1$d</string>
     <string name="rdr_lock">Заблокировать</string>
     <string name="rdr_locked">Заблокировано</string>
     <string name="rdr_go_back">Назад</string>

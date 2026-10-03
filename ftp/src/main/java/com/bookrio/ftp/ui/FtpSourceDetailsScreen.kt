@@ -145,6 +145,26 @@ fun FtpSourceDetailsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    val preparing = current.preparing
+                    if (preparing != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (preparing.scannedFiles > 0) {
+                                    stringResource(R.string.ftpu_preparing_scan, preparing.scannedFiles)
+                                } else {
+                                    stringResource(R.string.ftpu_preparing_start)
+                                },
+                                style = ShelfTypography.BodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     StatRow(
                         stringResource(R.string.ftpu_last_sync),
                         current.source.lastSyncAt?.let { formatTime(it) } ?: stringResource(R.string.ftpu_never)

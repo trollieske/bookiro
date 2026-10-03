@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="toru_title">Torrent-клиент</string>
+    <string name="toru_rights_notice">Скачивайте только тот контент, на который у вас есть права.</string>
     <string name="toru_back">Назад</string>
     <string name="toru_torrent_file">.torrent</string>
     <string name="toru_magnet">Magnet</string>

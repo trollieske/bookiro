@@ -2,6 +2,7 @@
 
 package com.bookrio.reader.readium
 
+import android.graphics.Bitmap
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.foundation.background
@@ -44,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -209,12 +211,15 @@ internal fun ReadiumEpubReaderScreen(
     var navigator by remember { mutableStateOf<EpubNavigatorFragment?>(null) }
     var progressPercent by remember { mutableStateOf(0) }
     var activeChapterIndex by remember { mutableStateOf(-1) }
+    // Full-screen illustration shown when the reader taps an image.
+    var zoomImage by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(bookId) {
         val book = runCatching { db.bookDao().getById(bookId) }.getOrNull()
         bookTitle = book?.title ?: ""
         val filePath = book?.filePath
-        if (filePath.isNullOrBlank()) {
+        val fileUri = book?.fileUri
+        if (filePath.isNullOrBlank() && fileUri.isNullOrBlank()) {
             error = context.getString(R.string.rdr_error_file_not_found)
             return@LaunchedEffect
         }
@@ -223,7 +228,7 @@ internal fun ReadiumEpubReaderScreen(
         initialLocator = saved?.anchorCfi?.let { json ->
             runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
         }
-        ReadiumPublicationOpener.open(context.applicationContext, filePath)
+        ReadiumPublicationOpener.open(context.applicationContext, filePath, fileUri)
             .onSuccess { pub ->
                 publication = pub
                 chapters = buildBookChapters(pub)
@@ -299,7 +304,7 @@ internal fun ReadiumEpubReaderScreen(
                 if (activity == null) {
                     ReaderMessage(context.getString(R.string.rdr_reader_unavailable), onBack)
                 } else {
-                    Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().background(readiumThemeBackground(theme))) {
                         val factory = remember(pub) {
                             EpubNavigatorFactory(pub).createFragmentFactory(
                                 initialLocator = initialLocator,
@@ -332,13 +337,30 @@ internal fun ReadiumEpubReaderScreen(
                             }
                         }
 
-                        // Supported gesture hook: one tap toggles the chrome. Swipes and
-                        // long-press/selection are not consumed (onDrag/onTap only).
-                        DisposableEffect(navigator) {
+                        // One tap opens an illustration for zooming when it lands on an
+                        // image; otherwise it toggles the chrome (as before).
+                        DisposableEffect(navigator, publication) {
                             val nav = navigator ?: return@DisposableEffect onDispose { }
+                            val pub = publication ?: return@DisposableEffect onDispose { }
+                            val density = context.resources.displayMetrics.density
                             val listener = object : InputListener {
                                 override fun onTap(event: TapEvent): Boolean {
-                                    showControls = !showControls
+                                    val point = event.point
+                                    scope.launch {
+                                        val src = runCatching {
+                                            nav.imageSrcAt(point.x, point.y, density)
+                                        }.getOrNull()
+                                        val locator = nav.currentLocator.value
+                                        val base = locator?.let { runCatching { pub.url(it) }.getOrNull() }
+                                        val bitmap = src?.let {
+                                            runCatching { loadReadiumImage(pub, base, it) }.getOrNull()
+                                        }
+                                        if (bitmap != null) {
+                                            zoomImage = bitmap
+                                        } else {
+                                            showControls = !showControls
+                                        }
+                                    }
                                     return true
                                 }
                             }
@@ -347,7 +369,8 @@ internal fun ReadiumEpubReaderScreen(
                         }
 
                         LaunchedEffect(navigator) {
-                            navigator?.currentLocator?.collect { locator ->
+                            val nav = navigator ?: return@LaunchedEffect
+                            nav.currentLocator.collect { locator ->
                                 progressPercent =
                                     ((locator.locations.totalProgression ?: 0.0) * 100).toInt()
                                 activeChapterIndex = chapterIndexForLocator(
@@ -355,6 +378,8 @@ internal fun ReadiumEpubReaderScreen(
                                     locator.href,
                                 )
                                 persistLocator(db, bookId, locator, scope)
+                                // Centre block images and mark them zoomable on each page.
+                                runCatching { nav.evaluateJavascript(READER_IMAGE_CSS_JS) }
                             }
                         }
 
@@ -463,6 +488,13 @@ internal fun ReadiumEpubReaderScreen(
                 }
             }
         }
+    }
+    zoomImage?.let { bmp ->
+        ReadiumImageZoomDialog(
+            bitmap = bmp,
+            closeContentDescription = stringResource(R.string.rdr_close),
+            onDismiss = { zoomImage = null },
+        )
     }
 }
 
@@ -586,4 +618,15 @@ private fun persistLocator(
             )
         }
     }
+}
+/**
+ * Background colour of the Readium reading surface for a given theme, matched to
+ * Readium CSS (`--RS__backgroundColor`): light `#FFFFFF`, sepia `#FAF4E8`,
+ * night `#000000`. Painting the surrounding (cutout/margin) area with the same
+ * colour stops the app's black background from showing as bars around the page.
+ */
+private fun readiumThemeBackground(theme: Theme): Color = when (theme) {
+    Theme.LIGHT -> Color(0xFFFFFFFF)
+    Theme.SEPIA -> Color(0xFFFAF4E8)
+    Theme.DARK -> Color(0xFF000000)
 }

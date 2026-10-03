@@ -69,6 +69,19 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
                 database
                 readingTracker
             }
+            // Self-heal duplicate rows and polluted metadata left by earlier builds.
+            // Runs off the main thread, is idempotent, and is cheap once clean.
+            runCatching {
+                val repo = com.bookrio.library.data.BookImportRepository(this, database)
+                kotlinx.coroutines.runBlocking {
+                    // Repair audiobook trails first, then de-duplicate (the split can
+                    // create books that a later scan also imported), then clean titles.
+                    repo.repairDuplicateAudioTracks()
+                    repo.splitMergedAudiobooks()
+                    repo.deduplicateLibrary()
+                    repo.repairTitlesAndAuthors()
+                }
+            }
         }
         warmUpThread.name = "shelf-db-warm"
         warmUpThread.isDaemon = true
@@ -77,8 +90,7 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
         MediaScannerWorker.schedule(this)
         FtpPeriodicSyncWorker.schedule(this)
         runCatching { FtpSyncCoordinator.start(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.schedule(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.runNow(this) }
+        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(this) }
         runCatching { com.bookrio.podcast.worker.PodcastFeedSyncWorker.schedulePeriodic(this) }
     }
 

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -694,15 +695,20 @@ private fun HomeEmptyState(onOpenImport: () -> Unit, onOpenSources: () -> Unit) 
             )
         }
         Spacer(Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.home_empty_sources),
-            style = ShelfTypography.LabelMedium,
-            color = HomeAccent,
+        Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
                 .clickable(onClick = onOpenSources)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        )
+                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.home_empty_sources),
+                style = ShelfTypography.LabelMedium,
+                color = HomeAccent
+            )
+        }
     }
 }
 

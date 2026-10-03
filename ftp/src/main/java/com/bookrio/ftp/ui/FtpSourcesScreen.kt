@@ -253,6 +253,30 @@ private fun SourceCard(
                 }
             }
 
+            val preparing = summary.preparing
+            if (preparing != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (preparing.scannedFiles > 0) {
+                            stringResource(R.string.ftpu_preparing_scan, preparing.scannedFiles)
+                        } else {
+                            stringResource(R.string.ftpu_preparing_start)
+                        },
+                        style = ShelfTypography.LabelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             if (summary.counts.total > 0) {
                 Spacer(Modifier.height(10.dp))
                 val done = summary.counts.completed + summary.counts.failed

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.bookrio.ftp.data.FtpGraph
 import com.bookrio.ftp.worker.FtpSyncWorker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -23,20 +24,28 @@ class FtpSourceDetailsViewModel(
     val summary: StateFlow<FtpSourceSummary?> = combine(
         graph.sourceRepository.observeSource(serverId),
         graph.transferRepository.observeForServer(serverId),
-        FtpGraph.runtime.active
-    ) { source, tasks, active ->
+        FtpGraph.runtime.active,
+        FtpGraph.runtime.preparing
+    ) { source, tasks, active, preparing ->
         if (source == null) null
         else FtpSourceSummary(
             source = source,
             counts = countsOf(tasks),
-            active = active.filter { it.serverId == serverId }
+            active = active.filter { it.serverId == serverId },
+            preparing = preparing[serverId]
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun syncNow() = viewModelScope.launch(Dispatchers.IO) {
         val source = graph.sourceRepository.getSource(serverId) ?: return@launch
+        // Immediate feedback while the worker starts and lists the remote folder.
+        FtpGraph.runtime.beginPreparing(serverId)
         graph.transferRepository.resume(serverId)
         FtpSyncWorker.enqueueOrRestart(getApplication(), source)
+        delay(90_000)
+        if (!FtpSyncWorker.isExecuting(getApplication(), serverId)) {
+            FtpGraph.runtime.endPreparing(serverId)
+        }
     }
 
     fun pause() = viewModelScope.launch(Dispatchers.IO) {

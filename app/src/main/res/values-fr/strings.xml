@@ -75,6 +75,19 @@
     <string name="settings_library_folder_chosen">Dossier de bibliothèque défini</string>
     <string name="settings_online_cover">Recherche de couverture en ligne</string>
     <string name="settings_online_cover_sub">Recherche des couvertures sur Internet</string>
+    <string name="metadata_refresh_notif_channel">Actualisation des métadonnées</string>
+    <string name="metadata_refresh_notif_channel_desc">Affiche la progression pendant la récupération des métadonnées et des couvertures</string>
+    <string name="metadata_refresh_notif_title">Actualisation des métadonnées…</string>
+    <string name="metadata_refresh_notif_text">%1$d sur %2$d</string>
+    <string name="settings_metadata_refresh">Actualiser les métadonnées et les couvertures</string>
+    <string name="settings_metadata_refresh_sub">Rechercher en ligne le bon titre, auteur et couverture.</string>
+    <string name="settings_metadata_refresh_dialog_title">Actualiser depuis Internet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro interroge Open Library, Google Books et iTunes. Cela remplace les couvertures génériques et complète les métadonnées manquantes ou erronées. Nécessite une connexion réseau.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Uniquement les livres qui semblent erronés</string>
+    <string name="settings_metadata_refresh_scope_all">Tous les livres (plus lent)</string>
+    <string name="settings_metadata_refresh_start">Démarrer</string>
+    <string name="settings_metadata_refresh_need_online">Activez d’abord « Recherche de couvertures en ligne ».</string>
+    <string name="settings_metadata_refresh_started">Actualisation lancée. Vous pouvez continuer à utiliser l’application.</string>
     <string name="settings_about_description">Bookiro — un lecteur et lecteur audio privé, sans publicité</string>
     <string name="action_continue">Continuer</string>
     <string name="action_save">Enregistrer</string>
@@ -170,6 +183,11 @@
     <string name="lan_done_found">Analyse terminée. %1$d source(s) possible(s) trouvée(s) – touchez pour ouvrir / ajouter.</string>
     <string name="lan_confidence">%1$d%% probable</string>
 
+    <string name="lan_type_ftp">Serveur FTP</string>
+    <string name="lan_type_smb">Partage de fichiers SMB/Windows</string>
+    <string name="lan_type_webdav">WebDAV (possiblement Nextcloud)</string>
+    <string name="lan_type_calibre">Serveur de livres Calibre</string>
+    <string name="lan_type_http">Serveur HTTP (peut-être une bibliothèque)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Les résultats s\'affichent ici lorsque l\'auto-synchronisation s\'exécute.</string>
     <string name="ip_source_sync">Sync</string>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Bookiro is local-first: users add their own FTP/SMB/WebDAV servers, Calibre
+    Content Server and podcast RSS feeds. Those are frequently plain HTTP on a
+    home LAN (e.g. http://192.168.1.20:8080), and Android blocks cleartext by
+    default from targetSdk 28. Without this config every http:// source fails
+    with "CLEARTEXT communication not permitted".
+
+    Cleartext is permitted for all hosts because the servers are arbitrary LAN
+    IPs that cannot be expressed as domains or configured in advance. HTTPS is
+    still preferred wherever offered, and the system trust anchors are kept.
+    Users who need self-signed HTTPS certificates can opt in per server.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

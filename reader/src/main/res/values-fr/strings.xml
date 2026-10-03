@@ -24,6 +24,9 @@
     <string name="rdr_contents">Sommaire</string>
     <string name="rdr_themes">Thèmes</string>
     <string name="rdr_bookmark">Signet</string>
+    <string name="rdr_bookmark_saved">Signet enregistré</string>
+    <string name="rdr_bookmark_removed">Signet supprimé</string>
+    <string name="rdr_page_n">Page %1$d</string>
     <string name="rdr_lock">Verrouiller</string>
     <string name="rdr_locked">Verrouillé</string>
     <string name="rdr_go_back">Revenir en arrière</string>

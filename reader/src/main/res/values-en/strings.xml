@@ -24,6 +24,9 @@
     <string name="rdr_contents">Contents</string>
     <string name="rdr_themes">Themes</string>
     <string name="rdr_bookmark">Bookmark</string>
+    <string name="rdr_bookmark_saved">Bookmark saved</string>
+    <string name="rdr_bookmark_removed">Bookmark removed</string>
+    <string name="rdr_page_n">Page %1$d</string>
     <string name="rdr_lock">Lock</string>
     <string name="rdr_locked">Locked</string>
     <string name="rdr_go_back">Go back</string>

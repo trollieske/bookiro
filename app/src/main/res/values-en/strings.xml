@@ -76,6 +76,19 @@
     <string name="settings_library_folder_chosen">Library folder set</string>
     <string name="settings_online_cover">Online cover lookup</string>
     <string name="settings_online_cover_sub">Search for covers on the internet</string>
+    <string name="metadata_refresh_notif_channel">Metadata refresh</string>
+    <string name="metadata_refresh_notif_channel_desc">Shows progress while fetching metadata and covers</string>
+    <string name="metadata_refresh_notif_title">Refreshing metadata…</string>
+    <string name="metadata_refresh_notif_text">%1$d of %2$d</string>
+    <string name="settings_metadata_refresh">Refresh metadata &amp; covers</string>
+    <string name="settings_metadata_refresh_sub">Look up the correct title, author and cover online.</string>
+    <string name="settings_metadata_refresh_dialog_title">Refresh from the internet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro will query Open Library, Google Books and iTunes. This replaces generic covers and fills in missing or wrong metadata. Needs a network connection.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Only books that look wrong</string>
+    <string name="settings_metadata_refresh_scope_all">All books (slower)</string>
+    <string name="settings_metadata_refresh_start">Start</string>
+    <string name="settings_metadata_refresh_need_online">Turn on “Online cover lookup” first.</string>
+    <string name="settings_metadata_refresh_started">Refresh started. You can keep using the app.</string>
     <string name="settings_about_description">Bookiro — a private, ad-free reader and audiobook player</string>
     <string name="action_continue">Continue</string>
     <string name="action_save">Save</string>
@@ -171,6 +184,11 @@
     <string name="lan_done_found">Scan complete. %1$d possible source(s) found – tap to open / add.</string>
     <string name="lan_confidence">%1$d%% likely</string>
 
+    <string name="lan_type_ftp">FTP server</string>
+    <string name="lan_type_smb">SMB / Windows file share</string>
+    <string name="lan_type_webdav">WebDAV (possibly Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre book server</string>
+    <string name="lan_type_http">HTTP server (possibly a library)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Results are shown here when auto-sync runs.</string>
     <string name="ip_source_sync">Sync</string>

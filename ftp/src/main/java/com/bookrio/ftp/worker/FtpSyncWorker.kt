@@ -1,5 +1,6 @@
 package com.bookrio.ftp.worker
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -46,8 +47,18 @@ class FtpSyncWorker(
         // nothing failed that the user has not explicitly retried.
         val before = graph.transferRepository.counts(serverId)
         if (before.queued == 0 && before.running == 0 && before.paused == 0 && before.failed == 0) {
-            runCatching {
-                FtpQueuePlanner(graph.sourceRepository, graph.transferRepository).plan(source)
+            // Surface the otherwise-silent remote listing so the user can see that
+            // "Sync now" is working on a large library.
+            FtpGraph.runtime.beginPreparing(serverId)
+            try {
+                runCatching {
+                    FtpQueuePlanner(graph.sourceRepository, graph.transferRepository)
+                        .plan(source) { found ->
+                            FtpGraph.runtime.progressPreparing(serverId, found)
+                        }
+                }
+            } finally {
+                FtpGraph.runtime.endPreparing(serverId)
             }
         }
 
@@ -138,6 +149,7 @@ class FtpSyncWorker(
             WorkManager.getInstance(context).cancelUniqueWork(uniqueName(serverId))
         }
 
+        @SuppressLint("RestrictedApi")
         suspend fun isRunning(context: Context, serverId: Long): Boolean {
             val info = WorkManager.getInstance(context)
                 .getWorkInfosForUniqueWork(uniqueName(serverId))
@@ -146,6 +158,7 @@ class FtpSyncWorker(
         }
 
         /** True only while the worker is actually executing (not ENQUEUED/backoff). */
+        @SuppressLint("RestrictedApi")
         suspend fun isExecuting(context: Context, serverId: Long): Boolean {
             val info = WorkManager.getInstance(context)
                 .getWorkInfosForUniqueWork(uniqueName(serverId))

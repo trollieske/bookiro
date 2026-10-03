@@ -158,7 +158,7 @@ object MobiUnpack {
             val type = bytes.copyOfRange(60, 64).toString(Charsets.ISO_8859_1)
             val creator = bytes.copyOfRange(64, 68).toString(Charsets.ISO_8859_1)
             if (type != "BOOK" || creator != "MOBI") {
-                throw MobiParseException("Ikke en MOBI-fil (mangler BOOKMOBI-magi)")
+                throw MobiParseException("Not a MOBI file (missing BOOKMOBI magic)")
             }
         }
 
