@@ -1288,7 +1288,7 @@ fun OnboardingScreen(
     }
     var chosenLabel by remember { mutableStateOf<String?>(null) }
     val folderLabel = chosenLabel
-        ?: persistedFolder?.let { com.bookrio.core.storage.LibraryFolderNames.treeDocumentPath(it) }
+        ?: persistedFolder?.let { com.bookrio.app.storage.LibraryFolderDisplay.nameFor(ctx, it) }
 
     fun finish() {
         scope.launch {
@@ -1308,7 +1308,7 @@ fun OnboardingScreen(
                     // enable it and scan once so a pre-filled folder appears at once.
                     runCatching { prefs.setWatchLibraryFolder(true) }
                     runCatching { com.bookrio.app.workers.MediaScannerWorker.runOnce(ctx) }
-                    chosenLabel = com.bookrio.core.storage.LibraryFolderNames.treeDocumentPath(tree.toString())
+                    chosenLabel = com.bookrio.app.storage.LibraryFolderDisplay.nameFor(ctx, tree.toString())
                         ?: tree.toString()
                 } else {
                     snackbarHostState.showSnackbar(

@@ -45,7 +45,6 @@ import com.bookrio.app.storage.LibraryFolderLauncher
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.DarkModePref
-import com.bookrio.core.storage.LibraryFolderNames
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
@@ -409,7 +408,8 @@ private fun LibraryFolderRow(
     onRemove: () -> Unit,
 ) {
     var showActions by remember { mutableStateOf(false) }
-    val label = LibraryFolderNames.treeDocumentPath(uri)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val label = com.bookrio.app.storage.LibraryFolderDisplay.nameFor(context, uri)
     val hasFolder = !uri.isNullOrBlank()
     val notSet = stringResource(R.string.settings_library_folder_not_set)
     val subtitle = label ?: uri ?: notSet
