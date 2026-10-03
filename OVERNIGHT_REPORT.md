@@ -99,6 +99,7 @@ Details of B8 (torrent):
 | `0efac71` | **Reader (major, found on device)** | **"File not found." on every SAF-imported EPUB.** EPUBs render through Readium, but `ReadiumEpubReaderScreen` required a local `book.filePath` and bailed out immediately for books imported from a library folder, which only have a `content://` `fileUri` (`filePath == null`). `ReadiumPublicationOpener.open()` now takes both path and uri and reads the SAF URI through Readium's ContentResolver factory. Verified on the OnePlus 13: a scoped-storage EPUB now renders real content. |
 | `5f78090` | UI (found on device) | Readium page was inset from the cutout/rounded corners, so the app's black background showed as bars around light/sepia pages. The container is now painted with Readium's own theme background (light `#FFFFFF`, sepia `#FAF4E8`, night `#000000`). Verified in dark and sepia. |
 | `a0954cb` | Reader feature (on device) | Book images could sit off-centre because of the EPUB's own `text-align`/float; a small injected stylesheet centres block images. Tapping an illustration now opens a full-screen zoom viewer (pinch / double-tap / close). Verified on the Shannara map in the OnePlus 13. |
+| `460c1db` | FTP UX (reported) | "Sync now" on a large library looked dead because the worker lists the whole remote tree before creating any download row, and the UI only showed transfer counts. `FtpTransferRuntime` now tracks a per-server **preparing** state with a live file count (auto-expiring), reported per folder by `listDirectoryRecursive`/`FtpQueuePlanner`; both the sources list and details screen show a spinner + "Scanning remote folder… N files found" (all 10 locales). |
 
 ---
 
@@ -282,4 +283,5 @@ fbbadb7 chore(play): target Android 16 (API 36)
 0efac71 fix(reader): open SAF content:// EPUBs in the Readium reader
 5f78090 ui(reader): fill the letterbox around the Readium page with the theme colour
 a0954cb feat(reader): centre book images and tap an illustration to zoom
+460c1db ui(ftp): show a live 'scanning remote folder' phase after Sync now
 ```
