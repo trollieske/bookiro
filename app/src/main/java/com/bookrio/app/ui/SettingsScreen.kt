@@ -1347,6 +1347,97 @@ fun SettingsScreen(
                             onCheckedChange = { vm.setOnlineCover(it) }
                         )
                     }
+
+                    var showMetadataRefreshDialog by rememberSaveable { mutableStateOf(false) }
+                    var metadataRefreshAll by rememberSaveable { mutableStateOf(false) }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showMetadataRefreshDialog = true },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_metadata_refresh),
+                                style = ShelfTypography.BodyLarge
+                            )
+                            Text(
+                                stringResource(R.string.settings_metadata_refresh_sub),
+                                style = ShelfTypography.BodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (showMetadataRefreshDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showMetadataRefreshDialog = false },
+                            title = { Text(stringResource(R.string.settings_metadata_refresh_dialog_title)) },
+                            text = {
+                                Column {
+                                    Text(
+                                        stringResource(R.string.settings_metadata_refresh_dialog_body),
+                                        style = ShelfTypography.BodySmall
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = !metadataRefreshAll,
+                                            onClick = { metadataRefreshAll = false }
+                                        )
+                                        Text(stringResource(R.string.settings_metadata_refresh_scope_suspects))
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = metadataRefreshAll,
+                                            onClick = { metadataRefreshAll = true }
+                                        )
+                                        Text(stringResource(R.string.settings_metadata_refresh_scope_all))
+                                    }
+                                    if (!state.onlineCoverLookup) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            stringResource(R.string.settings_metadata_refresh_need_online),
+                                            style = ShelfTypography.BodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        val target = if (metadataRefreshAll) {
+                                            com.bookrio.app.workers.MetadataRefreshWorker.SCOPE_ALL
+                                        } else {
+                                            com.bookrio.app.workers.MetadataRefreshWorker.SCOPE_SUSPECTS
+                                        }
+                                        com.bookrio.app.workers.MetadataRefreshWorker.enqueue(ctx, target)
+                                        showMetadataRefreshDialog = false
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                ctx.getString(R.string.settings_metadata_refresh_started)
+                                            )
+                                        }
+                                    },
+                                    enabled = state.onlineCoverLookup
+                                ) {
+                                    Text(stringResource(R.string.settings_metadata_refresh_start))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showMetadataRefreshDialog = false }) {
+                                    Text(stringResource(R.string.action_cancel))
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
