@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -300,7 +301,7 @@ internal fun ReadiumEpubReaderScreen(
                 if (activity == null) {
                     ReaderMessage(context.getString(R.string.rdr_reader_unavailable), onBack)
                 } else {
-                    Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().background(readiumThemeBackground(theme))) {
                         val factory = remember(pub) {
                             EpubNavigatorFactory(pub).createFragmentFactory(
                                 initialLocator = initialLocator,
@@ -587,4 +588,15 @@ private fun persistLocator(
             )
         }
     }
+}
+/**
+ * Background colour of the Readium reading surface for a given theme, matched to
+ * Readium CSS (`--RS__backgroundColor`): light `#FFFFFF`, sepia `#FAF4E8`,
+ * night `#000000`. Painting the surrounding (cutout/margin) area with the same
+ * colour stops the app's black background from showing as bars around the page.
+ */
+private fun readiumThemeBackground(theme: Theme): Color = when (theme) {
+    Theme.LIGHT -> Color(0xFFFFFFFF)
+    Theme.SEPIA -> Color(0xFFFAF4E8)
+    Theme.DARK -> Color(0xFF000000)
 }
