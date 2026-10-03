@@ -712,6 +712,7 @@ class BookImportRepository(
         try {
             val books = db.bookDao().getAllOnce().filter { !it.isDeleted }
             if (books.size <= 1) return@withContext 0
+            Log.i(TAG, "[DEDUP] scanning ${books.size} book(s)")
 
             // Pass 1: the exact same file.
             val byFile = books.groupBy { book ->

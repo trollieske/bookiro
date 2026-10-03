@@ -69,6 +69,17 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
                 database
                 readingTracker
             }
+            // Self-heal duplicate rows and polluted metadata left by earlier builds.
+            // Runs off the main thread, is idempotent, and is cheap once clean.
+            runCatching {
+                val repo = com.bookrio.library.data.BookImportRepository(this, database)
+                kotlinx.coroutines.runBlocking {
+                    // Remove duplicates first (big win, leaves a small library), then
+                    // clean the remaining titles/authors.
+                    repo.deduplicateLibrary()
+                    repo.repairTitlesAndAuthors()
+                }
+            }
         }
         warmUpThread.name = "shelf-db-warm"
         warmUpThread.isDaemon = true
