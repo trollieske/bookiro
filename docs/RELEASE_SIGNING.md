@@ -53,3 +53,74 @@ app signing key. Keep the upload keystore backed up outside the repo.
 Expose the four values as protected CI secrets; do not print them. `bundleRelease`
 should be the only release packaging command in CI, and it must fail if the secrets are
 not injected.
+
+```yaml
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Materialize upload keystore from secret
+        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/bookiro-release.jks"
+        env:
+          KEYSTORE_B64: ${{ secrets.BOOKIRO_KEYSTORE_BASE64 }}
+      - name: Build signed AAB
+        run: ./gradlew :app:bundleRelease
+        env:
+          BOOKIRO_KEYSTORE_PATH: ${{ runner.temp }}/bookiro-release.jks
+          BOOKIRO_KEYSTORE_PASSWORD: ${{ secrets.BOOKIRO_KEYSTORE_PASSWORD }}
+          BOOKIRO_KEY_ALIAS: ${{ secrets.BOOKIRO_KEY_ALIAS }}
+          BOOKIRO_KEY_PASSWORD: ${{ secrets.BOOKIRO_KEY_PASSWORD }}
+```
+
+Rules: secrets only from the platform secret store; never echo a password (the Gradle
+failure message prints variable **names**, not values); never upload the `.jks` as an
+artifact — only the AAB/APK.
+
+## Creating the upload key (documentation — do NOT run in this repo)
+
+```bash
+# Generate once, offline, with a strong passphrase. Never commit the .jks.
+keytool -genkeypair -v \
+  -keystore bookiro-release.jks \
+  -alias bookiro-upload \
+  -keyalg RSA -keysize 4096 -validity 10000 \
+  -storetype PKCS12
+```
+
+Store the keystore + passwords in the team secret manager and register the key with
+**Play App Signing** (Google holds the app signing key; this is the *upload* key).
+Back it up: a lost upload key needs a Play Console upload-key reset (subject to Google
+review).
+
+## Verification commands
+
+```bash
+# 1. Without credentials -> must fail with the clear message
+./gradlew :app:bundleRelease
+./gradlew :app:assembleRelease
+
+# 2. With credentials -> signed artifacts
+BOOKIRO_KEYSTORE_PATH=/secure/bookiro-release.jks \
+BOOKIRO_KEYSTORE_PASSWORD=... BOOKIRO_KEY_ALIAS=bookiro-upload \
+BOOKIRO_KEY_PASSWORD=... ./gradlew :app:bundleRelease :app:assembleRelease
+
+# 3. Certificate check (must NOT say "Android Debug")
+$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs --verbose \
+  app/build/outputs/apk/release/app-universal-release.apk
+
+# 4. AAB signature
+jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.aab | tail -5
+
+# 5. Debug build stays debug-signed + .debug-suffixed
+./gradlew :app:assembleDebug
+$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
+  app/build/outputs/apk/debug/app-universal-debug.apk
+```
+
+## Verified interaction with the Play variant
+
+The signing gate is flavor-agnostic: `playstoreRelease`/`fullRelease` both require the
+four variables. See `docs/PLAY_VARIANT_DECISION.md`.
