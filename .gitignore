@@ -18,9 +18,15 @@ captures/
 *.apk
 *.aab
 *.ap_
-*.aab
 app/release/
 app/debug/
+
+# Signing secrets — never commit
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pepk
 
 # ProGuard / mapping
 mapping.txt
