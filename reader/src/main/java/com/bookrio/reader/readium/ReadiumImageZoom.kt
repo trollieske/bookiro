@@ -72,15 +72,27 @@ internal suspend fun loadReadiumImage(
 }
 
 /**
- * Returns the `src` of an `<img>` at the given point (in raw view pixels), or null
- * when the tap did not land on an image. Used to decide between zooming an
- * illustration and toggling the reader chrome.
+ * Result of hit-testing a reader tap: whether the tap landed on a hyperlink and, if yes,
+ * the image source under the finger. Used to decide between zooming an illustration,
+ * letting Readium activate the link, and toggling the chrome. The navigator's InputListener
+ * always returns `false` now, so Readium keeps full ownership of link activation, selection
+ * and drag gestures — this hit-test only informs the Bookiro overlay.
  */
-internal suspend fun EpubNavigatorFragment.imageSrcAt(
+internal data class ReadiumTapTarget(
+    val isLink: Boolean,
+    val imageSrc: String?,
+)
+
+/**
+ * Returns what sits under a tap (in raw view pixels): a hyperlink and/or an image `src`.
+ * Used to decide between zooming an illustration, leaving a link to Readium, and toggling
+ * the reader chrome.
+ */
+internal suspend fun EpubNavigatorFragment.tapTargetAt(
     pointX: Float,
     pointY: Float,
     density: Float,
-): String? {
+): ReadiumTapTarget {
     val x = pointX / density
     val y = pointY / density
     val js = """
@@ -92,26 +104,34 @@ internal suspend fun EpubNavigatorFragment.imageSrcAt(
       if(!e.getAttribute) return null;
       return e.getAttribute('src')||e.getAttribute('href')||e.getAttribute('xlink:href')||e.getAttribute(n);
     }
-    if(tag==='IMG'||tag==='IMAGE'){var s=attr(); if(s) return tag+'|'+s;}
+    if(tag==='IMG'||tag==='IMAGE'){var s=attr(); if(s) return s;}
     var im=e.querySelector&&e.querySelector('img,image');
-    if(im){var s2=im.getAttribute('src')||im.getAttribute('href')||im.getAttribute('xlink:href'); if(s2) return tag+'|'+s2;}
+    if(im){var s2=im.getAttribute('src')||im.getAttribute('href')||im.getAttribute('xlink:href'); if(s2) return s2;}
     var bg=e.ownerDocument.defaultView.getComputedStyle(e).backgroundImage;
-    if(bg&&bg.indexOf('url(')===0){var m=bg.match(/url\(["']?([^"')]+)["']?\)/); if(m) return tag+'|'+m[1];}
-    return tag+'|';
+    if(bg&&bg.indexOf('url(')===0){var m=bg.match(/url\(["']?([^"')]+)["']?\)/); if(m) return m[1];}
+    return null;
   }
   var pts=[[$pointX,$pointY],[$x,$y]];
+  var first=null;
   for(var i=0;i<pts.length;i++){
     var e=document.elementFromPoint(pts[i][0],pts[i][1]);
-    if(e){var r=srcOf(e); if(r&&r.split('|')[1]) return r; if(i===0) var first=r;}
+    if(!e) continue;
+    var link=!!(e.closest&&e.closest('a[href], area[href]'));
+    var item={link:link,src:srcOf(e)};
+    if(first===null) first=item;
+    if(link||item.src) return item;
   }
-  return (typeof first!=='undefined'&&first)?first:'NONE|';
+  return first||{link:false,src:null};
 })()
 """.trimIndent()
     val raw = runCatching { evaluateJavascript(js) }.getOrNull()?.trim()
-    if (raw.isNullOrEmpty() || raw == "null") return null
-    val value = runCatching { org.json.JSONTokener(raw).nextValue() as? String }.getOrNull()
-        ?.takeIf { it.isNotBlank() && it != "NONE|" } ?: return null
-    return value.substringAfter('|', "").takeIf { it.isNotBlank() }
+    if (raw.isNullOrEmpty() || raw == "null") return ReadiumTapTarget(isLink = false, imageSrc = null)
+    val value = runCatching { org.json.JSONTokener(raw).nextValue() }.getOrNull()
+    val obj = value as? org.json.JSONObject ?: return ReadiumTapTarget(isLink = false, imageSrc = null)
+    return ReadiumTapTarget(
+        isLink = obj.optBoolean("link", false),
+        imageSrc = obj.optString("src").takeIf { it.isNotBlank() && it != "null" },
+    )
 }
 
 private fun decodeDownsampled(bytes: ByteArray, maxDimension: Int): Bitmap? {
