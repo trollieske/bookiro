@@ -35,6 +35,7 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.SettableFuture
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.BookEntity
@@ -56,14 +57,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
-
-/** Intern spesifikasjon for ett MediaItem: kapittel + global start + evt. klipp innenfor samme fil. */
-private data class ActiveItemSpec(
-    val chapter: AudiobookChapter,
-    val globalStartMs: Long,
-    val clipStartMs: Long?,
-    val clipEndMs: Long?
-)
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AudiobookPlaybackService : MediaLibraryService() {
@@ -358,6 +351,58 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 }
                 LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
             }
+
+            /**
+             * Resolves a controller request (`playFromMediaId` from Android Auto, a
+             * Media3 library controller's `setMediaItems`, …) into COMPLETE playable
+             * items.
+             *
+             * Media3 1.4.1's default implementation returns a failed future
+             * (`UnsupportedOperationException`) for every item that has no
+             * `LocalConfiguration`. A browsed leaf is an ID-only `book_<id>` library
+             * entry, and the legacy MediaBrowserCompat path used by Android Auto
+             * silently swallows that failure (`MediaSessionLegacyStub.onFailure`),
+             * which is exactly why selecting a book in the car started nothing. The
+             * service must expand the id here — asynchronously, off the session
+             * callback thread — into the same chapter timeline [loadBook] builds.
+             */
+            override fun onAddMediaItems(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>
+            ): ListenableFuture<List<MediaItem>> =
+                Futures.transformAsync<ResolvedSelection, List<MediaItem>>(
+                    resolveSelection(mediaItems, C.INDEX_UNSET, C.TIME_END_OF_SOURCE),
+                    { selection: ResolvedSelection -> Futures.immediateFuture(selection.items) },
+                    MoreExecutors.directExecutor()
+                )
+
+            /**
+             * The actual entry point for `playFromMediaId` (Android Auto) and for
+             * controller `setMediaItems`. Media3's default delegates to
+             * [onAddMediaItems], but overriding here as well lets a resolved book
+             * selection start at the stored position instead of always at chapter 1.
+             */
+            override fun onSetMediaItems(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>,
+                startIndex: Int,
+                startPositionMs: Long
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
+                Futures.transformAsync<ResolvedSelection, MediaSession.MediaItemsWithStartPosition>(
+                    resolveSelection(mediaItems, startIndex, startPositionMs),
+                    { selection: ResolvedSelection ->
+                        Futures.immediateFuture(
+                            MediaSession.MediaItemsWithStartPosition(
+                                ImmutableList.copyOf(selection.items),
+                                selection.startIndex,
+                                selection.startPositionMs
+                            )
+                        )
+                    },
+                    MoreExecutors.directExecutor()
+                )
         }
 
         val sessionIntent = Intent().apply {
@@ -462,7 +507,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             p.clearMediaItems()
         }
         activeChapters = emptyList()
-        activeItemSpecs = emptyList()
+        activePlan = emptyList()
         // loadedTimeline keeps its id: it is the last timeline we held, which is
         // exactly what a late progress write (and a play press) must target.
         // currentBookId is intentionally kept: an explicit play press re-loads it.
@@ -578,7 +623,32 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     private var activeChapters: List<AudiobookChapter> = emptyList()
-    private var activeItemSpecs: List<ActiveItemSpec> = emptyList()
+
+    /**
+     * Planned item list mirroring the player's timeline 1:1: global chapter start plus
+     * the clip window inside a shared file. Replaces the old `ActiveItemSpec` cache;
+     * produced by [AudiobookPlaybackPlan] so the in-app load and the Auto/library
+     * selection share one construction path.
+     */
+    private var activePlan: List<PlaybackItemPlan> = emptyList()
+
+    /** One book resolved into the complete, playable Media3 timeline. */
+    private data class BuiltTimeline(
+        val book: BookEntity,
+        val chapters: List<AudiobookChapter>,
+        val plan: List<PlaybackItemPlan>,
+        val items: List<MediaItem>,
+        /** Resume item index, or -1 when there is no stored progress. */
+        val resumeIndex: Int,
+        val resumeOffsetMs: Long
+    )
+
+    /** Controller media request resolved into a complete, playable selection. */
+    private data class ResolvedSelection(
+        val items: List<MediaItem>,
+        val startIndex: Int,
+        val startPositionMs: Long
+    )
 
     /**
      * Loads [bookId] into the player.
@@ -604,146 +674,292 @@ class AudiobookPlaybackService : MediaLibraryService() {
             return false
         }
         serviceScope.launch {
-            val db = db ?: return@launch
-            val book = db.bookDao().getById(bookId) ?: return@launch
-            val prog = db.progressDao().getByBook(bookId)?.progressPercent ?: 0f
-            val source = run {
-                val fp = book.filePath
-                val fu = book.fileUri
-                when {
-                    fp != null && fp.isNotBlank() && java.io.File(fp).canRead() ->
-                        Uri.fromFile(java.io.File(fp)).toString()
-                    fu != null && fu.isNotBlank() -> fu
-                    else -> null
-                }
+            val built = buildBookTimeline(bookId) ?: run {
+                Log.w(TAG, "loadBook($bookId): no playable timeline (missing book/source)")
+                return@launch
             }
-
-            val cover = withContext(Dispatchers.IO) { coverArtworkFor(book.id, book.coverPath) }
-            if (token != loadGate.current()) return@launch
-
-            // KANONISK oppfriskning: oppdager/persisterer reelle kapitler for
-            // eksisterende bøker med utdatert metadata (samme sti som ViewModel).
-            val chapters = chapterEngine?.ensureFreshChapters(book)
-                ?: parseChapters(book.chaptersJson ?: "")
-
-            if (chapters.isNotEmpty()) {
-                // Flere kapitler i SAMME fil (M4B/MP3 med innebygde kapitler) får
-                // ClippingConfiguration slik at hvert MediaItem spiller KUN sitt intervall.
-                // Én fil per kapittel (mappe-import) klippes ikke — startMs er kumulativ.
-                val uriCounts = HashMap<String, Int>()
-                chapters.forEach { ch ->
-                    val u = ch.mediaUri ?: source ?: ""
-                    uriCounts[u] = (uriCounts[u] ?: 0) + 1
-                }
-                val uriBases = HashMap<String, Long>()
-                val itemSpecs = chapters.map { ch ->
-                    val u = ch.mediaUri ?: source ?: ""
-                    if ((uriCounts[u] ?: 0) > 1) {
-                        val base = uriBases.getOrPut(u) { ch.startMs }
-                        val clipStart = (ch.startMs - base).coerceAtLeast(0L)
-                        val clipEnd = ch.endMs?.takeIf { it > ch.startMs }?.let { it - base }
-                        ActiveItemSpec(ch, clipStart, clipStart, clipEnd)
+            withContext(Dispatchers.Main) {
+                if (!loadGate.shouldApply(token, force, otherEngineIsPlaying())) {
+                    // Stale token: either a newer same-engine load (UI or Auto select)
+                    // owns the engine now — then this load must not touch the player at
+                    // all — or the other engine owns playback, in which case a passive
+                    // load retires instead of posting a second paused timeline.
+                    if (otherEngineIsPlaying()) {
+                        deferLoad("load superseded while in flight")
                     } else {
-                        ActiveItemSpec(ch, ch.startMs, null, null)
+                        Log.i(TAG, "loadBook($bookId) superseded by a newer load; not applying")
                     }
+                    return@withContext
                 }
-
-                val mediaItems = itemSpecs.map { spec ->
-                    val ch = spec.chapter
-                    val uriStr = ch.mediaUri ?: source ?: ""
-                    val builder = MediaItem.Builder()
-                        .setUri(Uri.parse(uriStr))
-                        .setMediaId("${book.id}_${ch.index}")
-                    if (spec.clipStartMs != null) {
-                        builder.setClippingConfiguration(
-                            MediaItem.ClippingConfiguration.Builder()
-                                .setStartPositionMs(spec.clipStartMs)
-                                .setEndPositionMs(
-                                    if (spec.clipEndMs != null && spec.clipEndMs > spec.clipStartMs) spec.clipEndMs
-                                    else C.TIME_END_OF_SOURCE
-                                )
-                                .build()
-                        )
-                    }
-                    builder.setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(ch.title)
-                            .setArtist(book.author)
-                            .setAlbumArtist(book.author)
-                            .setAlbumTitle(book.title)
-                            .setDisplayTitle(ch.title)
-                            .setSubtitle(getString(R.string.ply_chapter_of, ch.index + 1, chapters.size))
-                            .apply { cover?.bytes?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
-                            .build()
-                    )
-                    builder.build()
-                }
-
-                withContext(Dispatchers.Main) {
-                    if (!loadGate.shouldApply(token, force, otherEngineIsPlaying())) {
-                        // The other engine won while this load was in flight: do not
-                        // set a timeline here (that would post a second notification).
-                        deferLoad("load superseded while in flight")
-                        return@withContext
-                    }
-                    // Swap the chapter/spec caches and the loaded-timeline id *before*
-                    // the player call: any ExoPlayer listener callback fired by
-                    // setMediaItems then sees a consistent (id, caches, player) triple.
-                    activeChapters = chapters
-                    activeItemSpecs = itemSpecs
-                    loadedTimeline.committed(book.id, token)
-                    p.setMediaItems(mediaItems)
-                    val totalDur = book.durationMs ?: chapters.lastOrNull()?.endMs ?: 0L
-                    if (prog > 0f && totalDur > 0L) {
-                        val targetMs = (prog * totalDur).toLong()
-                        val targetIdx = chapters.indexOfLast { it.startMs <= targetMs }.coerceAtLeast(0)
-                        val offsetMs = (targetMs - (itemSpecs.getOrNull(targetIdx)?.globalStartMs ?: 0L)).coerceAtLeast(0L)
-                        p.seekTo(targetIdx, offsetMs)
-                    }
-                    p.prepare()
-                    p.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
-                    loadWatchdogJob?.cancel()
-                    if (autoPlay) p.playWhenReady = true
-                    publishNowPlaying()
-                }
-            } else if (source != null) {
-                val dur = book.durationMs ?: C.TIME_UNSET
-                val item = MediaItem.Builder()
-                    .setUri(Uri.parse(source))
-                    .setMediaId(book.id.toString())
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(book.title)
-                            .setArtist(book.author)
-                            .setAlbumArtist(book.author)
-                            .setAlbumTitle(book.title)
-                            .setDisplayTitle(book.title)
-                            .setSubtitle(book.format.name + " – " + getString(R.string.ply_title))
-                            .apply { cover?.bytes?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
-                            .build()
-                    )
-                    .build()
-                
-                withContext(Dispatchers.Main) {
-                    if (!loadGate.shouldApply(token, force, otherEngineIsPlaying())) {
-                        deferLoad("load superseded while in flight")
-                        return@withContext
-                    }
-                    // No chapters: drop any stale chapter/spec caches, bind the loaded
-                    // id to the timeline we are about to hand the player.
-                    activeChapters = emptyList()
-                    activeItemSpecs = emptyList()
-                    loadedTimeline.committed(book.id, token)
-                    p.setMediaItem(item, (prog * (if (dur == C.TIME_UNSET) 0L else dur).toDouble()).toLong().coerceAtLeast(0L))
-                    p.prepare()
-                    p.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
-                    loadWatchdogJob?.cancel()
-                    if (autoPlay) p.playWhenReady = true
-                    publishNowPlaying()
-                }
+                // Swap the chapter/plan caches and the loaded-timeline id *before* the
+                // player call: any ExoPlayer listener callback fired by setMediaItems
+                // then sees a consistent (id, caches, player) triple.
+                activeChapters = built.chapters
+                activePlan = built.plan
+                loadedTimeline.committed(built.book.id, token)
+                p.setMediaItems(built.items)
+                if (built.resumeIndex >= 0) p.seekTo(built.resumeIndex, built.resumeOffsetMs)
+                p.prepare()
+                p.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
+                loadWatchdogJob?.cancel()
+                if (autoPlay) p.playWhenReady = true
+                publishNowPlaying()
             }
         }
         return true
+    }
+
+    /**
+     * Resolves a controller's requested items into complete, playable items.
+     *
+     * - Items that already carry a URI are passed through unchanged (a host echoing
+     *   our own resolved timeline back).
+     * - Every `book_<id>` library leaf is expanded, asynchronously, into that book's
+     *   complete chapter timeline (the same builder [loadBook] uses).
+     * - Anything else (unknown id, deleted book, missing/unreadable file) fails the
+     *   returned future instead of handing the player an unplayable item, so Media3
+     *   reports an error on the session/auto path instead of silently doing nothing.
+     *
+     * Service state (chapter caches + loaded timeline) is committed on the main thread
+     * *before* the future completes, so Media3 applies the items with consistent
+     * progress and now-playing bookkeeping.
+     */
+    private fun resolveSelection(
+        requested: List<MediaItem>,
+        startIndex: Int,
+        startPositionMs: Long
+    ): ListenableFuture<ResolvedSelection> {
+        if (requested.isEmpty() || requested.all { it.localConfiguration != null }) {
+            // Nothing to resolve; keep the caller's start request untouched.
+            return Futures.immediateFuture(ResolvedSelection(requested, startIndex, startPositionMs))
+        }
+        val future = SettableFuture.create<ResolvedSelection>()
+        serviceScope.launch {
+            try {
+                val resolved = ArrayList<MediaItem>(requested.size)
+                val resolvedStartForInput = IntArray(requested.size) { -1 }
+                val expandedBooks = LinkedHashSet<Long>()
+                var firstResumeIndex = -1
+                var firstResumeOffsetMs = 0L
+
+                for ((inputIndex, item) in requested.withIndex()) {
+                    if (item.localConfiguration != null) {
+                        resolvedStartForInput[inputIndex] = resolved.size
+                        resolved.add(item)
+                        continue
+                    }
+                    val bookId = AudiobookLibraryTree.bookIdOf(item.mediaId)
+                    if (bookId == null) {
+                        Log.w(TAG, "selection rejected: unresolvable media id '${item.mediaId}'")
+                        failSelection(future, IllegalArgumentException("unresolvable media id '${item.mediaId}'"))
+                        return@launch
+                    }
+                    val built = buildBookTimeline(bookId)
+                    if (built == null) {
+                        Log.w(TAG, "selection rejected: book_$bookId has no playable timeline")
+                        failSelection(future, IllegalStateException("book $bookId has no playable timeline"))
+                        return@launch
+                    }
+                    val committed = withContext(Dispatchers.Main) { commitSelectedTimeline(built) }
+                    if (!committed) {
+                        Log.w(TAG, "selection superseded while resolving book_$bookId")
+                        failSelection(future, IllegalStateException("selection superseded"))
+                        return@launch
+                    }
+                    expandedBooks.add(bookId)
+                    resolvedStartForInput[inputIndex] = resolved.size
+                    if (firstResumeIndex < 0 && built.resumeIndex >= 0) {
+                        firstResumeIndex = resolved.size + built.resumeIndex
+                        firstResumeOffsetMs = built.resumeOffsetMs
+                    }
+                    resolved.addAll(built.items)
+                }
+
+                // Media3's legacy playFromMediaId (Android Auto) expresses the request
+                // as startIndex = INDEX_UNSET + startPosition = TIME_END_OF_SOURCE. A
+                // resolved book starts at its stored position instead of chapter 1.
+                val opaquePlayRequest = requested.size == 1 &&
+                    startIndex == C.INDEX_UNSET &&
+                    startPositionMs == C.TIME_END_OF_SOURCE
+                val resolvedStart: Int
+                val resolvedPositionMs: Long
+                when {
+                    opaquePlayRequest && firstResumeIndex >= 0 -> {
+                        resolvedStart = firstResumeIndex
+                        resolvedPositionMs = firstResumeOffsetMs
+                    }
+                    opaquePlayRequest -> {
+                        resolvedStart = C.INDEX_UNSET
+                        resolvedPositionMs = 0L
+                    }
+                    startIndex in resolvedStartForInput.indices && resolvedStartForInput[startIndex] >= 0 -> {
+                        // Map the caller's index (pre-expansion) onto the expanded list.
+                        resolvedStart = resolvedStartForInput[startIndex]
+                        resolvedPositionMs = if (startPositionMs > 0L) startPositionMs else 0L
+                    }
+                    else -> {
+                        resolvedStart = C.INDEX_UNSET
+                        resolvedPositionMs = 0L
+                    }
+                }
+
+                if (expandedBooks.size > 1) {
+                    // The chapter caches and progress target model exactly one book.
+                    // Multiple expanded books still play (every item is complete), but
+                    // nothing may claim the single-book progress slot: dropping the
+                    // attribution is safer than writing this book's data under another.
+                    Log.i(TAG, "selection spans ${expandedBooks.size} books; chapter/progress attribution disabled")
+                    withContext(Dispatchers.Main) {
+                        activeChapters = emptyList()
+                        activePlan = emptyList()
+                        loadedTimeline.cleared()
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    future.set(
+                        ResolvedSelection(
+                            items = resolved,
+                            startIndex = resolvedStart,
+                            startPositionMs = resolvedPositionMs
+                        )
+                    )
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "selection resolution failed", t)
+                future.setException(t)
+            }
+        }
+        return future
+    }
+
+    private fun failSelection(future: SettableFuture<ResolvedSelection>, error: Throwable) {
+        if (!future.setException(error)) {
+            Log.w(TAG, "selection failure was not delivered: ${error.message}")
+        }
+    }
+
+    /**
+     * Commits a controller-resolved book as the engine's active timeline, on the
+     * player's main thread and *before* Media3 applies the items (the future only
+     * completes after this returns). Returns false when a newer load won the race.
+     *
+     * Selection is an explicit user gesture (car select / host play), so it forces
+     * ownership: it must take over from a playing podcast or a previously loaded
+     * book. The arbiter stops the other engine as soon as playback starts.
+     */
+    private fun commitSelectedTimeline(built: BuiltTimeline): Boolean {
+        val token = loadGate.begin()
+        if (!loadGate.shouldApply(token, force = true, otherEngineIsPlaying())) return false
+        currentBookId = built.book.id
+        activeChapters = built.chapters
+        activePlan = built.plan
+        loadedTimeline.committed(built.book.id, token)
+        // Playback speed is a player property, so applying it here survives the item
+        // swap that follows this future.
+        player?.setPlaybackSpeed(defaultSpeed.coerceIn(0.5f, 3f))
+        Log.i(TAG, "committed library selection book=${built.book.id} items=${built.items.size}")
+        return true
+    }
+
+    /**
+     * Loads one book and builds its complete playable timeline: source URI, fresh
+     * chapters, artwork and the MediaItem list. Shared by the in-app [loadBook] path
+     * and the controller/Auto selection so both produce identical items.
+     *
+     * @return null when the book does not exist, is deleted, or has no playable
+     *   source (missing/unreadable file).
+     */
+    private suspend fun buildBookTimeline(bookId: Long): BuiltTimeline? {
+        val dao = db?.bookDao() ?: return null
+        val book = dao.getById(bookId)?.takeIf { !it.isDeleted } ?: return null
+        val progress = db?.progressDao()?.getByBook(bookId)?.progressPercent ?: 0f
+        val source = resolvePlaybackSource(book)
+        val cover = withContext(Dispatchers.IO) { coverArtworkFor(book.id, book.coverPath) }
+        // KANONISK oppfriskning: oppdager/persisterer reelle kapitler for eksisterende
+        // bøker med utdatert metadata (samme sti som ViewModel).
+        val chapters = chapterEngine?.ensureFreshChapters(book)
+            ?: parseChapters(book.chaptersJson ?: "")
+        val planned = when (val result = AudiobookPlaybackPlan.plan(book.id, chapters, source)) {
+            is AudiobookPlaybackPlan.Result.Planned -> result
+            is AudiobookPlaybackPlan.Result.Unresolvable -> {
+                Log.w(TAG, "book ${book.id} has no playable source (${result.reason})")
+                return null
+            }
+        }
+        val items = planned.items.map { planToMediaItem(book, it, cover?.bytes) }
+        val totalDurationMs = book.durationMs ?: chapters.lastOrNull()?.endMs ?: 0L
+        val resume = AudiobookPlaybackPlan.resumeTarget(planned, progress, totalDurationMs)
+        return BuiltTimeline(
+            book = book,
+            chapters = chapters,
+            plan = planned.items,
+            items = items,
+            resumeIndex = resume?.first ?: -1,
+            resumeOffsetMs = resume?.second ?: 0L
+        )
+    }
+
+    /** Same source preference as the engine: readable local file first, then URI. */
+    private fun resolvePlaybackSource(book: BookEntity): String? {
+        val path = book.filePath
+        if (!path.isNullOrBlank() && File(path).canRead()) return Uri.fromFile(File(path)).toString()
+        return book.fileUri?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Maps one planned item to a COMPLETE Media3 MediaItem: URI, title, album,
+     * subtitle, artwork and machine-readable extras. This is the single conversion
+     * used by both the in-app load and the Auto/library selection.
+     */
+    private fun planToMediaItem(book: BookEntity, item: PlaybackItemPlan, cover: ByteArray?): MediaItem {
+        val uri = Uri.parse(item.uri)
+        val builder = MediaItem.Builder()
+            .setUri(uri)
+            .setMediaId(item.mediaId)
+            .setRequestMetadata(
+                MediaItem.RequestMetadata.Builder()
+                    .setMediaUri(uri)
+                    .setExtras(itemExtras(item))
+                    .build()
+            )
+        if (item.clipStartMs != null) {
+            builder.setClippingConfiguration(
+                MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(item.clipStartMs)
+                    .setEndPositionMs(
+                        if (item.clipEndMs != null && item.clipEndMs > item.clipStartMs) item.clipEndMs
+                        else C.TIME_END_OF_SOURCE
+                    )
+                    .build()
+            )
+        }
+        val title = item.title.ifBlank { book.title }
+        val subtitle = if (item.isChapter) {
+            getString(R.string.ply_chapter_of, item.chapterIndex + 1, item.chapterCount)
+        } else {
+            book.format.name + " – " + getString(R.string.ply_title)
+        }
+        builder.setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(book.author)
+                .setAlbumArtist(book.author)
+                .setAlbumTitle(book.title)
+                .setDisplayTitle(title)
+                .setSubtitle(subtitle)
+                .setExtras(itemExtras(item))
+                .apply { cover?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
+                .build()
+        )
+        return builder.build()
+    }
+
+    /** Machine-readable item context for hosts/automation (ids only, no paths). */
+    private fun itemExtras(item: PlaybackItemPlan): Bundle = Bundle().apply {
+        putLong("com.bookrio.extra.book_id", item.bookId)
+        putInt("com.bookrio.extra.chapter_index", item.chapterIndex)
+        putInt("com.bookrio.extra.chapter_count", item.chapterCount)
     }
 
     private fun maybePersistProgress() {
@@ -1061,7 +1277,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         val posInItem = p.currentPosition.coerceAtLeast(0L)
         // posInItem er relativt til klipp-start; globalStartMs er kapittelens start
         // på den globale boktidslinjen (filposisjon for enkeltfil, kumulativt for mapper).
-        return (activeItemSpecs.getOrNull(idx)?.globalStartMs ?: 0L) + posInItem
+        return (activePlan.getOrNull(idx)?.globalStartMs ?: 0L) + posInItem
     }
 
     fun durationMs(): Long {
@@ -1096,7 +1312,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             val p = player ?: return
             if (activeChapters.isNotEmpty()) {
                 val idx = activeChapters.indexOfLast { it.startMs <= ms }.coerceAtLeast(0)
-                val globalStart = activeItemSpecs.getOrNull(idx)?.globalStartMs ?: activeChapters[idx].startMs
+                val globalStart = activePlan.getOrNull(idx)?.globalStartMs ?: activeChapters[idx].startMs
                 val trackMs = (ms - globalStart).coerceAtLeast(0L)
                 p.seekTo(idx, trackMs)
             } else {
