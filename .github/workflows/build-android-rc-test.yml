@@ -1,0 +1,163 @@
+name: Build Bookiro Android RC Test APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or commit SHA to build"
+        required: true
+        default: "release/bookiro-android-rc"
+        type: string
+      publish_prerelease:
+        description: "Create a GitHub prerelease with the debug APK"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bookiro-android-rc-test-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and publish RC test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out requested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Verify test-build signing policy
+        run: |
+          echo "This workflow intentionally builds a DEBUG APK only."
+          echo "It does not receive production signing secrets and cannot publish to Google Play."
+
+      - name: Run unit tests and lint
+        run: ./gradlew testDebugUnitTest lintDebug --stacktrace
+
+      - name: Build universal debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Locate APK and record provenance
+        id: provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
+          test -n "${APK}"
+          test -f "${APK}"
+
+          mkdir -p dist
+
+          SHORT_SHA=$(git rev-parse --short=12 HEAD)
+          VERSION_CODE=$(grep -E 'versionCode[[:space:]]*=' app/build.gradle.kts | head -n1 | sed -E 's/[^0-9]//g' || true)
+          VERSION_NAME=$(grep -E 'versionName[[:space:]]*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+
+          OUT="dist/Bookiro-Android-RC-${SHORT_SHA}-debug.apk"
+          cp "${APK}" "${OUT}"
+
+          SHA256=$(sha256sum "${OUT}" | awk '{print $1}')
+
+          echo "apk=${OUT}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "# Bookiro Android RC Test APK"
+            echo
+            echo "- Source ref: \`${{ inputs.ref }}\`"
+            echo "- Source SHA: \`$(git rev-parse HEAD)\`"
+            echo "- APK: \`$(basename "${OUT}")\`"
+            echo "- SHA-256: \`${SHA256}\`"
+            echo "- versionCode: \`${VERSION_CODE:-unknown}\`"
+            echo "- versionName: \`${VERSION_NAME:-unknown}\`"
+            echo "- Status: DEBUG-SIGNED TEST ARTIFACT — NOT FOR PLAY"
+            echo
+            echo "Install in place only after confirming package/signature compatibility; never uninstall or clear app data merely to test this build."
+          } > dist/PROVENANCE.md
+
+      - name: Inspect APK package and signing certificate
+        run: |
+          set -euo pipefail
+
+          APK="${{ steps.provenance.outputs.apk }}"
+          BUILD_TOOLS="${ANDROID_HOME}/build-tools/36.0.0"
+
+          "${BUILD_TOOLS}/aapt" dump badging "${APK}" | tee dist/aapt-badging.txt
+          "${BUILD_TOOLS}/apksigner" verify --print-certs "${APK}" | tee dist/apksigner.txt
+
+      - name: Upload test APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bookiro-Android-RC-${{ steps.provenance.outputs.short_sha }}-debug
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub prerelease
+        if: ${{ inputs.publish_prerelease }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: bookiro-android-rc-${{ steps.provenance.outputs.short_sha }}
+          APK: ${{ steps.provenance.outputs.apk }}
+          SHA256: ${{ steps.provenance.outputs.sha256 }}
+          VERSION_CODE: ${{ steps.provenance.outputs.version_code }}
+          VERSION_NAME: ${{ steps.provenance.outputs.version_name }}
+        run: |
+          set -euo pipefail
+
+          cat > dist/RELEASE_NOTES.md <<EOF
+          ## Bookiro Android RC TEST — NOT FOR PLAY
+
+          - Source ref: \`${{ inputs.ref }}\`
+          - Source SHA: \`$(git rev-parse HEAD)\`
+          - APK SHA-256: \`${SHA256}\`
+          - versionCode / versionName: \`${VERSION_CODE:-unknown}\` / \`${VERSION_NAME:-unknown}\`
+          - Package/signing details: see attached \`aapt-badging.txt\` and \`apksigner.txt\`.
+
+          This is a debug-signed test artifact. It is not Play-ready and is not uploaded to Google Play.
+
+          Test Readium reader features, Android Auto browse-to-play only while parked,
+          audiobook/podcast handoff, and library repairs before any merge or production release.
+          EOF
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release delete "${TAG}" --yes
+          fi
+
+          gh release create "${TAG}" \
+            "${APK}" \
+            dist/PROVENANCE.md \
+            dist/aapt-badging.txt \
+            dist/apksigner.txt \
+            --prerelease \
+            --title "Bookiro Android RC TEST — NOT FOR PLAY" \
+            --notes-file dist/RELEASE_NOTES.md
