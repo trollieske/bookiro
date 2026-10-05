@@ -41,7 +41,7 @@ jobs:
           java-version: "17"
           cache: gradle
 
-           - name: Install Android API 36
+      - name: Install Android API 36
         shell: bash
         run: |
           set -euo pipefail
