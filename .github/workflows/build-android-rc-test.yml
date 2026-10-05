@@ -41,13 +41,23 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android API 36
+        shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          set -euo pipefail
+
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "${SDKMANAGER}" ]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -path '*/bin/sdkmanager' -type f | head -n 1)"
+          fi
+
+          test -n "${SDKMANAGER}"
+          test -x "${SDKMANAGER}"
+
+          yes | "${SDKMANAGER}" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
@@ -60,7 +70,7 @@ jobs:
       - name: Run unit tests and lint
         run: ./gradlew testDebugUnitTest lintDebug --stacktrace
 
-      - name: Build universal debug APK
+      - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Locate APK and record provenance
@@ -69,23 +79,39 @@ jobs:
         run: |
           set -euo pipefail
 
-          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
+          APK="$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)"
+
           test -n "${APK}"
           test -f "${APK}"
 
           mkdir -p dist
 
-          SHORT_SHA=$(git rev-parse --short=12 HEAD)
-          VERSION_CODE=$(grep -E 'versionCode[[:space:]]*=' app/build.gradle.kts | head -n1 | sed -E 's/[^0-9]//g' || true)
-          VERSION_NAME=$(grep -E 'versionName[[:space:]]*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+          SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          FULL_SHA="$(git rev-parse HEAD)"
+
+          VERSION_CODE="$(
+            grep -E 'versionCode[[:space:]]*=' app/build.gradle.kts \
+              | head -n 1 \
+              | sed -E 's/[^0-9]//g' \
+              || true
+          )"
+
+          VERSION_NAME="$(
+            grep -E 'versionName[[:space:]]*=' app/build.gradle.kts \
+              | head -n 1 \
+              | sed -E 's/.*"([^"]+)".*/\1/' \
+              || true
+          )"
 
           OUT="dist/Bookiro-Android-RC-${SHORT_SHA}-debug.apk"
+
           cp "${APK}" "${OUT}"
 
-          SHA256=$(sha256sum "${OUT}" | awk '{print $1}')
+          SHA256="$(sha256sum "${OUT}" | awk '{print $1}')"
 
           echo "apk=${OUT}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "full_sha=${FULL_SHA}" >> "$GITHUB_OUTPUT"
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
           echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
           echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
@@ -94,25 +120,30 @@ jobs:
             echo "# Bookiro Android RC Test APK"
             echo
             echo "- Source ref: \`${{ inputs.ref }}\`"
-            echo "- Source SHA: \`$(git rev-parse HEAD)\`"
+            echo "- Source SHA: \`${FULL_SHA}\`"
             echo "- APK: \`$(basename "${OUT}")\`"
             echo "- SHA-256: \`${SHA256}\`"
             echo "- versionCode: \`${VERSION_CODE:-unknown}\`"
             echo "- versionName: \`${VERSION_NAME:-unknown}\`"
             echo "- Status: DEBUG-SIGNED TEST ARTIFACT — NOT FOR PLAY"
             echo
-            echo "Install in place only after confirming package/signature compatibility; never uninstall or clear app data merely to test this build."
+            echo "Install in place only after confirming package/signature compatibility."
+            echo "Never uninstall or clear app data merely to test this build."
           } > dist/PROVENANCE.md
 
       - name: Inspect APK package and signing certificate
+        shell: bash
         run: |
           set -euo pipefail
 
           APK="${{ steps.provenance.outputs.apk }}"
           BUILD_TOOLS="${ANDROID_HOME}/build-tools/36.0.0"
 
-          "${BUILD_TOOLS}/aapt" dump badging "${APK}" | tee dist/aapt-badging.txt
-          "${BUILD_TOOLS}/apksigner" verify --print-certs "${APK}" | tee dist/apksigner.txt
+          "${BUILD_TOOLS}/aapt" dump badging "${APK}" \
+            | tee dist/aapt-badging.txt
+
+          "${BUILD_TOOLS}/apksigner" verify --print-certs "${APK}" \
+            | tee dist/apksigner.txt
 
       - name: Upload test APK artifact
         uses: actions/upload-artifact@v4
@@ -131,6 +162,8 @@ jobs:
           SHA256: ${{ steps.provenance.outputs.sha256 }}
           VERSION_CODE: ${{ steps.provenance.outputs.version_code }}
           VERSION_NAME: ${{ steps.provenance.outputs.version_name }}
+          FULL_SHA: ${{ steps.provenance.outputs.full_sha }}
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -138,15 +171,18 @@ jobs:
           ## Bookiro Android RC TEST — NOT FOR PLAY
 
           - Source ref: \`${{ inputs.ref }}\`
-          - Source SHA: \`$(git rev-parse HEAD)\`
+          - Source SHA: \`${FULL_SHA}\`
           - APK SHA-256: \`${SHA256}\`
           - versionCode / versionName: \`${VERSION_CODE:-unknown}\` / \`${VERSION_NAME:-unknown}\`
           - Package/signing details: see attached \`aapt-badging.txt\` and \`apksigner.txt\`.
 
           This is a debug-signed test artifact. It is not Play-ready and is not uploaded to Google Play.
 
-          Test Readium reader features, Android Auto browse-to-play only while parked,
-          audiobook/podcast handoff, and library repairs before any merge or production release.
+          Test:
+          - Readium reader, bookmarks, search, highlights, themes and resume
+          - Android Auto browse-to-play while parked
+          - Audiobook/podcast artwork and playback handoff
+          - Library duplicate repair and audiobook track repair
           EOF
 
           if gh release view "${TAG}" >/dev/null 2>&1; then
