@@ -41,7 +41,7 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install Android API 36
+           - name: Install Android API 36
         shell: bash
         run: |
           set -euo pipefail
@@ -55,10 +55,17 @@ jobs:
           test -n "${SDKMANAGER}"
           test -x "${SDKMANAGER}"
 
+          set +o pipefail
           yes | "${SDKMANAGER}" \
             "platforms;android-36" \
             "build-tools;36.0.0"
+          SDK_EXIT=${PIPESTATUS[1]}
+          set -o pipefail
 
+          if [ "${SDK_EXIT}" -ne 0 ]; then
+            echo "sdkmanager failed with exit code ${SDK_EXIT}"
+            exit "${SDK_EXIT}"
+          fi
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
