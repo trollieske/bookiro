@@ -69,6 +69,23 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Create CI debug keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${HOME}/.android"
+
+          keytool -genkeypair \
+            -keystore "${HOME}/.android/debug.keystore" \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Verify test-build signing policy
         run: |
           echo "This workflow intentionally builds a DEBUG APK only."
