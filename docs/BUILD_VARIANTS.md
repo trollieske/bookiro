@@ -122,3 +122,14 @@ never user-visible. Removing them would require flavor-specific Room schemas acr
   playstore APK is torrent-free and the full APK still ships torrent.
 - **Manual (`workflow_dispatch`)**: builds both signed release AABs from the
   `BOOKIRO_*` secrets, verifies the playstore AAB, and uploads both AABs as artifacts.
+
+`.github/workflows/sideload-apks.yml`:
+
+- **Manual dispatch or `v*` tag**: builds release **APKs** for both flavors, verifies
+  the playstore APK is torrent-free, uploads them as workflow artifacts and attaches
+  them to a GitHub Release. Production-signed when the `BOOKIRO_*` secrets exist,
+  otherwise debug/**TEST**-signed.
+
+This is how the side-load (`full`) build is handed out: install
+`Bookiro-full-universal.apk`; `Bookiro-playstore-universal.apk` mirrors what Google
+Play would receive.
