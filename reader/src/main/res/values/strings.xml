@@ -50,7 +50,6 @@ The file may be empty, corrupted, DRM-protected, or in a supported format that c
     <string name="rdr_error_read_file">Error reading the file: %1$s</string>
     <string name="rdr_error_cannot_open_format">Could not open the %1$s file. %2$s</string>
     <string name="rdr_error_cannot_display">Can\'t display the content. %1$s</string>
-    <string name="rdr_error_garbage_torrent">This is a BitTorrent file (.torrent) or torrent metadata. Open it in the Torrent screen to download the books, not in the reader!</string>
     <string name="rdr_error_garbage_generic">The content doesn\'t look like a book (detected %1$s). Check that the file is in the right format (.epub, .mobi, .pdf, .txt, etc.) and not a mis-named zip, corrupted or binary file.</string>
     <string name="rdr_error_cannot_read_text">Could not read the file content as text.</string>
     <string name="rdr_error_mobi_empty">The MOBI file was empty or could not be read.</string>

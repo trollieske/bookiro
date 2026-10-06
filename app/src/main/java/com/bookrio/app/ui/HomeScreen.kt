@@ -69,6 +69,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
 import com.bookrio.R
+import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.designsystem.theme.OmarchyColors
 import com.bookrio.designsystem.theme.ShelfTypography
@@ -504,9 +505,7 @@ private fun HomeServiceTiles(
                     onClick = onOpenFtp,
                     modifier = Modifier.width(tileWidth)
                 )
-                ServiceTile(
-                    icon = Icons.Default.Download,
-                    label = stringResource(R.string.home_service_torrent),
+                TorrentFeatureProvider.feature.HomeTile(
                     onClick = onOpenTorrent,
                     modifier = Modifier.width(tileWidth)
                 )
@@ -536,7 +535,7 @@ private fun HomeServiceTiles(
 }
 
 @Composable
-private fun ServiceTile(
+internal fun ServiceTile(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

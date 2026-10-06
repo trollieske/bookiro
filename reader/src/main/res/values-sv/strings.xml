@@ -50,7 +50,6 @@ Filen kan vara tom, skadad, DRM-skyddad eller i ett format som inte kunde tolkas
     <string name="rdr_error_read_file">Fel vid läsning av filen: %1$s</string>
     <string name="rdr_error_cannot_open_format">Kunde inte öppna %1$s-filen. %2$s</string>
     <string name="rdr_error_cannot_display">Kan inte visa innehållet. %1$s</string>
-    <string name="rdr_error_garbage_torrent">Detta är en BitTorrent-fil (.torrent) eller torrent-metadata. Öppna den i Torrent-skärmen för att ladda ner böckerna, inte i läsaren!</string>
     <string name="rdr_error_garbage_generic">Innehållet ser inte ut som en bok (hittade %1$s). Kontrollera att filen har rätt format (.epub, .mobi, .pdf, .txt osv.) och inte är en felnamngiven zip-, skadad eller binär fil.</string>
     <string name="rdr_error_cannot_read_text">Kunde inte läsa filinnehållet som text.</string>
     <string name="rdr_error_mobi_empty">MOBI-filen var tom eller kunde inte läsas.</string>

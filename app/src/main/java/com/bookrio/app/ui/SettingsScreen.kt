@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bookrio.app.storage.LibraryFolderLauncher
+import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.DarkModePref
@@ -300,22 +301,22 @@ class SettingsViewModel(
 
     fun setTorrentBackgroundEnabled(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentBackgroundEnabled(b)
-        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setTorrentWifiOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentWifiOnly(b)
-        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setTorrentChargingOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentChargingOnly(b)
-        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setTorrentMinBattery(pct: Int) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentMinBatteryPct(pct)
-        com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(getApplication())
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setLibraryFormatFilter(b: Boolean) = viewModelScope.launch(dispatchers.io) {
@@ -1241,88 +1242,17 @@ fun SettingsScreen(
                         onChargingOnlyChange = { vm.setWebdavChargingOnly(it) }
                     )
 
-                    // Torrent background row
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.SwapHoriz, null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        stringResource(R.string.settings_torrent_bg),
-                                        style = ShelfTypography.BodyLarge,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        stringResource(R.string.settings_torrent_bg_sub),
-                                        style = ShelfTypography.BodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Switch(
-                                    checked = state.torrentBackgroundEnabled,
-                                    onCheckedChange = { vm.setTorrentBackgroundEnabled(it) }
-                                )
-                            }
-                            if (state.torrentBackgroundEnabled) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(stringResource(R.string.settings_sync_only_wifi), style = ShelfTypography.BodyMedium, modifier = Modifier.weight(1f))
-                                    Switch(
-                                        checked = state.torrentWifiOnly,
-                                        onCheckedChange = { vm.setTorrentWifiOnly(it) }
-                                    )
-                                }
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(stringResource(R.string.settings_sync_only_charging), style = ShelfTypography.BodyMedium, modifier = Modifier.weight(1f))
-                                    Switch(
-                                        checked = state.torrentChargingOnly,
-                                        onCheckedChange = { vm.setTorrentChargingOnly(it) }
-                                    )
-                                }
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        stringResource(R.string.settings_torrent_min_battery),
-                                        style = ShelfTypography.BodyMedium,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        "${state.torrentMinBattery}%",
-                                        style = ShelfTypography.LabelMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                                Slider(
-                                    value = state.torrentMinBattery.toFloat(),
-                                    onValueChange = { vm.setTorrentMinBattery(it.toInt()) },
-                                    valueRange = 0f..100f,
-                                    steps = 19,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = MaterialTheme.colorScheme.primary,
-                                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                                    )
-                                )
-                            }
-                        }
-                    }
+                    // Torrent background row (full build only; no-op in the playstore build).
+                    TorrentFeatureProvider.feature.SettingsSection(
+                        backgroundEnabled = state.torrentBackgroundEnabled,
+                        wifiOnly = state.torrentWifiOnly,
+                        chargingOnly = state.torrentChargingOnly,
+                        minBattery = state.torrentMinBattery,
+                        onBackgroundEnabledChange = { vm.setTorrentBackgroundEnabled(it) },
+                        onWifiOnlyChange = { vm.setTorrentWifiOnly(it) },
+                        onChargingOnlyChange = { vm.setTorrentChargingOnly(it) },
+                        onMinBatteryChange = { vm.setTorrentMinBattery(it) }
+                    )
 
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 

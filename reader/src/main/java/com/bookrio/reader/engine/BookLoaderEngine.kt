@@ -289,10 +289,7 @@ class BookLoaderEngine(
         // Prevents the infamous "4:pathl...eedd6:lengthi...e" (BitTorrent Bencode) display bug.
         runCatching { detectStructuredGarbage(bytes) }.getOrNull()?.let { garbageHint ->
             Log.w(TAG, "Rejecting raw-text decode for book=$bookId (format=${book.format}): $garbageHint")
-            val what = if (garbageHint.contains("torrent", ignoreCase = true))
-                ctx.getString(R.string.rdr_error_garbage_torrent)
-            else
-                ctx.getString(R.string.rdr_error_garbage_generic, garbageHint)
+            val what = ctx.getString(R.string.rdr_error_garbage_generic, garbageHint)
             return@withContext ReaderBookState(
                 bookId = bookId,
                 bookTitle = book.title,
@@ -667,7 +664,7 @@ class BookLoaderEngine(
             || headStr.contains(Regex("""^\s*d\s*8:announce"""))
             || headStr.contains(Regex("""4:name\d{1,4}:"""))
         ) {
-            return "BitTorrent (Bencode)"
+            return "Bencode (binary metadata)"
         }
 
         // === #2: Bencode-like structural density without sentence punctuation ===

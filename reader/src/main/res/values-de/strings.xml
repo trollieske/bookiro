@@ -50,7 +50,6 @@ Die Datei könnte leer, beschädigt, DRM-geschützt oder in einem unterstützten
     <string name="rdr_error_read_file">Fehler beim Lesen der Datei: %1$s</string>
     <string name="rdr_error_cannot_open_format">Die Datei %1$s konnte nicht geöffnet werden. %2$s</string>
     <string name="rdr_error_cannot_display">Der Inhalt kann nicht angezeigt werden. %1$s</string>
-    <string name="rdr_error_garbage_torrent">Dies ist eine BitTorrent-Datei (.torrent) oder Torrent-Metadaten. Öffne sie im Torrent-Bereich, um die Bücher herunterzuladen, nicht im Reader!</string>
     <string name="rdr_error_garbage_generic">Der Inhalt sieht nicht wie ein Buch aus (%1$s erkannt). Prüfe, ob die Datei das richtige Format hat (.epub, .mobi, .pdf, .txt usw.) und keine falsch benannte ZIP-, beschädigte oder Binärdatei ist.</string>
     <string name="rdr_error_cannot_read_text">Der Dateiinhalt konnte nicht als Text gelesen werden.</string>
     <string name="rdr_error_mobi_empty">Die MOBI-Datei war leer oder konnte nicht gelesen werden.</string>

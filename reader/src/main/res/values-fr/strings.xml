@@ -50,7 +50,6 @@ Le fichier peut être vide, corrompu, protégé par DRM ou dans un format pris e
     <string name="rdr_error_read_file">Erreur de lecture du fichier : %1$s</string>
     <string name="rdr_error_cannot_open_format">Impossible d\'ouvrir le fichier %1$s. %2$s</string>
     <string name="rdr_error_cannot_display">Impossible d\'afficher le contenu. %1$s</string>
-    <string name="rdr_error_garbage_torrent">Il s\'agit d\'un fichier BitTorrent (.torrent) ou de métadonnées de torrent. Ouvrez-le dans l\'écran Torrent pour télécharger les livres, pas dans le lecteur !</string>
     <string name="rdr_error_garbage_generic">Le contenu ne ressemble pas à un livre (%1$s détecté). Vérifiez que le fichier est au bon format (.epub, .mobi, .pdf, .txt, etc.) et qu\'il ne s\'agit pas d\'un zip mal nommé, d\'un fichier corrompu ou binaire.</string>
     <string name="rdr_error_cannot_read_text">Impossible de lire le contenu du fichier comme du texte.</string>
     <string name="rdr_error_mobi_empty">Le fichier MOBI était vide ou illisible.</string>

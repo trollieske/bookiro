@@ -3,6 +3,12 @@
 The release build **never** uses the debug keystore unless you explicitly opt in for a
 non-production test artifact. No keystore or secret is committed to this repository.
 
+> **Store flavors:** the app builds two flavors, so release tasks are flavor-qualified:
+> `:app:bundleFullRelease` / `:app:assembleFullRelease` and
+> `:app:bundlePlaystoreRelease` / `:app:assemblePlaystoreRelease`. The signing gate and
+> the four `BOOKIRO_*` credentials are identical for both. See
+> `docs/BUILD_VARIANTS.md`.
+
 ## Required production credentials
 
 Provide all four values as **environment variables** (preferred; CI secrets) or in an

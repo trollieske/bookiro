@@ -57,6 +57,24 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // ─── Store flavors ──────────────────────────────────────────────────────────
+    // `full`      = side-load / private build WITH the torrent client (id com.bookiro)
+    // `playstore` = Play-safe build WITHOUT `:torrent` (id com.bookiro.play)
+    // The torrent module is only wired for `full` (see dependencies below); the
+    // playstore source set provides a no-op TorrentFeature so no torrent code, UI,
+    // strings or native libraries can enter the Play artifact.
+    flavorDimensions += "store"
+    productFlavors {
+        create("full") {
+            dimension = "store"
+        }
+        create("playstore") {
+            dimension = "store"
+            applicationIdSuffix = ".play"
+            versionNameSuffix = "-play"
+        }
+    }
+
     buildTypes {
         release {
             if (releaseRequested && !hasProductionSigning && !allowDebugSigning) {
@@ -129,6 +147,13 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // AGP's `UseTomlInstead` quick-fix crashes with a ConcurrentModificationException
+        // inside `TomlUtilities` when the two store flavors are present (an AGP/lint bug,
+        // not a code issue). The check only produces a refactor suggestion, so disable it.
+        disable += "UseTomlInstead"
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -164,7 +189,8 @@ dependencies {
     implementation(project(":smb"))
     implementation(project(":webdav"))
     implementation(project(":calibre"))
-    implementation(project(":torrent"))
+    // Torrent is intentionally full-only. The playstore variant must not link it.
+    "fullImplementation"(project(":torrent"))
     implementation(project(":podcast"))
 
     implementation(platform(libs.androidx.compose.bom))

@@ -1,0 +1,109 @@
+name: Android CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & test both store flavors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure debug keystore
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Unit tests (app both flavors + reader)
+        run: >
+          ./gradlew
+          :app:testFullDebugUnitTest
+          :app:testPlaystoreDebugUnitTest
+          :reader:testDebugUnitTest
+
+      - name: Assemble debug variants
+        run: ./gradlew :app:assembleFullDebug :app:assemblePlaystoreDebug
+
+      - name: Playstore variant must be torrent-free
+        run: >
+          tools/verify_playstore_variant.sh
+          app/build/outputs/apk/playstore/debug/app-playstore-universal-debug.apk
+
+      - name: Full variant must still ship the torrent client
+        run: |
+          if ! unzip -Z1 app/build/outputs/apk/full/debug/app-full-universal-debug.apk | grep -qi libtorrent4j; then
+            echo "FAIL: full variant is missing the torrent client" >&2
+            exit 1
+          fi
+
+  release-bundles:
+    name: Signed release bundles (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Materialize upload keystore
+        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/bookiro-release.jks"
+        env:
+          KEYSTORE_B64: ${{ secrets.BOOKIRO_KEYSTORE_BASE64 }}
+
+      - name: Build both release AABs
+        env:
+          BOOKIRO_KEYSTORE_PATH: ${{ runner.temp }}/bookiro-release.jks
+          BOOKIRO_KEYSTORE_PASSWORD: ${{ secrets.BOOKIRO_KEYSTORE_PASSWORD }}
+          BOOKIRO_KEY_ALIAS: ${{ secrets.BOOKIRO_KEY_ALIAS }}
+          BOOKIRO_KEY_PASSWORD: ${{ secrets.BOOKIRO_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleFullRelease :app:bundlePlaystoreRelease
+
+      - name: Playstore AAB must be torrent-free
+        run: >
+          tools/verify_playstore_variant.sh
+          app/build/outputs/bundle/playstoreRelease/app-playstore-release.aab
+
+      - name: Upload AABs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookiro-release-aabs
+          path: |
+            app/build/outputs/bundle/fullRelease/app-full-release.aab
+            app/build/outputs/bundle/playstoreRelease/app-playstore-release.aab

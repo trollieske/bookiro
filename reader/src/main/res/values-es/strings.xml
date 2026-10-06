@@ -50,7 +50,6 @@ El archivo puede estar vacío, dañado, protegido por DRM o en un formato compat
     <string name="rdr_error_read_file">Error al leer el archivo: %1$s</string>
     <string name="rdr_error_cannot_open_format">No se pudo abrir el archivo %1$s. %2$s</string>
     <string name="rdr_error_cannot_display">No se puede mostrar el contenido. %1$s</string>
-    <string name="rdr_error_garbage_torrent">Esto es un archivo BitTorrent (.torrent) o metadatos de torrent. Ábrelo en la pantalla de Torrent para descargar los libros, ¡no en el lector!</string>
     <string name="rdr_error_garbage_generic">El contenido no parece un libro (se detectó %1$s). Comprueba que el archivo tenga el formato correcto (.epub, .mobi, .pdf, .txt, etc.) y que no sea un zip mal nombrado, un archivo dañado o binario.</string>
     <string name="rdr_error_cannot_read_text">No se pudo leer el contenido del archivo como texto.</string>
     <string name="rdr_error_mobi_empty">El archivo MOBI estaba vacío o no se pudo leer.</string>

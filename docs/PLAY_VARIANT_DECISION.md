@@ -1,8 +1,10 @@
 # Bookiro Android — Play-safe vs full/private variant (decision + config)
 
-Status: **PROPOSAL — NOT APPLIED to `release/bookiro-android-rc`.**
-The RC is the **full/private** build. Applying the Play-safe variant is an **owner
-decision** and must not happen before the owner elects to publish through Google Play.
+Status: **APPLIED.** The two flavors (`full`, `playstore`) and the `TorrentFeature`
+seam are implemented in `app/build.gradle.kts` + `app/src/{full,playstore}/`. The
+`playstore` flavor is the Google Play variant and is verified torrent-free by
+`tools/verify_playstore_variant.sh`. See `docs/BUILD_VARIANTS.md` for the concrete
+structure, commands and the (inert) data-layer residual.
 
 ---
 
@@ -41,12 +43,29 @@ All torrent entry points in the full build:
 `torrent/` declares no Android components of its own, so removing the dependency and
 the UI entry points removes the code and the native libraries from the artifact.
 
-## 3. Proposed build configuration (exact shape)
+## 3. Applied build configuration (actual shape)
 
-Standard two-flavor dimension. **Impact:** every variant is renamed
-(`debug` → `fullDebug`, `release` → `fullRelease`; `playstoreDebug`,
-`playstoreRelease`). CI task names, the signing gate and any external scripts must be
-updated. This is why it is not applied to the RC.
+Standard two-flavor dimension. **Impact:** every app variant is renamed
+(`debug` → `fullDebug`; `playstoreDebug`, `playstoreRelease`), so CI task names and
+external scripts use the flavor-qualified names. The `full` flavor keeps the
+`com.bookiro` id; `playstore` gets `applicationIdSuffix = ".play"` and
+`versionNameSuffix = "-play"`.
+
+Implemented (see `docs/BUILD_VARIANTS.md`):
+
+- `flavorDimensions += "store"`; `full` (default) and `playstore`.
+- `"fullImplementation"(project(":torrent"))` — `:torrent` is never linked by
+  `playstore`.
+- A `TorrentFeature` interface in `main` with a real implementation in
+  `app/src/full/java/.../TorrentFeatureProvider.kt` and a no-op in
+  `app/src/playstore/java/.../TorrentFeatureProvider.kt`. Every torrent entry point
+  (home tile, sources row, settings block, nav route, worker wiring) goes through it,
+  so shared code never imports `com.bookrio.torrent.*`.
+- Torrent-only strings live in `app/src/full/res/values*/`; the combined service
+  strings are overridden without torrent in `app/src/playstore/res/values*/`.
+
+The earlier *proposal* below is kept for history; the implementation above is what is
+actually wired.
 
 ```kotlin
 // app/build.gradle.kts
@@ -116,8 +135,9 @@ remaining `.so` files.
 ## 7. Recommendation
 
 1. Keep the RC as the **full/private** build.
-2. Apply the `play-store` flavor only after the owner elects to publish via Play.
-3. If Play is chosen: remove `:torrent`, hide every entry point in §2, add F1/F2
-   disclosures to the Play listing, then build `playstoreRelease` with the production
-   upload key and re-run the 16 KB + privacy checks on that exact artifact.
+2. The `playstore` flavor is now applied; build it with `:app:bundlePlaystoreRelease`
+   after the owner elects to publish via Play.
+3. Build `:app:bundlePlaystoreRelease` with the production upload key, add the F1/F2
+   disclosures to the Play listing, and re-run the 16 KB + privacy checks on that exact
+   artifact. (Removing `:torrent` and hiding every entry point is already done — §3.)
 4. Do **not** publish either variant until explicit owner approval.

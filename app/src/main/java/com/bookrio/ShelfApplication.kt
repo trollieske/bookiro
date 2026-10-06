@@ -90,7 +90,8 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
         MediaScannerWorker.schedule(this)
         FtpPeriodicSyncWorker.schedule(this)
         runCatching { FtpSyncCoordinator.start(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.applyUserSettings(this) }
+        // Torrent is full-only; the playstore flavor provides a no-op implementation.
+        runCatching { com.bookrio.app.torrent.TorrentFeatureProvider.feature.applyBackgroundSettings(this) }
         runCatching { com.bookrio.podcast.worker.PodcastFeedSyncWorker.schedulePeriodic(this) }
     }
 

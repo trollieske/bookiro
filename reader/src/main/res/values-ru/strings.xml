@@ -50,7 +50,6 @@
     <string name="rdr_error_read_file">Ошибка чтения файла: %1$s</string>
     <string name="rdr_error_cannot_open_format">Не удалось открыть файл %1$s. %2$s</string>
     <string name="rdr_error_cannot_display">Не удаётся показать содержимое. %1$s</string>
-    <string name="rdr_error_garbage_torrent">Это файл BitTorrent (.torrent) или метаданные торрента. Откройте его на экране «Торрент», чтобы скачать книги, а не в читалке!</string>
     <string name="rdr_error_garbage_generic">Содержимое не похоже на книгу (обнаружено: %1$s). Проверьте, что у файла правильный формат (.epub, .mobi, .pdf, .txt и т. д.) и что это не переименованный zip, повреждённый или бинарный файл.</string>
     <string name="rdr_error_cannot_read_text">Не удалось прочитать содержимое файла как текст.</string>
     <string name="rdr_error_mobi_empty">Файл MOBI пуст или не читается.</string>

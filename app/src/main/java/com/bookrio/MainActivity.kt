@@ -80,7 +80,7 @@ import com.bookrio.webdav.ui.WebdavScreen
 import com.bookrio.calibre.ui.CalibreBrowserScreen
 import com.bookrio.calibre.ui.CalibreConnectionScreen
 import com.bookrio.calibre.ui.CalibreSourcesScreen
-import com.bookrio.torrent.ui.TorrentScreen
+import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.app.BookDetailsScreen
 import com.bookrio.app.ImportScreen
 import com.bookrio.app.OnboardingScreen
@@ -371,7 +371,10 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onOpenPodcasts = { navController.navigate(ShelfDestinations.Podcasts.route) },
                     onOpenImport = { navController.navigate(ShelfDestinations.Import.route) },
                     onOpenFtp = { navController.navigate(ShelfDestinations.Ftp.route) },
-                    onOpenTorrent = { navController.navigate(ShelfDestinations.Torrent.route) },
+                    onOpenTorrent = {
+                        val torrent = TorrentFeatureProvider.feature
+                        if (torrent.isAvailable) navController.navigate(torrent.route)
+                    },
                     onOpenSources = { navController.navigate(ShelfDestinations.Sources.route) },
                     onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
@@ -424,7 +427,10 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onFtpClick = { navController.navigate(ShelfDestinations.Ftp.route) },
                     onSmbClick = { navController.navigate(ShelfDestinations.Smb.route) },
                     onWebdavClick = { navController.navigate(ShelfDestinations.Webdav.route) },
-                    onTorrentClick = { navController.navigate(ShelfDestinations.Torrent.route) },
+                    onTorrentClick = {
+                        val torrent = TorrentFeatureProvider.feature
+                        if (torrent.isAvailable) navController.navigate(torrent.route)
+                    },
                     onCalibreClick = { navController.navigate(ShelfDestinations.Calibre.route) },
                     onImportClick = { navController.navigate(ShelfDestinations.Import.route) },
                     onImportProgressClick = { navController.navigate(ShelfDestinations.ImportProgress.route) },
@@ -489,13 +495,15 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onImport = { navController.navigate(ShelfDestinations.Import.route) }
                 )
             }
-            composable(ShelfDestinations.Torrent.route) {
-                // The torrent worker posts its progress notification; ask for
-                // POST_NOTIFICATIONS so it is actually visible on Android 13+.
-                RequestNotificationPermissionIfNeeded()
-                TorrentScreen(
-                    onBack = { navController.popBackStack() }
-                )
+            if (TorrentFeatureProvider.feature.isAvailable) {
+                composable(TorrentFeatureProvider.feature.route) {
+                    // The torrent worker posts its progress notification; ask for
+                    // POST_NOTIFICATIONS so it is actually visible on Android 13+.
+                    RequestNotificationPermissionIfNeeded()
+                    TorrentFeatureProvider.feature.Screen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
             }
             composable(ShelfDestinations.Calibre.route) {
                 CalibreSourcesScreen(
@@ -792,13 +800,7 @@ private fun SourcesOverviewScreen(
                     tint = OmarchyColors.Fg,
                     onClick = onWebdavClick
                 )
-                SourceCard(
-                    title = stringResource(R.string.torrent_title),
-                    subtitle = stringResource(R.string.torrent_subtitle),
-                    icon = Icons.Default.SwapHoriz,
-                    tint = OmarchyColors.Fg,
-                    onClick = onTorrentClick
-                )
+                TorrentFeatureProvider.feature.SourceCard(onClick = onTorrentClick)
                 SourceCard(
                     title = stringResource(com.bookrio.calibre.R.string.calibre_title),
                     subtitle = stringResource(com.bookrio.calibre.R.string.calibre_subtitle),
@@ -878,7 +880,7 @@ private fun SourcesOverviewScreen(
 
 /** Flat kilderekke: panel, 4dp hjørner, ingen heving — enkel liste, ikke dashbord. */
 @Composable
-private fun SourceCard(
+internal fun SourceCard(
     modifier: Modifier = Modifier,
     title: String,
     subtitle: String,

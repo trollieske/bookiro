@@ -27,8 +27,6 @@
     <string name="smb_subtitle">Windows / NAS</string>
     <string name="webdav_title">WebDAV</string>
     <string name="webdav_subtitle">Nextcloud / Owncloud</string>
-    <string name="torrent_title">Torrent</string>
-    <string name="torrent_subtitle">Punto a punto</string>
     <string name="reader_theme_light">Claro</string>
     <string name="reader_theme_sepia">Sepia</string>
     <string name="reader_theme_dark">Oscuro</string>
@@ -249,9 +247,6 @@
     <string name="settings_autoplay_next_sub">Cuando termine el último capítulo</string>
     <string name="settings_import_button">Importar</string>
     <string name="settings_smb_sync_sub">Windows / NAS / Samba</string>
-    <string name="settings_torrent_bg">Torrent (segundo plano)</string>
-    <string name="settings_torrent_bg_sub">Continuar descargas con la aplicación cerrada</string>
-    <string name="settings_torrent_min_battery">Batería mínima</string>
     <string name="settings_handoff_precision_desc">Elige la precisión del cambio entre audiolibro y ebook. Predeterminado: Inteligente.</string>
     <string name="settings_handoff_show_toast_sub">La posición de continuación (capítulo o porcentaje) se muestra como un breve mensaje.</string>
     <string name="settings_handoff_scan_progress_label">%1$d / %2$d · %3$d vínculos creados</string>
@@ -312,7 +307,6 @@
     <string name="home_service_ftp">FTP</string>
     <string name="home_service_import">Importar</string>
     <string name="home_service_sources">Fuentes</string>
-    <string name="home_service_torrent">Torrent</string>
     <string name="home_service_transfers">Transferencias</string>
     <string name="home_empty_browse">Explorar biblioteca</string>
 </resources>

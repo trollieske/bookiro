@@ -81,20 +81,36 @@ the KMP branches.
 
 - **Android application id**: `com.bookrio`
 - **iOS bundle id**: `com.bookrio.ios`
-- **SDK**: `minSdk 26` (Android 8.0) · `targetSdk 35` (Android 15) · iOS 15+
+- **SDK**: `minSdk 26` (Android 8.0) · `targetSdk 36` (Android 16) · iOS 15+
 - **Build**: Kotlin + Jetpack Compose (Material 3), Room, Media3 and WorkManager on
   Android; Kotlin Multiplatform + Compose Multiplatform + UIKit for the iOS port.
 
 ## Build & run
 
 ### Android
-Requires JDK 17 and Android SDK API 35.
+Requires JDK 17 and Android SDK API 36.
+
+There are **two store flavors** (see [`docs/BUILD_VARIANTS.md`](docs/BUILD_VARIANTS.md)):
+
+| Flavor | App id | Torrent client |
+|---|---|---|
+| `full` | `com.bookiro` | **yes** (side-load / private) |
+| `playstore` | `com.bookiro.play` | **no** (Google Play) |
 
 ```bash
-./gradlew :app:assembleDebug     # debug APK
-./gradlew :app:assembleRelease   # release APK
-./gradlew :app:installDebug      # install on a connected device
-./gradlew testDebugUnitTest      # unit tests
+./gradlew :app:assembleFullDebug       # full debug APK (with torrent)
+./gradlew :app:assemblePlaystoreDebug  # Play-safe debug APK (no torrent)
+./gradlew :app:installFullDebug        # install full on a connected device
+./gradlew :app:testFullDebugUnitTest :app:testPlaystoreDebugUnitTest   # unit tests
+```
+
+A release build requires the four `BOOKIRO_*` signing values (see
+[`docs/RELEASE_SIGNING.md`](docs/RELEASE_SIGNING.md)):
+
+```bash
+./gradlew :app:bundleFullRelease       # signed full AAB
+./gradlew :app:bundlePlaystoreRelease  # signed Play AAB
+./gradlew :app:lintPlaystoreRelease    # lint the Play variant
 ```
 
 ### iOS (macOS only)
