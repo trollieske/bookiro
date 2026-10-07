@@ -23,11 +23,33 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "${SDKMANAGER}" ]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -path '*/bin/sdkmanager' -type f | head -n 1)"
+          fi
+          test -n "${SDKMANAGER}"
+          test -x "${SDKMANAGER}"
+
+          set +o pipefail
+          yes | "${SDKMANAGER}" "platforms;android-36" "build-tools;36.0.0"
+          SDK_EXIT=${PIPESTATUS[1]}
+          set -o pipefail
+
+          if [ "${SDK_EXIT}" -ne 0 ]; then
+            echo "sdkmanager failed with exit code ${SDK_EXIT}"
+            exit "${SDK_EXIT}"
+          fi
+
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
 
       - name: Ensure debug keystore
         run: |
@@ -76,11 +98,30 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "${SDKMANAGER}" ]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -path '*/bin/sdkmanager' -type f | head -n 1)"
+          fi
+          test -n "${SDKMANAGER}"
+          test -x "${SDKMANAGER}"
+
+          set +o pipefail
+          yes | "${SDKMANAGER}" "platforms;android-36" "build-tools;36.0.0"
+          SDK_EXIT=${PIPESTATUS[1]}
+          set -o pipefail
+
+          if [ "${SDK_EXIT}" -ne 0 ]; then
+            echo "sdkmanager failed with exit code ${SDK_EXIT}"
+            exit "${SDK_EXIT}"
+          fi
 
       - name: Materialize upload keystore
         run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/bookiro-release.jks"
