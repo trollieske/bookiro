@@ -62,6 +62,18 @@ jobs:
             exit "${SDK_EXIT}"
           fi
 
+      - name: Ensure debug keystore
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Materialize upload keystore (if provided)
         env:
           KEYSTORE_B64: ${{ secrets.BOOKIRO_KEYSTORE_BASE64 }}
