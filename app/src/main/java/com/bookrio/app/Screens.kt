@@ -1334,7 +1334,7 @@ fun OnboardingScreen(
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "BOOKRIO",
+                    "BOOKIRO",
                     style = ShelfTypography.TitleLarge.copy(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     ),

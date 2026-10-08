@@ -200,15 +200,10 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
     val navController = rememberNavController()
     val hasSeenOnboardingState by prefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
 
-    // Library tab counts (Settings → "Show counts on library tabs").
-    val appContextForCounts = LocalContext.current.applicationContext
-    val allBooks by remember(appContextForCounts) {
-        com.bookrio.data.local.ShelfDatabase.getInstance(appContextForCounts).bookDao().observeAll()
-    }.collectAsStateWithLifecycle(initialValue = emptyList())
-    val showTabCounts by prefs.libraryTabCountsEnabled.collectAsStateWithLifecycle(initialValue = true)
-
     // If the database could not be opened, keep the data and show a recoverable
-    // error/retry path instead of wiping anything.
+    // error/retry path instead of wiping anything. This gate runs BEFORE any
+    // Room-backed flow is created below, so no database query runs until the DB is
+    // known to be usable.
     val dbApp = LocalContext.current.applicationContext as? ShelfApplication
     val dbError = dbApp?.databaseError?.collectAsStateWithLifecycle(initialValue = null)?.value
     if (dbApp != null && dbError != null) {
@@ -218,6 +213,13 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
         )
         return
     }
+
+    // Library tab counts (Settings → "Show counts on library tabs").
+    val appContextForCounts = LocalContext.current.applicationContext
+    val allBooks by remember(appContextForCounts) {
+        com.bookrio.data.local.ShelfDatabase.getInstance(appContextForCounts).bookDao().observeAll()
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val showTabCounts by prefs.libraryTabCountsEnabled.collectAsStateWithLifecycle(initialValue = true)
 
     if (hasSeenOnboardingState == null) {
         Surface(color = OmarchyColors.Bg, modifier = Modifier.fillMaxSize()) {}

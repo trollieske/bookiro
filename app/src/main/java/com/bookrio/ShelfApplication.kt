@@ -60,24 +60,50 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
             }
     }
 
-    /** User-initiated retry after a database error. Non-destructive. */
+    private val databaseRetryInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * User-initiated retry after a database error. The blocking open runs on a
+     * background thread so the UI thread is never blocked, and the error state is kept
+     * until the retry succeeds so no Room-backed UI runs against a broken database.
+     */
     fun retryDatabaseOpen() {
-        _databaseError.value = null
-        openDatabaseOrSurfaceError()
+        if (!databaseRetryInProgress.compareAndSet(false, true)) return
+        Thread {
+            runCatching { database.openHelper.writableDatabase }
+                .onSuccess { _databaseError.value = null }
+                .onFailure {
+                    android.util.Log.e("Bookiro", "Database retry failed; keeping the file", it)
+                    _databaseError.value = it
+                }
+            databaseRetryInProgress.set(false)
+        }.apply { name = "shelf-db-retry"; isDaemon = true }.start()
     }
 
     /**
-     * Explicit, user-confirmed destructive reset. Never called automatically and
-     * never triggered by [openDatabaseOrSurfaceError].
+     * Explicit, user-confirmed destructive reset. Runs off the UI thread, then restarts
+     * the process so no ViewModel/repository can keep using the closed database
+     * instance. Never called automatically.
      */
     fun resetDatabaseAfterUserConfirmation() {
         if (!DatabaseRecoveryPolicy.mayDeleteDatabase(userConfirmedReset = true)) return
-        synchronized(this) {
-            ShelfDatabase.resetInstance()
-            _database = null
-            deleteDatabase("shelf.db")
-            _databaseError.value = null
-        }
+        Thread {
+            synchronized(this) {
+                ShelfDatabase.resetInstance()
+                _database = null
+                deleteDatabase("shelf.db")
+                _databaseError.value = null
+            }
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                intent.addFlags(
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                )
+                startActivity(intent)
+            }
+            Runtime.getRuntime().exit(0)
+        }.apply { name = "shelf-db-reset"; isDaemon = true }.start()
     }
 
     private var _readingTracker: ReadingTrackerEngine? = null

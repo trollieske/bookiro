@@ -79,12 +79,21 @@ object JvmHarness {
         val constructor = BookImportRepository::class.java.getDeclaredConstructor(
             Context::class.java,
             ShelfDatabase::class.java,
-            com.bookrio.core.dispatchers.DispatcherProvider::class.java
+            com.bookrio.core.dispatchers.DispatcherProvider::class.java,
+            BookImportRepository.TransactionRunner::class.java
         )
-        return constructor.newInstance(ctx, db, dispatcherProvider)
+        return constructor.newInstance(ctx, db, dispatcherProvider, passThroughTransactions)
     }
 
     private val dispatcherProvider: DispatcherProvider = object : DispatcherProvider {}
+
+    /**
+     * The JVM fake DB has no Room transaction support, so it runs blocks directly.
+     * Real rollback semantics are proven by the Room instrumentation test instead.
+     */
+    private val passThroughTransactions = object : BookImportRepository.TransactionRunner {
+        override suspend fun <T> run(block: suspend () -> T): T = block()
+    }
 }
 
 /** In-memory state shared by the fake DAOs. */

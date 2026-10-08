@@ -194,7 +194,7 @@ class DuplicateRepairTest {
     }
 
     @Test
-    fun `same ISBN same type and same format collapses (identity proven)`() = runBlocking {
+    fun `different EPUB files with the same ISBN are NOT merged`() = runBlocking {
         val db = FakeShelfDatabase()
         val repo = JvmHarness.repository(db)
         db.store.addBook(
@@ -204,9 +204,10 @@ class DuplicateRepairTest {
             book(2, "Dune", "Frank Herbert", format = FormatEntity.EPUB, isbn = "9780441013593", fileUri = "content://b", size = 100)
         )
 
-        assertEquals(1, repo.deduplicateLibrary())
-        assertEquals(listOf(1L), db.store.activeBooks.map { it.id })
-        assertTrue(db.store.books[2L]!!.isDeleted)
+        // Matching ISBN + type + format is NOT proof of identical file content.
+        assertEquals(0, repo.deduplicateLibrary())
+        assertEquals(2, db.store.activeBooks.size)
+        assertFalse(db.store.books[2L]!!.isDeleted)
     }
 
     @Test

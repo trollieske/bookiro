@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.room.withTransaction
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.BookFormat
@@ -30,11 +31,26 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
+private fun roomTransactionRunner(db: ShelfDatabase): BookImportRepository.TransactionRunner =
+    object : BookImportRepository.TransactionRunner {
+        override suspend fun <T> run(block: suspend () -> T): T = db.withTransaction { block() }
+    }
+
 class BookImportRepository(
     private val ctx: Context,
     private val db: ShelfDatabase,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider,
+    private val transactionRunner: TransactionRunner = roomTransactionRunner(db)
 ) {
+
+    /**
+     * Runs [block] as one atomic unit. Production uses Room's `withTransaction`; the JVM
+     * fake harness has no Room transaction support and injects a pass-through runner, so
+     * rollback is proven by a real-Room instrumentation test instead.
+     */
+    interface TransactionRunner {
+        suspend fun <T> run(block: suspend () -> T): T
+    }
 
     companion object {
         private const val TAG = "BookImportRepo"
@@ -700,16 +716,14 @@ class BookImportRepository(
     /**
      * Collapses duplicate library rows created by earlier builds:
      *  1. the exact same file (same `file_uri`/`file_path`) imported repeatedly by
-     *     the scheduled media scan, and
-     *  2. the same edition proven by an identical non-blank ISBN (same book type and
-     *     same format).
+     *     the scheduled media scan.
      *
-     * A matching title+author is **not** proof: different editions, translations
-     * and formats are deliberately kept separate. EPUB wins over other formats,
-     * then the larger file, then the oldest row. Reading progress and all
-     * bookmarks/highlights are re-pointed to the survivor, and duplicates are
-     * soft-deleted so no data is destroyed. Idempotent: a second run changes
-     * nothing.
+     * File identity is the ONLY automatic merge key. ISBN, title/author, format and
+     * edition matches are NOT proof of identical content and are deliberately left
+     * alone (different editions/translations/formats stay separate). EPUB wins over
+     * other formats, then the larger file, then the oldest row. The merge runs in one
+     * Room transaction: progress, bookmarks and highlights are re-pointed and the
+     * duplicate soft-deleted, all or nothing. Idempotent: a second run changes nothing.
      */
     suspend fun deduplicateLibrary(): Int = withContext(dispatchers.io) {
         var removed = 0
@@ -718,32 +732,14 @@ class BookImportRepository(
             if (books.size <= 1) return@withContext 0
             Log.i(TAG, "[DEDUP] scanning ${books.size} book(s)")
 
-            // Pass 1: the exact same file.
+            // Only the exact same file is auto-merged. ISBN/title/author/format are
+            // NOT proof of identical content and are left alone.
             val byFile = books.groupBy { book ->
                 book.fileUri?.takeIf { it.isNotBlank() }
                     ?: book.filePath?.takeIf { it.isNotBlank() }?.let { "path:$it" }
                     ?: "id:${book.id}"
             }
-            val survivors = mutableListOf<BookEntity>()
             for ((_, group) in byFile) {
-                val keep = pickCanonical(group)
-                survivors.add(keep)
-                for (dup in group) {
-                    if (dup.id != keep.id) {
-                        mergeAndSoftDelete(dup, keep)
-                        removed++
-                    }
-                }
-            }
-
-            // Pass 2: SAME EDITION proven by an identical non-blank ISBN, book type
-            // and format. Title/author alone is NOT proof, so different editions,
-            // translations and formats remain separate.
-            val byIsbn = survivors
-                .filter { !it.isbn.isNullOrBlank() }
-                .groupBy { Triple(it.isbn!!.trim().lowercase(), it.type, it.format) }
-            for ((_, group) in byIsbn) {
-                if (group.size <= 1) continue
                 val keep = pickCanonical(group)
                 for (dup in group) {
                     if (dup.id != keep.id) {
@@ -778,7 +774,10 @@ class BookImportRepository(
     }
 
     private suspend fun mergeAndSoftDelete(dup: BookEntity, keep: BookEntity) {
-        runCatching {
+        // One atomic unit: progress + bookmark + highlight transfer and the soft-delete
+        // either all apply or all roll back. Annotation-transfer failures are NOT
+        // swallowed — they abort the transaction so the source is never hidden.
+        transactionRunner.run {
             val dupProgress = db.progressDao().getByBook(dup.id)
             val keepProgress = db.progressDao().getByBook(keep.id)
             val keepHasProgress = keepProgress != null &&
@@ -786,21 +785,16 @@ class BookImportRepository(
             if (dupProgress != null && !keepHasProgress) {
                 db.progressDao().insertOrReplace(dupProgress.copy(bookId = keep.id))
             }
-            // Re-point the user's annotations to the survivor so a confirmed-duplicate
-            // merge never drops bookmarks/highlights. A conflicting reading position is
-            // never overwritten (the survivor keeps its own).
-            runCatching {
-                for (bm in db.bookmarkDao().getForBook(dup.id)) {
-                    db.bookmarkDao().insert(bm.copy(id = 0, bookId = keep.id))
-                }
-                db.bookmarkDao().deleteByBook(dup.id)
+            // Re-point the user's annotations to the survivor. A conflicting reading
+            // position is never overwritten (the survivor keeps its own).
+            for (bm in db.bookmarkDao().getForBook(dup.id)) {
+                db.bookmarkDao().insert(bm.copy(id = 0, bookId = keep.id))
             }
-            runCatching {
-                for (hl in db.highlightDao().getForBook(dup.id)) {
-                    db.highlightDao().insert(hl.copy(id = 0, bookId = keep.id))
-                }
-                db.highlightDao().deleteByBook(dup.id)
+            db.bookmarkDao().deleteByBook(dup.id)
+            for (hl in db.highlightDao().getForBook(dup.id)) {
+                db.highlightDao().insert(hl.copy(id = 0, bookId = keep.id))
             }
+            db.highlightDao().deleteByBook(dup.id)
             db.bookDao().softDelete(dup.id)
         }
     }
@@ -821,17 +815,19 @@ class BookImportRepository(
                 val seen = HashSet<String>()
                 val keep = tracks.filter { t -> seen.add(t.fileUri ?: t.filePath ?: "id:${t.id}") }
                 if (keep.size == tracks.size) continue
-                db.audioTrackDao().deleteTracksForBook(book.id)
-                var total = 0L
-                var size = 0L
-                keep.forEachIndexed { i, t ->
-                    db.audioTrackDao().insert(t.copy(bookId = book.id, discNumber = 1, trackNumber = i + 1))
-                    total += t.durationMs
-                    size += t.fileSizeBytes
+                transactionRunner.run {
+                    db.audioTrackDao().deleteTracksForBook(book.id)
+                    var total = 0L
+                    var size = 0L
+                    keep.forEachIndexed { i, t ->
+                        db.audioTrackDao().insert(t.copy(bookId = book.id, discNumber = 1, trackNumber = i + 1))
+                        total += t.durationMs
+                        size += t.fileSizeBytes
+                    }
+                    db.bookDao().update(
+                        book.copy(chapterCount = keep.size, durationMs = total, fileSizeBytes = size)
+                    )
                 }
-                db.bookDao().update(
-                    book.copy(chapterCount = keep.size, durationMs = total, fileSizeBytes = size)
-                )
                 fixed++
                 Log.i(TAG, "[TRACK_DEDUP] book ${book.id} '${book.title}' ${tracks.size} -> ${keep.size} tracks")
             }
@@ -879,6 +875,8 @@ class BookImportRepository(
                     g.any { AudiobookNormalizer.normalizeString(it.title.orEmpty()) == bookTitle }
                 } ?: groups.first()
 
+                // The split mutation is one Room transaction.
+                transactionRunner.run {
                 for (g in groups) {
                     val first = g.first()
                     val duration = g.sumOf { it.durationMs }
@@ -953,6 +951,7 @@ class BookImportRepository(
                             db.audioTrackDao().insert(t.copy(bookId = targetId, discNumber = 1, trackNumber = i + 1))
                         }
                     }
+                }
                 }
                 Log.i(TAG, "[SPLIT_MERGED] book ${book.id} '${book.title}' -> ${groups.size} books")
             }
@@ -1059,6 +1058,10 @@ class BookImportRepository(
 
                 val duplicates = sortedList.drop(1)
 
+                // The whole group mutation is one Room transaction: track rebuild,
+                // canonical update, progress/annotation transfer and fragment
+                // soft-delete all apply together or roll back together.
+                transactionRunner.run {
                 // Read every group member's tracks first, then wipe the whole group's
                 // track list and rebuild it once. Previously the canonical's tracks
                 // were re-inserted on every consolidation run, multiplying them.
@@ -1145,19 +1148,15 @@ class BookImportRepository(
                     }
 
                     // Preserve the fragment's annotations on the canonical row before
-                    // hiding it, so a merge never silently drops bookmarks/highlights.
-                    runCatching {
-                        for (bm in db.bookmarkDao().getForBook(dup.id)) {
-                            db.bookmarkDao().insert(bm.copy(id = 0, bookId = canonicalBook.id))
-                        }
-                        db.bookmarkDao().deleteByBook(dup.id)
+                    // hiding it. A failure here aborts the transaction (not swallowed).
+                    for (bm in db.bookmarkDao().getForBook(dup.id)) {
+                        db.bookmarkDao().insert(bm.copy(id = 0, bookId = canonicalBook.id))
                     }
-                    runCatching {
-                        for (hl in db.highlightDao().getForBook(dup.id)) {
-                            db.highlightDao().insert(hl.copy(id = 0, bookId = canonicalBook.id))
-                        }
-                        db.highlightDao().deleteByBook(dup.id)
+                    db.bookmarkDao().deleteByBook(dup.id)
+                    for (hl in db.highlightDao().getForBook(dup.id)) {
+                        db.highlightDao().insert(hl.copy(id = 0, bookId = canonicalBook.id))
                     }
+                    db.highlightDao().deleteByBook(dup.id)
 
                     db.audioTrackDao().deleteTracksForBook(dup.id)
                     // Soft-delete (not hard-delete): the fragment row and its metadata
@@ -1169,6 +1168,7 @@ class BookImportRepository(
 
                 val coverRepo = com.bookrio.library.cover.CoverRepository(ctx, db, dispatchers)
                 coverRepo.coverFileFor(updatedCanonical)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error consolidating audiobooks", e)

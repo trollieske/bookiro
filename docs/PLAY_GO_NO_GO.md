@@ -1,15 +1,16 @@
 # Bookiro Android — GO/NO-GO (Bookiro-id, data-safety RC)
 
-**Base:** branch `release/playstore-variant-rc`, commit `eec1c7c` **plus uncommitted
-working-tree changes** (applicationId correction + data-safety fixes). The candidate was
-not built from a clean commit, so `HEAD` alone does not identify its source.
+**Base:** branch `release/playstore-variant-rc`. Committed source: PR #6 tip `a80c450`
+(`e630cc4` = applicationId + data-safety + bug fixes). The pre-merge hardening patch
+(dedup file-identity only, Room transactions, DB-error ordering, onboarding wordmark)
+sits on top and is not yet committed.
 **Dato:** 2026-10-08. **Miljø:** JDK 17, Gradle 8.11.1, macOS/arm64, build-tools 36.0.0.
 
 ## Verdikter (separate)
 
 | Gate | Verdikt | Grunnlag |
 |---|---|---|
-| **Lokal / enhets-test** | **READY TO BEGIN** | begge flavors bygger; **406 JVM-tester, 0 feil**; Playstore-lint 0 errors; 16 KB OK; data-tap-fikser inne. Ingen device-pass utført ennå. |
+| **Lokal / enhets-test** | **READY TO BEGIN** | begge flavors bygger; **406 JVM-tester, 0 feil**; Playstore-lint 0 errors; 16 KB OK; data-tap-fikser inne; **emulator-pass** dekket launch/onboarding/leser (inkl. søk)/audiobook/podkast — se `docs/INTERNAL_TEST_ACCEPTANCE.md`. |
 | **Play internal testing-upload** | **NOT READY** | ingen produksjonssignert AAB (kun debug/**TEST**); upload-nøkkel + Play App Signing ikke satt opp. |
 | **Produksjon** | **NOT READY** | device-aksept, data-safety-eierbeslutninger, privacy-URL og F2-disclosure gjenstår. |
 
@@ -139,7 +140,7 @@ cover-overrides (ingen egen «manual override»-flagg funnet — dokumentert som
 
 1. **KRITISK — produksjonssignert AAB.** Registrer upload-keystore + Play App Signing, bygg
    `:app:bundlePlaystoreRelease` med `BOOKIRO_*`-secrets, verifiser at cert ≠ "Android Debug".
-2. **HØY (DELVIS) — device-aksept.** Emulator-pass (2026-10-08) dekket launcher/onboarding/Home, torrent-tile per flavor, EPUB-render + ≥20 sidevendinger + TOC + bokmerke + in-book søk, rotasjon, resume, offline, gjentatt import, **ekte M4B-audiobook** (play/seek/speed/background) og **podkast** (legg til lokal RSS, sync, stream). Gjenstår: podkast↔lyd-eierskapsbytte på device (JVM-invarianter dekker det), kilder/avbrutt overføring, Android Auto/DHU (blokkert av miljø: `gearhead` er en stub, ingen head-unit-server), FileProvider-deling, self-signed cert, og same-id-oppgradering.
+2. **HØY (DELVIS) — device-aksept.** Emulator-pass (2026-10-08) dekket launcher/onboarding/Home, torrent-tile per flavor, EPUB-render + ≥20 sidevendinger + TOC + bokmerke + in-book søk, rotasjon, resume, offline, gjentatt import, **ekte M4B-audiobook** (play/seek/speed/background) og **podkast** (legg til lokal RSS, sync, stream). Gjenstår: podkast↔lyd-eierskapsbytte på device (JVM-invarianter dekker det), kilder/avbrutt overføring, Android Auto/DHU, FileProvider-deling, self-signed cert, og same-id-oppgradering. **Android Auto er NOT TESTED**: ekte Android Auto 17.9 ble installert og head-unit-serveren kjørte på 5277, men DHU-transporten faller (`ProxyThreadHandler`-exception / `Failed to read from transport`) så projeksjonen starter ikke; kun DHU v2.0 (2022) finnes og `google_apis`-imaget er ikke Play-sertifisert.
 3. **HØY (UKJENT) — data-safety-eierbeslutninger** (privacy-URL, F2-disclosure).
 4. **MIDDELS — transaksjonell audiobook-merge** ikke fullt ut; soft-delete + annotasjoner er
    på plass, men en krasj midt i en merge kan fortsatt etterlate delvis tilstand.

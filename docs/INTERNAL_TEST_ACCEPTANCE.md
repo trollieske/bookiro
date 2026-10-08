@@ -1,8 +1,12 @@
 # Bookiro — INTERNAL TEST acceptance (Bookiro id, data-safety RC)
 
-Base commit: `eec1c7c` **plus uncommitted working-tree changes** (applicationId correction
-+ data-safety fixes). This candidate was **not** built from a clean commit — HEAD alone
-does not identify its complete source.
+Committed source: PR #6 tip `a80c450` (`e630cc4` = applicationId + data-safety + bug
+fixes). The pre-merge hardening patch (dedup file-identity only, Room transactions,
+DB-error ordering, onboarding wordmark) sits on top and is **not yet committed**.
+
+This document mixes **historical observations** (things found and then fixed, e.g. the
+sample-stub feature and the search empty state) with **current-candidate tests** (results
+for the committed candidate). Each row/statement below is marked accordingly.
 
 Target ids: `full` = `com.bookiro`, `playstore` = `com.bookiro.play`.
 
@@ -10,7 +14,7 @@ Target ids: `full` = `com.bookiro`, `playstore` = `com.bookiro.play`.
 
 | Gate | Verdict | Basis |
 |---|---|---|
-| **Local / device test readiness** | **READY TO BEGIN** | both flavors build; 406 JVM tests pass; Playstore lint 0 errors; 16 KB checks pass; data-loss fixes in. Emulator pass done for launches/onboarding/reader (see below); audiobook, sources, Auto and certs still need manual testing. |
+| **Local / device test readiness** | **READY TO BEGIN** | both flavors build; 406 JVM tests pass; Playstore lint 0 errors; 16 KB checks pass; data-loss fixes in. Emulator pass done for launches/onboarding/reader/audiobook/podcast (see below); sources, Auto and certs still need manual testing. |
 | **Play internal-track upload readiness** | **NOT READY** | no production-signed AAB (only debug/**TEST**-signed); upload key/Play App Signing not set up. |
 | **Production readiness** | **NOT READY** | device acceptance, data-safety owner decisions, privacy-policy URL and F2 disclosure still pending. |
 
@@ -60,14 +64,14 @@ Installed simultaneously: old `com.bookrio.debug` (from an earlier snapshot), ne
 | In-book search for `mailbox` (present in the text) | **PASS after fix** — the empty-state message was shown before searching; fixed with a `hasSearched` flag. Verified: no message before pressing Search, then 5 hits |
 | Bookmark re-open / list / navigate | **NOT VERIFIED** (bookmark save confirmed; list navigation not isolated) |
 
-### Findings from the emulator pass (status after fixes)
+### Findings from the emulator pass (1–2 historical/fixed; 3–5 current)
 
-1. **Bundled sample "books" were sub-1 KB stubs** (`assets/samples/*`, EPUB 631 B, M4B 615 B,
+1. **(historical, fixed)** **Bundled sample "books" were sub-1 KB stubs** (`assets/samples/*`, EPUB 631 B, M4B 615 B,
    MP3 514 B). They imported but could not be read/played. The **"Load sample books" option
    was removed** (UI card, `enqueueSamples`, `importAssetsSamples`, `SampleBooks`/`SampleData`,
    the dead `SeedCallback` demo data, the strings and the assets). Verified on-device: the
    Import screen offers only real sources.
-2. **In-book search works** (5 hits for `mailbox`). The defect was a misleading empty state:
+2. **(historical, fixed)** **In-book search works** (5 hits for `mailbox`). The defect was a misleading empty state:
    `ReadiumSearchSheet` showed "No matches found" whenever the query was non-blank, even
    before a search ran. Fixed with a `hasSearched` flag that only shows the message after a
    search completes. Verified on-device.
@@ -84,21 +88,25 @@ Installed simultaneously: old `com.bookrio.debug` (from an earlier snapshot), ne
    (`Waiting for phone...`). Likely causes: the only available **DHU is v2.0 (build
    2022-03-30)** (confirmed: SDK Manager offers no newer version) and/or the
    `google_apis` image is not **Play-certified**. Structural Auto readiness is correct.
+5. **(found on-device, fixed in the pre-merge patch)** The onboarding wordmark rendered the
+   **old brand `BOOKRIO`** (hardcoded literal in `Screens.kt`, not the `app_name`). It now
+   reads `BOOKIRO`. Note the internal drawable name `bookrio_mark` and the `com.bookrio.*`
+   namespace are intentionally left unchanged.
 
 ## Owner device checklist — PASS / FAIL / NOT TESTED
 
 | # | Scenario | Status | Notes |
 |---|---|---|---|
-| 1 | Fresh install of `com.bookiro` (full) **alongside** the old `com.bookrio` app; both coexist and the old one is untouched | **PASS** | three packages installed together; old app launched with no FATAL |
+| 1 | Fresh install of `com.bookiro` (full) **alongside** the old `com.bookrio` app | **PASS (coexistence only)** | three packages installed together; old app launched with no FATAL. "Old data untouched" was **not** independently verified |
 | 2 | Onboarding + SAF folder selection, including cancelling the picker | **PASS / PARTIAL** | onboarding renders; folder picker **cancel** not exercised |
-| 3 | EPUB: ≥20 page turns, chapter boundary, TOC jump, in-book search | **PASS** | page turns + TOC + in-book search all pass (after the empty-state fix) |
+| 3 | EPUB reading | **PASS / PARTIAL** | page turns (≥20) **PASS**; TOC jump **PASS**; in-book search **PASS** (after fix); explicit chapter-boundary crossing **NOT VERIFIED** |
 | 4 | Bookmarks/highlights: save, reopen the book, list and navigate | **PARTIAL** | save **PASS**; reopen/list/navigate **NOT VERIFIED** |
-| 5 | Reader resume after force-stop / process death | **PASS** | force-stop + relaunch |
-| 6 | Rotation and large font settings in the reader | **PASS / PARTIAL** | rotation **PASS**; large-font settings not exercised |
-| 7 | Audiobook: play, seek, chapters, speed, background/lockscreen controls | **PASS** | real M4B: play, seek (+30s), speed 1.2×, background playback; chapter list present (1 chapter) |
+| 5 | Reader resume after force-stop / process death | **PASS / PARTIAL** | force-stop + relaunch **PASS**; true process-death (`kill -9`) resume **NOT VERIFIED** |
+| 6 | Rotation and large font settings in the reader | **PARTIAL** | rotation landscape↔portrait **PASS**; large-font settings **NOT TESTED** |
+| 7 | Audiobook playback | **PASS / PARTIAL** | real M4B: play **PASS**, seek (+30s) **PASS**, speed 1.2× **PASS**, background **PASS**, 1-chapter list present; lockscreen/Bluetooth controls **NOT TESTED** |
 | 8 | Podcast ↔ audiobook switching: exactly one playback owner and correct metadata | **PARTIAL** | podcast playback **PASS** (own `shelf_podcast` session); the live A↔B owner switch was not driven on device — covered by JVM hand-off invariants only |
-| 9 | Fully offline local reading and listening | **PASS / PARTIAL** | offline launch+render **PASS**; offline audio not tested |
-| 10 | Repeated import / scanning / startup: no duplicates and no disappearing books | **PASS** | samples + valid EPUB; consistent counts; no crash |
+| 9 | Fully offline local reading and listening | **PARTIAL** | offline app launch + Home render **PASS**; offline audio/reading **NOT TESTED** |
+| 10 | Repeated import / startup: no duplicates or disappearing books | **PASS / PARTIAL** | repeated import (samples + valid EPUB) and repeated startup **PASS** with consistent counts; watched-folder scanning loop **NOT TESTED** |
 | 11 | Source browsing, transfer cancellation, unreachable-server handling | **NOT TESTED** | no server configured |
 | 12 | Upgrade / data preservation with the **SAME** applicationId and a compatible signing key | **NOT TESTED** | no prior `com.bookiro` install |
 | 13 | Android Auto/DHU browse → direct playback and correct metadata | **NOT TESTED (environment)** | real AA 17.9 sideloaded; dev mode + head-unit server on 5277 running; DHU connects but transport drops (`ProxyThreadHandler` exception / `Failed to read from transport`) → no projection. Only DHU v2.0 (2022) available; `google_apis` image not Play-certified. Structural readiness verified (manifest car metadata + `MediaLibraryService` + `MEDIA_PLAY_FROM_SEARCH`). Try the **Play-image AVD** (`Medium_Phone_API_37.0`) with Android Auto installed from Play |

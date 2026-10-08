@@ -1,7 +1,10 @@
 # Bookiro — applicationId correction & data-safety changes (APPLIED)
 
-Status: **APPLIED on branch `release/playstore-variant-rc`** (working tree, not yet
-committed). Base `eec1c7c` plus the uncommitted changes described here.
+Status: **APPLIED.** Committed on `release/playstore-variant-rc`; the applicationId
+correction and the initial data-safety fixes are in `e630cc4`, the removal of the
+unusable sample feature and the search fix in `e630cc4`/`a80c450` (PR #6). The
+deduplication tightening (file identity only) and Room-transaction hardening from the
+pre-merge pass are in the pending patch on top of `a80c450`.
 
 Branding: **Bookrio was the original name; Bookiro is the current brand.** `com.bookrio.*`
 namespaces/source packages are intentionally retained (no cosmetic package rename).
@@ -105,7 +108,7 @@ presented as a supported migration:
 | Area | Before | After |
 |---|---|---|
 | DB open failure | `.fallbackToDestructiveMigration()` + `deleteDatabase` on failure | no destructive migration, no auto-delete; `databaseError` StateFlow + error/retry UI; reset only via explicit confirm |
-| Dedup pass 2 | collapsed any same title+author (and cross-format) | only proven identity: same file URI/path, or same non-blank ISBN + type + format |
+| Dedup | collapsed any same title+author (and cross-format), then same ISBN+type+format | **file identity only** (same `file_uri`/`file_path`); ISBN/title/author/format matches are NOT proof of identical content and are left alone |
 | Dedup annotations | only progress moved | progress (never overwriting) + bookmarks + highlights re-pointed to the survivor |
 | Audiobook consolidate | `bookDao.delete(dup)` (hard) | `softDelete(dup)` + annotations preserved |
 | Audiobook split | split any 2..12 same-folder chapter-name files | only when track files span ≥2 parent folders; one-folder/SAF groups untouched |
