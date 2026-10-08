@@ -39,7 +39,7 @@ Fra `aapt2 dump badging` på `app-playstore-universal-release.apk` og merged
 release-manifest
 (`app/build/intermediates/merged_manifests/playstoreRelease/processPlaystoreReleaseManifest/universal/AndroidManifest.xml`):
 
-| Felt | Full (`com.bookiro`) | **Playstore** |
+| Felt | Full (`com.bookrio`) | **Playstore** |
 |---|---|---|
 | `applicationId` | `com.bookrio` | **`com.bookrio.play`** |
 | `versionCode` | `11` | **`11`** |
@@ -224,8 +224,9 @@ for en release-port; den brede testmassen ligger i bibliotek-modulene
 
 ## 9. Neste steg for intern testing-track i Play Console (playstore-flavor)
 
-1. **Eier-beslutninger:** bekreft pakke-id `com.bookiro.play`, `versionCode`-policy, og
-   F2-disclosure (automatisk Audible/audnex-oppslag).
+1. **Eier-beslutninger:** bekreft pakke-id `com.bookrio.play` (foreslått rettet til
+   `com.bookiro.play`, se `docs/APPLICATION_ID_PLAN.md` — ikke anvendt ennå),
+   `versionCode`-policy, og F2-disclosure (automatisk Audible/audnex-oppslag).
 2. **Upload-keystore** opprettes offline, legges i secret manager.
 3. **Registrer Play App Signing** når appen opprettes i Play Console.
 4. **Bygg produksjonssignert Play-AAB:**
