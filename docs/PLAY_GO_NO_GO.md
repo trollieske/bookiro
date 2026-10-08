@@ -139,7 +139,7 @@ cover-overrides (ingen egen «manual override»-flagg funnet — dokumentert som
 
 1. **KRITISK — produksjonssignert AAB.** Registrer upload-keystore + Play App Signing, bygg
    `:app:bundlePlaystoreRelease` med `BOOKIRO_*`-secrets, verifiser at cert ≠ "Android Debug".
-2. **HØY (DELVIS) — device-aksept.** Emulator-pass (2026-10-08) dekket launcher/onboarding/Home, torrent-tile per flavor, EPUB-render + ≥20 sidevendinger + TOC + bokmerke-save + in-book søk, rotasjon, resume, offline og gjentatt import (PASS). Gjenstår: audiobook-avspilling (kun stub-er i samples → sample-funksjonen er nå fjernet), podkast↔lyd, kilder/avbrutt overføring, Android Auto/DHU, FileProvider-deling, self-signed cert, og same-id-oppgradering.
+2. **HØY (DELVIS) — device-aksept.** Emulator-pass (2026-10-08) dekket launcher/onboarding/Home, torrent-tile per flavor, EPUB-render + ≥20 sidevendinger + TOC + bokmerke + in-book søk, rotasjon, resume, offline, gjentatt import, **ekte M4B-audiobook** (play/seek/speed/background) og **podkast** (legg til lokal RSS, sync, stream). Gjenstår: podkast↔lyd-eierskapsbytte på device (JVM-invarianter dekker det), kilder/avbrutt overføring, Android Auto/DHU (blokkert av miljø: `gearhead` er en stub, ingen head-unit-server), FileProvider-deling, self-signed cert, og same-id-oppgradering.
 3. **HØY (UKJENT) — data-safety-eierbeslutninger** (privacy-URL, F2-disclosure).
 4. **MIDDELS — transaksjonell audiobook-merge** ikke fullt ut; soft-delete + annotasjoner er
    på plass, men en krasj midt i en merge kan fortsatt etterlate delvis tilstand.

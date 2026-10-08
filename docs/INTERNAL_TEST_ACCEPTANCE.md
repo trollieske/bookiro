@@ -55,6 +55,8 @@ Installed simultaneously: old `com.bookrio.debug` (from an earlier snapshot), ne
 | Rotation landscape↔portrait (no crash, same activity) | **PASS** |
 | Offline (wifi+data off) launch + Home render | **PASS** |
 | Repeated startup/import: counts stay consistent (7→8 ebooks), no crash | **PASS** |
+| **Real M4B audiobook** (LibriVox *Gettysburg Address*, 1.36 MB, public domain): import, play, seek, speed, background | **PASS** | media_session `state=PLAYING`, speed 1.2×, still playing after Home |
+| **Podcast** (local RSS over `10.0.2.2`): add feed, sync, stream episode | **PASS** | server served `/feed.xml` + `/episode.mp3`; `PodcastFeedSyncWorker` SUCCESS; session `shelf_podcast` PLAYING |
 | In-book search for `mailbox` (present in the text) | **PASS after fix** — the empty-state message was shown before searching; fixed with a `hasSearched` flag. Verified: no message before pressing Search, then 5 hits |
 | Bookmark re-open / list / navigate | **NOT VERIFIED** (bookmark save confirmed; list navigation not isolated) |
 
@@ -71,6 +73,17 @@ Installed simultaneously: old `com.bookrio.debug` (from an earlier snapshot), ne
    search completes. Verified on-device.
 3. No data-loss behaviour was observed: the DB opened cleanly, nothing was auto-deleted, and
    the old `com.bookrio` app kept its own separate data.
+4. **Android Auto could not be completed** on `emulator-5554` despite a full setup attempt:
+   the real **Android Auto 17.9.664004** was sideloaded (system stub removed via
+   `-writable-system` + `remount`), developer mode was enabled, and the **head-unit server
+   was running on 5277** (`GH.DHUService: Network server running on port 5277`). The
+   Desktop Head Unit connects, the phone logs `Head unit connected` and handles the
+   `com.google.android.gms.carsetup.START_DUPLEX` intent, but then the phone logs
+   `Exception in DeveloperHeadUnitNetworkService.ProxyThreadHandler.run` and the DHU logs
+   `Failed to read from transport - disconnect. Exiting` — the projection never streams
+   (`Waiting for phone...`). Likely causes: the only available **DHU is v2.0 (build
+   2022-03-30)** (confirmed: SDK Manager offers no newer version) and/or the
+   `google_apis` image is not **Play-certified**. Structural Auto readiness is correct.
 
 ## Owner device checklist — PASS / FAIL / NOT TESTED
 
@@ -82,13 +95,13 @@ Installed simultaneously: old `com.bookrio.debug` (from an earlier snapshot), ne
 | 4 | Bookmarks/highlights: save, reopen the book, list and navigate | **PARTIAL** | save **PASS**; reopen/list/navigate **NOT VERIFIED** |
 | 5 | Reader resume after force-stop / process death | **PASS** | force-stop + relaunch |
 | 6 | Rotation and large font settings in the reader | **PASS / PARTIAL** | rotation **PASS**; large-font settings not exercised |
-| 7 | Audiobook: play, seek, chapters, speed, background/lockscreen controls | **NOT TESTED** | only 615-byte stub audio shipped |
-| 8 | Podcast ↔ audiobook switching: exactly one playback owner and correct metadata | **NOT TESTED** | no feed/subscription |
+| 7 | Audiobook: play, seek, chapters, speed, background/lockscreen controls | **PASS** | real M4B: play, seek (+30s), speed 1.2×, background playback; chapter list present (1 chapter) |
+| 8 | Podcast ↔ audiobook switching: exactly one playback owner and correct metadata | **PARTIAL** | podcast playback **PASS** (own `shelf_podcast` session); the live A↔B owner switch was not driven on device — covered by JVM hand-off invariants only |
 | 9 | Fully offline local reading and listening | **PASS / PARTIAL** | offline launch+render **PASS**; offline audio not tested |
 | 10 | Repeated import / scanning / startup: no duplicates and no disappearing books | **PASS** | samples + valid EPUB; consistent counts; no crash |
 | 11 | Source browsing, transfer cancellation, unreachable-server handling | **NOT TESTED** | no server configured |
 | 12 | Upgrade / data preservation with the **SAME** applicationId and a compatible signing key | **NOT TESTED** | no prior `com.bookiro` install |
-| 13 | Android Auto/DHU browse → direct playback and correct metadata | **NOT TESTED** | no DHU/head unit |
+| 13 | Android Auto/DHU browse → direct playback and correct metadata | **NOT TESTED (environment)** | real AA 17.9 sideloaded; dev mode + head-unit server on 5277 running; DHU connects but transport drops (`ProxyThreadHandler` exception / `Failed to read from transport`) → no projection. Only DHU v2.0 (2022) available; `google_apis` image not Play-certified. Structural readiness verified (manifest car metadata + `MediaLibraryService` + `MEDIA_PLAY_FROM_SEARCH`). Try the **Play-image AVD** (`Medium_Phone_API_37.0`) with Android Auto installed from Play |
 | 14 | File sharing / FileProvider after the id change (`com.bookiro.fileprovider`) | **NOT TESTED** | |
 | 15 | Self-signed certificate opt-in works; an invalid certificate is rejected by default | **NOT TESTED** | no TLS server; WebDAV `trustAllCertificates` defaults off |
 
