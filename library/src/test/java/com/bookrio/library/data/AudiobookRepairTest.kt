@@ -152,7 +152,7 @@ class AudiobookRepairTest {
      * This test documents the hard delete.
      */
     @Test
-    fun `consolidation hard-deletes duplicate fragments (documented)`() = runBlocking {
+    fun `consolidation soft-deletes duplicate fragments so the merge is recoverable`() = runBlocking {
         val folder = "/audiobooks/phm"
         val db = FakeShelfDatabase()
         val repo = JvmHarness.repository(db)
@@ -162,9 +162,11 @@ class AudiobookRepairTest {
         db.store.addTrack(track(2, "02", filePath = "$folder/02.mp3", duration = 1_000, size = 10))
 
         assertEquals(1, repo.consolidateFragmentedAudiobooks())
-        assertEquals(1, db.store.books.size)
-        // Not recoverable via the row: the duplicate was deleted, not flagged.
-        assertFalse(db.store.books.containsKey(2L))
+        // The row is preserved but hidden, so the merge is reversible from the table.
+        assertTrue(db.store.books.containsKey(2L))
+        assertTrue(db.store.books[2L]!!.isDeleted)
+        assertTrue(db.store.softDeleted.contains(2L))
+        assertEquals(1, db.store.activeBooks.size)
     }
 
     @Test
@@ -233,10 +235,12 @@ class AudiobookRepairTest {
             val db = FakeShelfDatabase()
             val repo = JvmHarness.repository(db)
             db.store.addBook(audiobook(1, "The Martian", "Andy Weir"))
-            db.store.addTrack(track(1, "The Martian", fileUri = "content://a", duration = 10 * 3_600_000L))
-            db.store.addTrack(track(1, "Project Hail Mary", fileUri = "content://b", duration = 9 * 3_600_000L))
-            db.store.addTrack(track(1, "His and Hers", fileUri = "content://c", duration = 8 * 3_600_000L))
-            db.store.addTrack(track(1, "And Then There Were None", fileUri = "content://d", duration = 7 * 3_600_000L))
+            // A historical cross-folder merge: unrelated books ended up under one row,
+            // and their local tracks live in different folders.
+            db.store.addTrack(track(1, "The Martian", filePath = "/books/martian/track.mp3", duration = 10 * 3_600_000L))
+            db.store.addTrack(track(1, "Project Hail Mary", filePath = "/books/phm/track.mp3", duration = 9 * 3_600_000L))
+            db.store.addTrack(track(1, "His and Hers", filePath = "/books/hh/track.mp3", duration = 8 * 3_600_000L))
+            db.store.addTrack(track(1, "And Then There Were None", filePath = "/books/attwn/track.mp3", duration = 7 * 3_600_000L))
 
             val created = repo.splitMergedAudiobooks()
 
@@ -308,22 +312,13 @@ class AudiobookRepairTest {
     }
 
     /**
-     * KNOWN-RISK CHARACTERIZATION (reproducible false positive):
-     *
-     * `splitMergedAudiobooks` does not require the book to have ever been merged.
-     * A *correct* multi-file audiobook (2..12 files, all in one folder) whose
-     * per-file titles are chapter names that do not literally start with
-     * "Chapter" and do not contain the book title is re-partitioned into one book
-     * per file. `The Fellowship of the Ring` here is untouched by the import: it is
-     * one real book. The split is NOT gated by the user, not soft-deletable and
-     * creates three extra books with a blank author.
-     *
-     * Proposed minimal gate (see audit): only split when the distinct files come
-     * from pairwise different parent folders (the old merge could only happen
-     * across folders — a real multi-file audiobook lives in one folder).
+     * FIXED false positive: a correct multi-file audiobook in ONE folder whose
+     * per-file titles are chapter names (without the literal word "Chapter") is
+     * now left untouched, because splitting requires the tracks to span multiple
+     * parent folders.
      */
     @Test
-    fun `KNOWN RISK - chapter-name file titles in one folder are wrongly split`() = runBlocking {
+    fun `chapter-name file titles in one folder are NOT split`() = runBlocking {
         val db = FakeShelfDatabase()
         val repo = JvmHarness.repository(db)
         db.store.addBook(audiobook(1, "The Fellowship of the Ring", "J. R. R. Tolkien", filePath = "/books/lotr"))
@@ -334,9 +329,33 @@ class AudiobookRepairTest {
 
         val created = repo.splitMergedAudiobooks()
 
-        // Current behaviour (the bug): a correct book is split into 4 books.
-        assertEquals(3, created)
-        assertEquals(4, db.store.activeBooks.size)
+        assertEquals(0, created)
+        assertEquals(1, db.store.activeBooks.size)
         assertEquals(4, db.store.tracks.size)
+    }
+
+    @Test
+    fun `numbered chapter files are not split`() = runBlocking {
+        val db = FakeShelfDatabase()
+        val repo = JvmHarness.repository(db)
+        db.store.addBook(audiobook(1, "Some Book", "Some Author", filePath = "/books/some"))
+        db.store.addTrack(track(1, "Chapter 01", filePath = "/books/some/01.mp3", duration = 3_600_000))
+        db.store.addTrack(track(1, "Chapter 02", filePath = "/books/some/02.mp3", duration = 3_600_000))
+        db.store.addTrack(track(1, "Chapter 03", filePath = "/books/some/03.mp3", duration = 3_600_000))
+
+        assertEquals(0, repo.splitMergedAudiobooks())
+        assertEquals(1, db.store.activeBooks.size)
+    }
+
+    @Test
+    fun `SAF imports with no local folder are not split`() = runBlocking {
+        val db = FakeShelfDatabase()
+        val repo = JvmHarness.repository(db)
+        db.store.addBook(audiobook(1, "Some Book", "Some Author"))
+        db.store.addTrack(track(1, "A Long-Expected Party", fileUri = "content://a", duration = 3_600_000))
+        db.store.addTrack(track(1, "The Shadow of the Past", fileUri = "content://b", duration = 3_600_000))
+
+        assertEquals(0, repo.splitMergedAudiobooks())
+        assertEquals(1, db.store.activeBooks.size)
     }
 }

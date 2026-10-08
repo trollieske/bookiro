@@ -23,6 +23,9 @@ import com.bookrio.data.local.dao.TorrentDownloadDao
 import com.bookrio.data.local.dao.WebdavServerDao
 import com.bookrio.data.local.entity.AudioTrackEntity
 import com.bookrio.data.local.entity.BookEntity
+import com.bookrio.data.local.entity.BookmarkEntity
+import com.bookrio.data.local.entity.BookmarkTypeEntity
+import com.bookrio.data.local.entity.HighlightEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.library.data.BookImportRepository
 import kotlinx.coroutines.flow.Flow
@@ -89,12 +92,32 @@ class FakeLibraryStore {
     val books = LinkedHashMap<Long, BookEntity>()
     val tracks = LinkedHashMap<Long, AudioTrackEntity>()
     val progress = LinkedHashMap<Long, ReadingProgressEntity>()
+    val bookmarks = LinkedHashMap<Long, BookmarkEntity>()
+    val highlights = LinkedHashMap<Long, HighlightEntity>()
 
     /** Soft-deleted book ids in delete order — the repair must never hard-delete. */
     val softDeleted: MutableList<Long> = mutableListOf()
 
     private var nextBookId = 1L
     private var nextTrackId = 1L
+    private var nextBookmarkId = 1L
+    private var nextHighlightId = 1L
+
+    fun addBookmark(bookmark: BookmarkEntity): BookmarkEntity {
+        val id = if (bookmark.id == 0L) nextBookmarkId++ else bookmark.id
+        val stored = bookmark.copy(id = id)
+        bookmarks[id] = stored
+        if (id >= nextBookmarkId) nextBookmarkId = id + 1
+        return stored
+    }
+
+    fun addHighlight(highlight: HighlightEntity): HighlightEntity {
+        val id = if (highlight.id == 0L) nextHighlightId++ else highlight.id
+        val stored = highlight.copy(id = id)
+        highlights[id] = stored
+        if (id >= nextHighlightId) nextHighlightId = id + 1
+        return stored
+    }
 
     /** Books that the DAO would return for getAllOnce() (is_deleted = 0). */
     val activeBooks: List<BookEntity> get() = books.values.filter { !it.isDeleted }
@@ -270,6 +293,95 @@ class FakeProgressDao(private val store: FakeLibraryStore) : ReadingProgressDao 
     }
 }
 
+class FakeBookmarkDao(private val store: FakeLibraryStore) : BookmarkDao {
+    override suspend fun insert(bookmark: BookmarkEntity): Long = store.addBookmark(bookmark).id
+
+    override suspend fun update(bookmark: BookmarkEntity) {
+        store.bookmarks[bookmark.id] = bookmark
+    }
+
+    override suspend fun delete(bookmark: BookmarkEntity) {
+        store.bookmarks.remove(bookmark.id)
+    }
+
+    override suspend fun deleteById(id: Long) {
+        store.bookmarks.remove(id)
+    }
+
+    override suspend fun deleteByBook(bookId: Long) {
+        store.bookmarks.entries.removeIf { it.value.bookId == bookId }
+    }
+
+    override suspend fun getById(id: Long): BookmarkEntity? = store.bookmarks[id]
+
+    override suspend fun getForBook(bookId: Long): List<BookmarkEntity> =
+        store.bookmarks.values.filter { it.bookId == bookId }
+
+    override fun observeByBook(bookId: Long): Flow<List<BookmarkEntity>> =
+        flowOf(getForBookSync(bookId))
+
+    private fun getForBookSync(bookId: Long) = store.bookmarks.values.filter { it.bookId == bookId }
+
+    override fun observeByBookAndType(bookId: Long, type: BookmarkTypeEntity): Flow<List<BookmarkEntity>> =
+        flowOf(store.bookmarks.values.filter { it.bookId == bookId && it.type == type })
+
+    override suspend fun existsNear(bookId: Long, pct: Float): Boolean =
+        store.bookmarks.values.any { it.bookId == bookId && kotlin.math.abs((it.positionPercent ?: -1f) - pct) < 0.01f }
+
+    override suspend fun getNear(bookId: Long, pct: Float): BookmarkEntity? =
+        store.bookmarks.values.firstOrNull { it.bookId == bookId && kotlin.math.abs((it.positionPercent ?: -1f) - pct) < 0.01f }
+
+    override suspend fun getByBookSectionPage(
+        bookId: Long,
+        type: BookmarkTypeEntity,
+        chapterIndex: Int,
+        pageIndex: Int
+    ): BookmarkEntity? = store.bookmarks.values.firstOrNull {
+        it.bookId == bookId && it.type == type && it.chapterIndex == chapterIndex && it.pageIndex == pageIndex
+    }
+
+    override fun observeRecent(limit: Int): Flow<List<BookmarkEntity>> =
+        flowOf(store.bookmarks.values.sortedByDescending { it.updatedAt }.take(limit))
+
+    override fun observeChapterBookmarks(bookId: Long): Flow<List<BookmarkEntity>> =
+        flowOf(store.bookmarks.values.filter { it.bookId == bookId && it.type == BookmarkTypeEntity.CHAPTER })
+
+    override fun observeAll(): Flow<List<BookmarkEntity>> = flowOf(store.bookmarks.values.toList())
+}
+
+class FakeHighlightDao(private val store: FakeLibraryStore) : HighlightDao {
+    override suspend fun insert(highlight: HighlightEntity): Long = store.addHighlight(highlight).id
+
+    override suspend fun update(highlight: HighlightEntity) {
+        store.highlights[highlight.id] = highlight
+    }
+
+    override suspend fun delete(highlight: HighlightEntity) {
+        store.highlights.remove(highlight.id)
+    }
+
+    override suspend fun deleteById(id: Long) {
+        store.highlights.remove(id)
+    }
+
+    override suspend fun deleteByBook(bookId: Long) {
+        store.highlights.entries.removeIf { it.value.bookId == bookId }
+    }
+
+    override suspend fun getById(id: Long): HighlightEntity? = store.highlights[id]
+
+    override suspend fun getForBook(bookId: Long): List<HighlightEntity> =
+        store.highlights.values.filter { it.bookId == bookId }
+
+    override fun observeByBook(bookId: Long): Flow<List<HighlightEntity>> =
+        flowOf(store.highlights.values.filter { it.bookId == bookId })
+
+    override fun observeRecent(limit: Int): Flow<List<HighlightEntity>> =
+        flowOf(store.highlights.values.sortedByDescending { it.updatedAt }.take(limit))
+
+    override fun observeAll(): Flow<List<HighlightEntity>> = flowOf(store.highlights.values.toList())
+}
+
 /**
  * ShelfDatabase subclass with the three DAOs the repair paths use. All other
  * abstract DAOs return null (never touched by these tests); the Room runtime is
@@ -281,14 +393,16 @@ class FakeShelfDatabase : ShelfDatabase() {
     val bookDaoImpl = FakeBookDao(store)
     val audioTrackDaoImpl = FakeAudioTrackDao(store)
     val progressDaoImpl = FakeProgressDao(store)
+    val bookmarkDaoImpl = FakeBookmarkDao(store)
+    val highlightDaoImpl = FakeHighlightDao(store)
 
     override fun bookDao(): BookDao = bookDaoImpl
     override fun audioTrackDao(): AudioTrackDao = audioTrackDaoImpl
     override fun progressDao(): ReadingProgressDao = progressDaoImpl
 
     override fun shelfDao(): ShelfDao = JvmHarness.uninitialized()
-    override fun bookmarkDao(): BookmarkDao = JvmHarness.uninitialized()
-    override fun highlightDao(): HighlightDao = JvmHarness.uninitialized()
+    override fun bookmarkDao(): BookmarkDao = bookmarkDaoImpl
+    override fun highlightDao(): HighlightDao = highlightDaoImpl
     override fun ftpServerDao(): FtpServerDao = JvmHarness.uninitialized()
     override fun downloadTaskDao(): DownloadTaskDao = JvmHarness.uninitialized()
     override fun cachedPathDao(): CachedPathDao = JvmHarness.uninitialized()

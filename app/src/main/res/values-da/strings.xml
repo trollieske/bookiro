@@ -12,7 +12,6 @@
     <string name="menu_import">Importer</string>
     <string name="import_files">Vælg filer</string>
     <string name="import_folder">Importer mappe</string>
-    <string name="import_sample">Indlæs prøvebøger</string>
     <string name="import_progress_title">Downloads &amp; import</string>
     <string name="import_tab_downloads">Downloads</string>
     <string name="import_tab_sync_history">Synkroniseringshistorik</string>
@@ -135,7 +134,6 @@
     <string name="loading">Indlæser…</string>
     <string name="books_sent_to_import">%1$d bog/bøger sendt til import.</string>
     <string name="import_from_folder_started">Importerer indhold fra valgt mappe…</string>
-    <string name="samples_loading_started">Indlæser prøvebøger i baggrunden…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Immersion Handoff</string>
@@ -227,7 +225,6 @@
     <string name="import_title">Importer bøger</string>
     <string name="import_files_sub">En eller flere e-bøger eller lydbøger fra din enhed.</string>
     <string name="import_folder_sub">Importer alle bøger i en mappe. Kan overvåges for nye filer.</string>
-    <string name="import_sample_sub">Offentlige klassikere, der følger med appen.</string>
     <string name="import_from_ftp">Fra FTP-server</string>
     <string name="import_from_ftp_sub">Hent bøger fra NAS, hjemmeserver eller skyopbevaring.</string>
     <string name="import_supported_formats">Understøttede formater</string>
@@ -309,4 +306,11 @@
     <string name="home_service_sources">Kilder</string>
     <string name="home_service_transfers">Overførsler</string>
     <string name="home_empty_browse">Gennemse bibliotek</string>
+    <string name="db_error_title">Biblioteksdatabasen er utilgængelig</string>
+    <string name="db_error_body">Bookiro kunne ikke åbne biblioteksdatabasen. Dine data er bevaret, ikke slettet. Prøv igen; hvis problemet fortsætter, kan du nulstille databasen.</string>
+    <string name="db_error_retry">Prøv igen</string>
+    <string name="db_error_reset">Nulstil database …</string>
+    <string name="db_error_reset_confirm_title">Nulstil databasen?</string>
+    <string name="db_error_reset_confirm_body">Dette sletter den lokale biblioteksdatabase permanent på denne enhed. Dine originale filer og eventuelle eksporterede sikkerhedskopier påvirkes ikke. Det kan ikke fortrydes.</string>
+    <string name="db_error_reset_confirm_action">Nulstil</string>
 </resources>

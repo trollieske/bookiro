@@ -222,6 +222,9 @@ internal fun ReadiumEpubReaderScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<ReadiumSearchHit>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
+    // True once a search has actually completed for the current query, so the sheet
+    // does not show a misleading "no matches" message before you press Search.
+    var hasSearched by remember { mutableStateOf(false) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var activeHighlight by remember { mutableStateOf<HighlightEntity?>(null) }
 
@@ -447,6 +450,7 @@ internal fun ReadiumEpubReaderScreen(
         if (query.isBlank()) return
         searchJob?.cancel()
         searching = true
+        hasSearched = false
         searchResults = emptyList()
         val data = chapters
         searchJob = scope.launch {
@@ -454,6 +458,7 @@ internal fun ReadiumEpubReaderScreen(
             if (isActive) {
                 searchResults = hits
                 searching = false
+                hasSearched = true
             }
         }
     }
@@ -712,9 +717,15 @@ internal fun ReadiumEpubReaderScreen(
     if (showSearch) {
         ReadiumSearchSheet(
             query = searchQuery,
-            onQueryChange = { searchQuery = it },
+            onQueryChange = {
+                searchQuery = it
+                // A new query invalidates the previous result state.
+                hasSearched = false
+                searchResults = emptyList()
+            },
             onSearch = { startSearch() },
             searching = searching,
+            hasSearched = hasSearched,
             results = searchResults,
             onJump = { hit ->
                 closeSearch()

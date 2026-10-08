@@ -106,9 +106,6 @@ class ImportWorker(
         }
 
         val cnt = when {
-            inputData.getBoolean(KEY_SAMPLES, false) -> {
-                repo.importAssetsSamples()
-            }
             treeUri != null -> {
                 repo.importFolderTree(Uri.parse(treeUri))
             }
@@ -213,7 +210,6 @@ class ImportWorker(
         const val KEY_URIS = "KEY_URIS"
         const val KEY_TREE_URI = "KEY_TREE_URI"
         const val KEY_SOURCE = "KEY_SOURCE"
-        const val KEY_SAMPLES = "KEY_SAMPLES"
 
         private const val CHANNEL_ID = "import_channel_id"
         private const val NOTIFICATION_ID = 10001
@@ -242,18 +238,6 @@ class ImportWorker(
         ): Operation {
             val data = Data.Builder()
                 .putString(KEY_TREE_URI, treeUri)
-                .build()
-
-            val request = OneTimeWorkRequest.Builder(ImportWorker::class.java)
-                .setInputData(data)
-                .build()
-
-            return workManager.enqueue(request)
-        }
-
-        fun enqueueSamples(workManager: WorkManager): Operation {
-            val data = Data.Builder()
-                .putBoolean(KEY_SAMPLES, true)
                 .build()
 
             val request = OneTimeWorkRequest.Builder(ImportWorker::class.java)

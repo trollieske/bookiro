@@ -12,7 +12,6 @@
     <string name="menu_import">Importieren</string>
     <string name="import_files">Dateien auswählen</string>
     <string name="import_folder">Ordner importieren</string>
-    <string name="import_sample">Beispielbücher laden</string>
     <string name="import_progress_title">Downloads &amp; Import</string>
     <string name="import_tab_downloads">Downloads</string>
     <string name="import_tab_sync_history">Synchronisierungsverlauf</string>
@@ -135,7 +134,6 @@
     <string name="loading">Wird geladen…</string>
     <string name="books_sent_to_import">%1$d Buch/Bücher zum Import gesendet.</string>
     <string name="import_from_folder_started">Importiere Inhalte aus ausgewähltem Ordner…</string>
-    <string name="samples_loading_started">Beispielbücher werden im Hintergrund geladen…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Nahtloser Wechsel</string>
@@ -227,7 +225,6 @@
     <string name="import_title">Bücher importieren</string>
     <string name="import_files_sub">Ein oder mehrere E-Books oder Hörbücher von deinem Gerät.</string>
     <string name="import_folder_sub">Importiert alle Bücher in einem Ordner. Kann auf neue Dateien überwacht werden.</string>
-    <string name="import_sample_sub">Gemeinfreie Klassiker, die der App beiliegen.</string>
     <string name="import_from_ftp">Von FTP-Server</string>
     <string name="import_from_ftp_sub">Hole Bücher von NAS, Heimserver oder Cloud-Speicher.</string>
     <string name="import_supported_formats">Unterstützte Formate</string>
@@ -309,4 +306,11 @@
     <string name="home_service_sources">Quellen</string>
     <string name="home_service_transfers">Übertragungen</string>
     <string name="home_empty_browse">Bibliothek durchsuchen</string>
+    <string name="db_error_title">Bibliotheksdatenbank nicht verfügbar</string>
+    <string name="db_error_body">Bookiro konnte die Bibliotheksdatenbank nicht öffnen. Ihre Daten wurden behalten, nicht gelöscht. Versuchen Sie es erneut; wenn das Problem weiterhin besteht, können Sie die Datenbank zurücksetzen.</string>
+    <string name="db_error_retry">Erneut versuchen</string>
+    <string name="db_error_reset">Datenbank zurücksetzen …</string>
+    <string name="db_error_reset_confirm_title">Datenbank zurücksetzen?</string>
+    <string name="db_error_reset_confirm_body">Dadurch wird die lokale Bibliotheksdatenbank auf diesem Gerät dauerhaft gelöscht. Ihre Originaldateien und eventuell exportierte Sicherungen sind nicht betroffen. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="db_error_reset_confirm_action">Zurücksetzen</string>
 </resources>

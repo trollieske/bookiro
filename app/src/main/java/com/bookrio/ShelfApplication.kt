@@ -14,6 +14,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.util.DebugLogger
 import com.bookrio.core.di.AppDependenciesProvider
+import com.bookrio.core.db.DatabaseRecoveryPolicy
 import com.bookrio.core.gamification.ReadingTrackerFacade
 import com.bookrio.data.gamification.engine.ReadingTrackerEngine
 import com.bookrio.data.local.ShelfDatabase
@@ -21,6 +22,9 @@ import com.bookrio.app.workers.MediaScannerWorker
 import com.bookrio.ftp.worker.FtpPeriodicSyncWorker
 import com.bookrio.ftp.worker.FtpSyncCoordinator
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -32,14 +36,49 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
     private var _database: ShelfDatabase? = null
     val database: ShelfDatabase
         get() = _database ?: synchronized(this) {
-            _database ?: runCatching { ShelfDatabase.getInstance(this) }
-                .getOrElse {
-                    _database = null
-                    deleteDatabase("shelf.db")
-                    ShelfDatabase.getInstance(this)
-                }
-                .also { _database = it }
+            // No deleteDatabase()/recreate fallback here: a transient open failure must
+            // never wipe user data. The getter returns the (lazily built) instance and
+            // open failures are surfaced via [databaseError].
+            _database ?: ShelfDatabase.getInstance(this).also { _database = it }
         }
+
+    private val _databaseError = MutableStateFlow<Throwable?>(null)
+
+    /** Non-null when the database could not be opened. The database file is preserved. */
+    val databaseError: StateFlow<Throwable?> = _databaseError.asStateFlow()
+
+    /**
+     * Opens (and migrates) the database eagerly on the warm-up thread. On failure it
+     * records a non-destructive error state for the UI instead of deleting anything.
+     */
+    fun openDatabaseOrSurfaceError() {
+        runCatching { database.openHelper.writableDatabase }
+            .onSuccess { _databaseError.value = null }
+            .onFailure {
+                android.util.Log.e("Bookiro", "Database open failed; keeping the file for recovery", it)
+                _databaseError.value = it
+            }
+    }
+
+    /** User-initiated retry after a database error. Non-destructive. */
+    fun retryDatabaseOpen() {
+        _databaseError.value = null
+        openDatabaseOrSurfaceError()
+    }
+
+    /**
+     * Explicit, user-confirmed destructive reset. Never called automatically and
+     * never triggered by [openDatabaseOrSurfaceError].
+     */
+    fun resetDatabaseAfterUserConfirmation() {
+        if (!DatabaseRecoveryPolicy.mayDeleteDatabase(userConfirmedReset = true)) return
+        synchronized(this) {
+            ShelfDatabase.resetInstance()
+            _database = null
+            deleteDatabase("shelf.db")
+            _databaseError.value = null
+        }
+    }
 
     private var _readingTracker: ReadingTrackerEngine? = null
     override val readingTracker: ReadingTrackerFacade
@@ -69,6 +108,9 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
                 database
                 readingTracker
             }
+            // Open/migrate eagerly so an open failure is surfaced as a recoverable
+            // error state (never an automatic delete).
+            openDatabaseOrSurfaceError()
             // Self-heal duplicate rows and polluted metadata left by earlier builds.
             // Runs off the main thread, is idempotent, and is cheap once clean.
             runCatching {

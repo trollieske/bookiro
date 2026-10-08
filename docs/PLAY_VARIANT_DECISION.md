@@ -17,7 +17,7 @@ structure, commands and the (inert) data-layer residual.
 | Libgen link/preset | **already absent** (only a filename-cleanup regex remains) | absent |
 | Metadata / chapter lookup (F1/F2) | included (F1 opt-in, F2 automatic+disclosed) | included, **must still be disclosed** |
 | FTP/SMB/WebDAV/Calibre/podcasts | included | included |
-| Package / version identity | same app, private distribution | recommended **separate** app id, e.g. `com.bookrio.play` (proposed correction: `com.bookiro.play`; see `docs/APPLICATION_ID_PLAN.md`) |
+| Package / version identity | same app, private distribution | separate app id **`com.bookiro.play`** (applied; see `docs/APPLICATION_ID_PLAN.md`) |
 | Signing | production upload key | production upload key (Play App Signing) |
 
 `grep -rni libgen` finds **no link, URL, preset or entry point**; the remaining hits
@@ -48,7 +48,7 @@ the UI entry points removes the code and the native libraries from the artifact.
 Standard two-flavor dimension. **Impact:** every app variant is renamed
 (`debug` → `fullDebug`; `playstoreDebug`, `playstoreRelease`), so CI task names and
 external scripts use the flavor-qualified names. The `full` flavor keeps the
-`com.bookrio` id; `playstore` gets `applicationIdSuffix = ".play"` and
+`com.bookiro` id; `playstore` gets `applicationIdSuffix = ".play"` and
 `versionNameSuffix = "-play"`.
 
 Implemented (see `docs/BUILD_VARIANTS.md`):
@@ -104,11 +104,10 @@ app/src/playstore/res/values/strings.xml                        // no torrent st
 
 ## 4. Package / version / signing implications
 
-- **Application id:** a separate `com.bookrio.play` id is recommended if both variants
-  are ever published, otherwise Play treats a Play build and a sideload build as the
-  same app only when ids match. Separate ids allow side-by-side install but split
-  reviews. Either choice must be made *before the first Play upload*. (Proposed
-  correction to `com.bookiro` / `com.bookiro.play`: `docs/APPLICATION_ID_PLAN.md`.)
+- **Application id:** a separate `com.bookiro.play` id is used for Play (`full` shops as
+  `com.bookiro`), applied; see `docs/APPLICATION_ID_PLAN.md`. Separate ids allow
+  side-by-side install but split reviews. The id must be locked **before the first Play
+  upload**.
 - **versionCode:** Play requires a monotonically increasing `versionCode` per track;
   the full/private build may reuse codes only if it is never uploaded to the same track.
 - **Signing:** both variants use the same production upload key from

@@ -12,7 +12,6 @@
     <string name="menu_import">Importar</string>
     <string name="import_files">Elegir archivos</string>
     <string name="import_folder">Importar carpeta</string>
-    <string name="import_sample">Cargar libros de muestra</string>
     <string name="import_progress_title">Descargas e importación</string>
     <string name="import_tab_downloads">Descargas</string>
     <string name="import_tab_sync_history">Historial de sincronización</string>
@@ -135,7 +134,6 @@
     <string name="loading">Cargando…</string>
     <string name="books_sent_to_import">%1$d libro(s) enviado(s) a importación.</string>
     <string name="import_from_folder_started">Importando contenido de la carpeta seleccionada…</string>
-    <string name="samples_loading_started">Cargando libros de muestra en segundo plano…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Cambio inmersivo</string>
@@ -227,7 +225,6 @@
     <string name="import_title">Importar libros</string>
     <string name="import_files_sub">Uno o más ebooks o audiolibros de tu dispositivo.</string>
     <string name="import_folder_sub">Importa todos los libros de una carpeta. Puede vigilarse en busca de archivos nuevos.</string>
-    <string name="import_sample_sub">Clásicos de dominio público incluidos con la aplicación.</string>
     <string name="import_from_ftp">Desde servidor FTP</string>
     <string name="import_from_ftp_sub">Obtén libros de NAS, servidor doméstico o almacenamiento en la nube.</string>
     <string name="import_supported_formats">Formatos compatibles</string>
@@ -309,4 +306,11 @@
     <string name="home_service_sources">Fuentes</string>
     <string name="home_service_transfers">Transferencias</string>
     <string name="home_empty_browse">Explorar biblioteca</string>
+    <string name="db_error_title">Base de datos de la biblioteca no disponible</string>
+    <string name="db_error_body">Bookiro no pudo abrir la base de datos de la biblioteca. Tus datos se han conservado, no se han eliminado. Inténtalo de nuevo; si el problema persiste, puedes restablecer la base de datos.</string>
+    <string name="db_error_retry">Reintentar</string>
+    <string name="db_error_reset">Restablecer base de datos…</string>
+    <string name="db_error_reset_confirm_title">¿Restablecer la base de datos?</string>
+    <string name="db_error_reset_confirm_body">Esto elimina permanentemente la base de datos local de la biblioteca en este dispositivo. Tus archivos originales y las copias de seguridad exportadas no se ven afectados. Esta acción no se puede deshacer.</string>
+    <string name="db_error_reset_confirm_action">Restablecer</string>
 </resources>

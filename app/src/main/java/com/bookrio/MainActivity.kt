@@ -56,7 +56,6 @@ import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.designsystem.theme.ShelfTheme
 import com.bookrio.library.ui.LibraryScreen
 import com.bookrio.library.viewmodel.LibraryMode
-import com.bookrio.library.ui.SampleBooks
 import com.bookrio.reader.ui.ReaderScreen
 import com.bookrio.player.ui.PlayerScreen
 import com.bookrio.player.service.AudiobookPlaybackService
@@ -137,6 +136,64 @@ private fun NavItemIcon(item: BottomNavItem, label: String) {
     }
 }
 
+@Composable
+private fun DatabaseErrorScreen(
+    onRetry: () -> Unit,
+    onResetConfirmed: () -> Unit
+) {
+    var showResetConfirm by remember { mutableStateOf(false) }
+    Surface(color = OmarchyColors.Bg, modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                stringResource(R.string.db_error_title),
+                style = ShelfTypography.HeadlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = OmarchyColors.FgBright
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.db_error_body),
+                style = ShelfTypography.BodyMedium,
+                color = OmarchyColors.Dim
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onRetry) {
+                Text(stringResource(R.string.db_error_retry))
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { showResetConfirm = true }) {
+                Text(stringResource(R.string.db_error_reset))
+            }
+        }
+    }
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text(stringResource(R.string.db_error_reset_confirm_title)) },
+            text = { Text(stringResource(R.string.db_error_reset_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    onResetConfirmed()
+                }) {
+                    Text(stringResource(R.string.db_error_reset_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = null) {
@@ -149,6 +206,18 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
         com.bookrio.data.local.ShelfDatabase.getInstance(appContextForCounts).bookDao().observeAll()
     }.collectAsStateWithLifecycle(initialValue = emptyList())
     val showTabCounts by prefs.libraryTabCountsEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    // If the database could not be opened, keep the data and show a recoverable
+    // error/retry path instead of wiping anything.
+    val dbApp = LocalContext.current.applicationContext as? ShelfApplication
+    val dbError = dbApp?.databaseError?.collectAsStateWithLifecycle(initialValue = null)?.value
+    if (dbApp != null && dbError != null) {
+        DatabaseErrorScreen(
+            onRetry = { dbApp.retryDatabaseOpen() },
+            onResetConfirmed = { dbApp.resetDatabaseAfterUserConfirmation() }
+        )
+        return
+    }
 
     if (hasSeenOnboardingState == null) {
         Surface(color = OmarchyColors.Bg, modifier = Modifier.fillMaxSize()) {}
@@ -1383,8 +1452,4 @@ private fun formatBytes(bytes: Long): String = when {
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"
     bytes < 1024 * 1024 * 1024 -> "${"%.1f".format(bytes.toDouble() / (1024 * 1024))} MB"
     else -> "${"%.2f".format(bytes.toDouble() / (1024 * 1024 * 1024))} GB"
-}
-
-object SampleData {
-    val demoBooks = SampleBooks.books
 }

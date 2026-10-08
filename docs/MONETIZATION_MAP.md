@@ -282,10 +282,11 @@ different mechanism (license key / external store) — not designed here.
 
 ## 6. Edge cases & risks
 
-- **Different application ids** (`com.bookrio.play` vs `com.bookrio` today; proposed
-  `com.bookiro.play` vs `com.bookiro`, see `docs/APPLICATION_ID_PLAN.md`): a Play
-  purchase is bound to the Play applicationId. The full build will never see it — by
-  design (§5).
+- **Different application ids** (`com.bookiro.play` vs `com.bookiro`; applied — see
+  `docs/APPLICATION_ID_PLAN.md`): a Play purchase is bound to the Play applicationId.
+  The full build will never see it — by design (§5).
+- **Code namespace stays `com.bookrio.*`** for every module; only the applicationId uses
+  the `com.bookiro` brand. Do not expect package names to match the store id.
 - **Refunds / chargebacks:** a one-time purchase can be refunded; `refresh()` on resume
   handles downgrade. With no server validation, a refunded user may keep Pro until the
   next Play query — acceptable for a $4.99 product (UNKNOWN whether owner wants server

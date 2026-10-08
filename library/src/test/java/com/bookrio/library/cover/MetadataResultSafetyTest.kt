@@ -53,22 +53,17 @@ class MetadataResultSafetyTest {
     }
 
     /**
-     * DATA-SAFETY finding for area 3: there is no minimum-match threshold. A
-     * candidate that does not match the queried title at all wins on cover URL +
-     * ISBN + author-overlap points over the matching result, and its
-     * title/author are returned as the "best" metadata. `MetadataRefreshWorker`
-     * scope=ALL persists that result over the real metadata
-     * (`enrichMetadataSilently`), with no review step and no stored undo.
+     * FIXED: the minimum-match gate rejects a candidate whose title does not match
+     * the query, even when it carries cover + ISBN + author points. The matching
+     * result wins instead, so a bad network hit cannot overwrite real metadata.
      */
     @Test
-    fun `a completely mismatched title still wins when it has cover and isbn points`() {
-        // The matching result has no author/cover/ISBN (20 title points).
+    fun `a mismatched title no longer wins over the matching result`() {
         val realBook = FetchedMetadata(
             title = "The Martian",
             author = null,
             source = "openlibrary"
         )
-        // The mismatched result gets isbn 8 + cover 10 + author occurrence 12 = 30.
         val wrongBook = FetchedMetadata(
             title = "A Completely Different Book",
             author = "Someone Else",
@@ -80,8 +75,43 @@ class MetadataResultSafetyTest {
         val best = pickBest(listOf(realBook, wrongBook), "The Martian", "Andy Weir", false)
 
         assertNotNull(best)
-        assertEquals("A Completely Different Book", best?.title)
-        assertEquals("Someone Else", best?.author)
+        assertEquals("The Martian", best?.title)
+    }
+
+    @Test
+    fun `a lone mismatched result is rejected entirely (retain existing data)`() {
+        val wrongBook = FetchedMetadata(
+            title = "A Completely Different Book",
+            author = "Someone Else",
+            isbn = "9780000000000",
+            coverUrl = "https://example.com/wrong.jpg",
+            source = "google"
+        )
+
+        val best = pickBest(listOf(wrongBook), "The Martian", "Andy Weir", false)
+
+        assertEquals(null, best)
+    }
+
+    @Test
+    fun `a matching ISBN is accepted even when the title is formatted differently`() {
+        val candidate = FetchedMetadata(
+            title = "Dune (Deluxe Edition)",
+            author = "Frank Herbert",
+            isbn = "9780441013593",
+            source = "openlibrary"
+        )
+
+        val best = pickBest(
+            listOf(candidate),
+            "Dune",
+            "Frank Herbert",
+            false,
+            rawIsbn = "9780441013593"
+        )
+
+        assertNotNull(best)
+        assertEquals("9780441013593", best?.isbn)
     }
 
     @Test

@@ -12,7 +12,6 @@
     <string name="menu_import">Import</string>
     <string name="import_files">Choose files</string>
     <string name="import_folder">Import folder</string>
-    <string name="import_sample">Load sample books</string>
     <string name="import_progress_title">Downloads &amp; import</string>
     <string name="import_tab_downloads">Downloads</string>
     <string name="import_tab_sync_history">Sync history</string>
@@ -136,7 +135,6 @@
     <string name="loading">Loading…</string>
     <string name="books_sent_to_import">%1$d book(s) sent to import.</string>
     <string name="import_from_folder_started">Importing contents from selected folder…</string>
-    <string name="samples_loading_started">Loading sample books in background…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Immersion Handoff</string>
@@ -228,7 +226,6 @@
     <string name="import_title">Import books</string>
     <string name="import_files_sub">One or more ebooks or audiobooks from your device.</string>
     <string name="import_folder_sub">Import all books in a folder. Can be watched for new files.</string>
-    <string name="import_sample_sub">Public classics that ship with the app.</string>
     <string name="import_from_ftp">From FTP server</string>
     <string name="import_from_ftp_sub">Fetch books from NAS, home server or cloud storage.</string>
     <string name="import_supported_formats">Supported formats</string>
@@ -310,4 +307,12 @@
     <string name="home_service_transfers">Transfers</string>
     <string name="home_empty_sources">Connect a source</string>
     <string name="home_empty_browse">Browse library</string>
+    <!-- Database open failure: data is preserved; reset is explicit and separate. -->
+    <string name="db_error_title">Library database unavailable</string>
+    <string name="db_error_body">Bookiro could not open your library database. Your data has been kept, not deleted. Try again; if the problem persists you can reset the database.</string>
+    <string name="db_error_retry">Try again</string>
+    <string name="db_error_reset">Reset database…</string>
+    <string name="db_error_reset_confirm_title">Reset the database?</string>
+    <string name="db_error_reset_confirm_body">This permanently deletes the local library database on this device. Your original files and any exported backups are not affected. This cannot be undone.</string>
+    <string name="db_error_reset_confirm_action">Reset</string>
 </resources>

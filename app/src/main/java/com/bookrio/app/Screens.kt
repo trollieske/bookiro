@@ -53,7 +53,6 @@ import com.bookrio.designsystem.components.BookFormat
 import com.bookrio.designsystem.components.BookVisual
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
-import com.bookrio.library.ui.SampleBooks
 
 private val GENERIC_CHAPTER_TITLE =
     Regex("^(kapittel|kapitel|chapter)\\s*\\d+$", RegexOption.IGNORE_CASE)
@@ -1060,12 +1059,6 @@ fun ImportScreen(
         }
     }
 
-    fun launchSamples() {
-        ImportWorker.enqueueSamples(WorkManager.getInstance(ctx))
-        snackbarScope.launch {
-            snackbarHostState.showSnackbar(ctx.getString(R.string.samples_loading_started))
-        }
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1118,23 +1111,6 @@ fun ImportScreen(
                     )
                     // #endregion
                     openFolderLauncher.launch(null)
-                }
-            )
-            ImportCard(
-                title = stringResource(R.string.import_sample),
-                subtitle = stringResource(R.string.import_sample_sub),
-                icon = Icons.Default.AutoAwesome,
-                color = com.bookrio.designsystem.theme.OmarchyColors.Accent,
-                onClick = {
-                    // #region debug-point UI:samples-launch
-                    dbgUi(
-                        location = "ImportScreen",
-                        hypothesisId = "A",
-                        msg = "sample-import-launch",
-                        data = "source=samples"
-                    )
-                    // #endregion
-                    launchSamples()
                 }
             )
             ImportCard(

@@ -696,7 +696,3 @@ private fun defaultLibraryVmFactory(): androidx.lifecycle.ViewModelProvider.Fact
         LibraryViewModel(app, prefs)
     }
 }
-
-object SampleBooks {
-    val books: List<com.bookrio.designsystem.components.BookVisual> = emptyList()
-}

@@ -533,6 +533,7 @@ internal fun ReadiumSearchSheet(
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     searching: Boolean,
+    hasSearched: Boolean,
     results: List<ReadiumSearchHit>,
     onJump: (ReadiumSearchHit) -> Unit,
     onDismiss: () -> Unit,
@@ -582,7 +583,11 @@ internal fun ReadiumSearchSheet(
                     Text(stringResource(R.string.rdr_searching), color = OmarchyColors.Dim, fontSize = 13.sp)
                 }
 
-                results.isEmpty() && query.isNotBlank() -> EmptySheetText(
+                // No search has run for this query yet: show nothing rather than a
+                // misleading "no matches found".
+                !hasSearched -> Unit
+
+                results.isEmpty() -> EmptySheetText(
                     stringResource(R.string.rdr_search_no_results),
                 )
 

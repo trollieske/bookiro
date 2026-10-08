@@ -30,6 +30,7 @@ class DuplicateRepairTest {
         fileUri: String? = null,
         filePath: String? = null,
         size: Long = 0L,
+        isbn: String? = null,
         isDeleted: Boolean = false
     ) = BookEntity(
         id = id,
@@ -42,6 +43,7 @@ class DuplicateRepairTest {
         fileUri = fileUri,
         filePath = filePath,
         fileSizeBytes = size,
+        isbn = isbn,
         isDeleted = isDeleted
     )
 
@@ -173,10 +175,10 @@ class DuplicateRepairTest {
     }
 
     @Test
-    fun `the same book in several formats collapses to the best format (EPUB wins)`() = runBlocking {
+    fun `the same book in several formats is preserved (identity not proven)`() = runBlocking {
         val db = FakeShelfDatabase()
         val repo = JvmHarness.repository(db)
-        // The PDF is bigger, but EPUB is the preferred reading format.
+        // Same work, different files and formats, no ISBN: must NOT be collapsed.
         db.store.addBook(
             book(1, "Project Hail Mary", "Andy Weir", format = FormatEntity.EPUB, fileUri = "content://epub", size = 10)
         )
@@ -187,34 +189,55 @@ class DuplicateRepairTest {
             book(3, "Project Hail Mary", "Andy Weir", format = FormatEntity.TXT, fileUri = "content://txt", size = 1)
         )
 
-        assertEquals(2, repo.deduplicateLibrary())
-        assertEquals(listOf(1L), db.store.activeBooks.map { it.id })
-        assertTrue(db.store.books[2L]!!.isDeleted)
-        assertTrue(db.store.books[3L]!!.isDeleted)
+        assertEquals(0, repo.deduplicateLibrary())
+        assertEquals(setOf(1L, 2L, 3L), db.store.activeBooks.map { it.id }.toSet())
     }
 
-    /**
-     * DATA-SAFETY finding: pass 2 collapses ANY two files with the same
-     * normalized title+author+type, including two genuinely different editions
-     * (e.g. two EPUB translations) — silently, without user confirmation. The
-     * rows are soft-deleted, so the data is recoverable from the table, but
-     * nothing in the UI shows that a collapse happened. Documented by test.
-     */
     @Test
-    fun `two different EPUB files with identical title and author are collapsed silently`() =
-        runBlocking {
-            val db = FakeShelfDatabase()
-            val repo = JvmHarness.repository(db)
-            db.store.addBook(
-                book(1, "The Hobbit", "J. R. R. Tolkien", fileUri = "content://edition-a", size = 500)
-            )
-            db.store.addBook(
-                book(2, "The Hobbit", "J. R. R. Tolkien", fileUri = "content://edition-b", size = 500)
-            )
+    fun `same ISBN same type and same format collapses (identity proven)`() = runBlocking {
+        val db = FakeShelfDatabase()
+        val repo = JvmHarness.repository(db)
+        db.store.addBook(
+            book(1, "Dune", "Frank Herbert", format = FormatEntity.EPUB, isbn = "9780441013593", fileUri = "content://a", size = 500)
+        )
+        db.store.addBook(
+            book(2, "Dune", "Frank Herbert", format = FormatEntity.EPUB, isbn = "9780441013593", fileUri = "content://b", size = 100)
+        )
 
-            assertEquals(1, repo.deduplicateLibrary())
-            assertEquals(1, db.store.activeBooks.size)
-        }
+        assertEquals(1, repo.deduplicateLibrary())
+        assertEquals(listOf(1L), db.store.activeBooks.map { it.id })
+        assertTrue(db.store.books[2L]!!.isDeleted)
+    }
+
+    @Test
+    fun `same ISBN but different format is preserved`() = runBlocking {
+        val db = FakeShelfDatabase()
+        val repo = JvmHarness.repository(db)
+        db.store.addBook(
+            book(1, "Dune", "Frank Herbert", format = FormatEntity.EPUB, isbn = "9780441013593", fileUri = "content://a")
+        )
+        db.store.addBook(
+            book(2, "Dune", "Frank Herbert", format = FormatEntity.PDF, isbn = "9780441013593", fileUri = "content://b")
+        )
+
+        assertEquals(0, repo.deduplicateLibrary())
+        assertEquals(2, db.store.activeBooks.size)
+    }
+
+    @Test
+    fun `two different EPUB files with identical title and author are NOT collapsed`() = runBlocking {
+        val db = FakeShelfDatabase()
+        val repo = JvmHarness.repository(db)
+        db.store.addBook(
+            book(1, "The Hobbit", "J. R. R. Tolkien", fileUri = "content://edition-a", size = 500)
+        )
+        db.store.addBook(
+            book(2, "The Hobbit", "J. R. R. Tolkien", fileUri = "content://edition-b", size = 500)
+        )
+
+        assertEquals(0, repo.deduplicateLibrary())
+        assertEquals(2, db.store.activeBooks.size)
+    }
 
     @Test
     fun `rows with no file identity and different titles are left alone`() = runBlocking {
@@ -223,12 +246,35 @@ class DuplicateRepairTest {
         db.store.addBook(book(1, "Audiobook", "", type = BookTypeEntity.AUDIOBOOK, format = FormatEntity.M4B))
         db.store.addBook(book(2, "Audiobook", "", type = BookTypeEntity.AUDIOBOOK, format = FormatEntity.M4B))
 
-        // Same title/author and no identity at all: pass 2 does merge these two
-        // (same book by name). What must never happen is a merge with a DIFFERENT title.
+        // No proven identity at all: even the same title must stay separate now.
         db.store.addBook(book(3, "Different Book", "", type = BookTypeEntity.AUDIOBOOK, format = FormatEntity.M4B))
         repo.deduplicateLibrary()
 
         assertTrue(db.store.activeBooks.any { it.id == 3L })
+        assertEquals(3, db.store.activeBooks.size)
+    }
+
+    @Test
+    fun `bookmarks and highlights of a confirmed duplicate are re-pointed to the survivor`() = runBlocking {
+        val db = FakeShelfDatabase()
+        val repo = JvmHarness.repository(db)
+        val uri = "content://tree/document/55"
+        db.store.addBook(book(1, "The Martian", "Andy Weir", fileUri = uri))
+        db.store.addBook(book(2, "The Martian", "Andy Weir", fileUri = uri))
+        db.store.addBookmark(
+            com.bookrio.data.local.entity.BookmarkEntity(bookId = 2, title = "page 3")
+        )
+        db.store.addHighlight(
+            com.bookrio.data.local.entity.HighlightEntity(bookId = 2, text = "a quote")
+        )
+
+        repo.deduplicateLibrary()
+
+        assertEquals(1, db.store.activeBooks.size)
+        assertEquals(1, db.store.bookmarks.values.count { it.bookId == 1L })
+        assertEquals(0, db.store.bookmarks.values.count { it.bookId == 2L })
+        assertEquals(1, db.store.highlights.values.count { it.bookId == 1L })
+        assertEquals(0, db.store.highlights.values.count { it.bookId == 2L })
     }
 
     @Test

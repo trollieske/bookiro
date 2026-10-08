@@ -1,259 +1,155 @@
-# Bookiro Android — Play GO/NO-GO (playstore-flavor, re-verifisert)
+# Bookiro Android — GO/NO-GO (Bookiro-id, data-safety RC)
 
-**Verdikt: NO-GO for Google Play (inkl. intern testing-track).**
+**Base:** branch `release/playstore-variant-rc`, commit `eec1c7c` **plus uncommitted
+working-tree changes** (applicationId correction + data-safety fixes). The candidate was
+not built from a clean commit, so `HEAD` alone does not identify its source.
+**Dato:** 2026-10-08. **Miljø:** JDK 17, Gradle 8.11.1, macOS/arm64, build-tools 36.0.0.
 
-- Branch: `release/playstore-variant-rc`
-- Commit: `accb368b00628be2c4092f1cac22ffedce036bac` (`accb368`)
-- Dato: 2026-10-07
-- Miljø: JDK 17, Gradle 8.11.1 (wrapper), macOS/arm64, Android build-tools 36.0.0
-- Arbeidstre: ren. **Ingen kode endret, ingenting committet** i denne re-verifiseringen
-  (kun dette dokumentet er skrevet).
-- Metode: playstore-artefaktene (release-AAB + release-APK) inspisert med
-  `tools/verify_playstore_variant.sh`, `unzip -l`, `aapt2 dump badging`, merged
-  release-manifest, `zipalign`, `jarsigner`/`apksigner`; tester og lint kjørt for
-  playstore-flavoren. Alle verdier under er målt, ikke antatt.
+## Verdikter (separate)
 
-**Hvorfor NO-GO:** selv om Play-varianten nå er torrent-fri, gjenstår
-**produksjonssignering** (artefaktene er debug-signert), og **device-aksept**,
-**data-safety-portene** og **privacy policy-URL** er fortsatt **UKJENT**. Grønne
-tester alene er ikke GO.
-
----
-
-## 0. Endringer siden forrige rapport (`4af538c`)
-
-| Tidligere funn | Nå |
-|---|---|
-| «Ingen Play-variant finnes» | **Løst** — `full`/`playstore`-flavors implementert |
-| Torrent i release-artefaktet | **Løst** — playstore AAB/APK har ingen `libtorrent4j`/torrent-klasser/ressurser |
-| `rdr_error_garbage_torrent`-melding | **Løst** — fjernet, generisk melding i begge varianter |
-| Lint krasjet (`UseTomlInstead`) med to flavors | **Løst** — kun den sjekken er deaktivert; lint grønn for begge |
-| Produksjonssignering | **Fortsatt FEIL** |
-| Device-aksept / data-safety / privacy-URL / F2-disclosure | **Fortsatt UKJENT** |
-
----
-
-## 1. Faktiske bygg-verdier — playstore (målt)
-
-Fra `aapt2 dump badging` på `app-playstore-universal-release.apk` og merged
-release-manifest
-(`app/build/intermediates/merged_manifests/playstoreRelease/processPlaystoreReleaseManifest/universal/AndroidManifest.xml`):
-
-| Felt | Full (`com.bookrio`) | **Playstore** |
+| Gate | Verdikt | Grunnlag |
 |---|---|---|
-| `applicationId` | `com.bookrio` | **`com.bookrio.play`** |
-| `versionCode` | `11` | **`11`** |
-| `versionName` | `1.0.0-readium9` | **`1.0.0-readium9-play`** |
-| `minSdk` | `26` | **`26`** |
-| `targetSdk` | `36` | **`36`** |
-| `compileSdk` | `36` | **`36`** |
+| **Lokal / enhets-test** | **READY TO BEGIN** | begge flavors bygger; **406 JVM-tester, 0 feil**; Playstore-lint 0 errors; 16 KB OK; data-tap-fikser inne. Ingen device-pass utført ennå. |
+| **Play internal testing-upload** | **NOT READY** | ingen produksjonssignert AAB (kun debug/**TEST**); upload-nøkkel + Play App Signing ikke satt opp. |
+| **Produksjon** | **NOT READY** | device-aksept, data-safety-eierbeslutninger, privacy-URL og F2-disclosure gjenstår. |
 
-Merged playstore release-manifest:
-
-```
-package="com.bookrio.play"
-android:minSdkVersion="26"
-android:targetSdkVersion="36"
-android:versionCode="11"
-android:versionName="1.0.0-readium9-play"
-```
-
-Ingen `android:debuggable`/`android:testOnly` i release-manifestet.
+**Hvorfor ikke GO:** ingen produksjonssignert artefakt, og device-/data-safety-portene er
+fortsatt **UKJENT**. Grønne tester er ikke GO.
 
 ---
 
-## 2. Torrent-ekskludering — verifisert på playstore-artefaktene
+## 1. Faktiske bygg-verdier (målt med `aapt2 dump badging`)
 
-| Sjekk | Playstore | Full |
+| Felt | Full | Playstore |
 |---|---|---|
-| `tools/verify_playstore_variant.sh` (AAB) | **OK** (exit 0) | **FAIL** — `libtorrent4j` finnes (exit 1) |
-| `tools/verify_playstore_variant.sh` (APK) | **OK** (exit 0) | (ikke kjørt) |
-| `libtorrent4j.so` i AAB (`unzip -l`) | **0 treff** | 3 treff: arm64 15 883 152 B, v7a 13 734 884 B, x86_64 16 358 808 B |
-| `libtorrent4j.so` i APK (`unzip -l`) | **ingen** | 3 treff |
-| Native `.so` i playstore AAB | kun `libandroidx.graphics.path.so`, `libdatastore_shared_counter.so` (arm64-v8a, armeabi-v7a, x86, x86_64) | + `libtorrent4j.so` |
-| `com/bookrio/torrent/`-klasser (DEX) | **ingen** | ja |
-| torrent-ressurser/strenger (`aapt2 dump resources`) | **ingen** | ja |
+| `applicationId` | **`com.bookiro`** | **`com.bookiro.play`** |
+| `versionCode` | `11` | `11` |
+| `versionName` | `1.0.0-readium9` | `1.0.0-readium9-play` |
+| `minSdk` / `targetSdk` / `compileSdk` | `26` / `36` / `36` | `26` / `36` / `36` |
 
-AAB-størrelse: playstore **32 607 475 B** vs. full **50 802 399 B** (torrent utgjør
-~18 MB). Universal release-APK: playstore **16 346 366 B** vs. full **62 755 780 B**.
-
-FTP/SMB/WebDAV/Calibre/podkast er med i begge varianter, som bestemt
-(`docs/PLAY_VARIANT_DECISION.md` §1).
-
-**Kjent inert rest:** den delte `data`-modulen beholder Room-entiteten/DAO-en
-`torrent_downloads` (tabellen kan aldri få rader uten `:torrent`; ingen P2P/DHT/
-tracker-kode, ingen native lib). Internal-only, ikke brukervendt. Se
-`docs/BUILD_VARIANTS.md`.
+Debug: `com.bookiro.debug` / `com.bookiro.play.debug`. Namespace forblir `com.bookrio.*`
+(ingen kosmetisk pakke-rename). Ingen `debuggable`/`testOnly` i release.
 
 ---
 
-## 3. Permissions i merged playstore release-manifest
+## 2. Torrent-ekskludering (verifisert)
 
-Fra `aapt2 dump badging` + merged manifest — **identisk sett** med full (11 totalt,
-10 app + 1 auto):
+- `tools/verify_playstore_variant.sh` på Playstore-AAB: **OK** (ingen `libtorrent4j`, ingen
+  `com.bookrio.torrent`-klasser, ingen torrent-ressurser).
+- Full-AAB inneholder `libtorrent4j.so` for arm64/armeabi-v7a/x86_64 (3 treff).
+- AAB-størrelse: Playstore ~? vs full ~? (bygg målt i denne kjøringen).
 
-| Permission | Playstore | Begrunnet? | Grunnlag |
-|---|---|---|---|
-| `INTERNET` | ja | Ja | F1–F9 (metadata, podkast, bruker-servere) |
-| `ACCESS_NETWORK_STATE` | ja | Ja | sync/torrent(–)/podkast-constraints |
-| `ACCESS_WIFI_STATE` | ja | Ja | LAN-discovery leser `WifiManager.connectionInfo` |
-| `FOREGROUND_SERVICE` | ja | Ja | media + WorkManager |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | ja | Ja | player/podcast |
-| `FOREGROUND_SERVICE_DATA_SYNC` | ja | Ja | WorkManager-arbeidere |
-| `POST_NOTIFICATIONS` | ja | Ja | media-/overføringsvarsler |
-| `VIBRATE` | **ja — fortsatt der** | **Nei — ubegrunnet/ubrukt** | `grep -rn "VIBRATE\|vibrat"` i `app/core/data/library`-koden: **0 kode-treff** |
-| `WAKE_LOCK` | ja | Ja | `setWakeMode` + WorkManager |
-| `RECEIVE_BOOT_COMPLETED` | ja | Ja | WorkManager reschedule |
-| `com.bookrio.play.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | ja | Ja (auto) | signature-level, androidx core |
+---
 
-- **`MANAGE_EXTERNAL_STORAGE`: fraværende** (`grep -c` = 0). Ingen storage/lokasjon/
-  kamera/mikrofon/kontakter/`QUERY_ALL_PACKAGES`/eksakte alarmer.
-- **Foreground service-typer:** `mediaPlayback` (player + podkast) og `dataSync`
-  (WorkManager), med matchende permissions.
-- **`POST_NOTIFICATIONS`:** deklarert; runtime-forespørsel kun i enkelte
-  kilde-skjermer (UX-gap, ikke policy-brudd).
+## 3. Permissions
+
+Identisk sett for begge flavors, **uten `VIBRATE`** (fjernet — ingen kode satte et
+vibrasjonsmønster og ingen kanal aktiverte vibrasjon):
+`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `FOREGROUND_SERVICE_DATA_SYNC`,
+`POST_NOTIFICATIONS`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` + auto-generert
+`DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`.
+Ingen `MANAGE_EXTERNAL_STORAGE`/storage/lokasjon/kamera. FGS-typer: `mediaPlayback` +
+`dataSync` med matchende permissions.
 
 ---
 
 ## 4. Signering
 
-- `hasProductionSigning` = **false** i dette miljøet (ingen `BOOKIRO_*`-verdier /
-  `keystore.properties`). Release-bygget bruker derfor **debug-nøkkelen**.
-- **Målt identitet (playstore release):**
-  - APK: `Signer #1 certificate DN: CN=Android Debug, O=Android, C=US`,
-    SHA-256 `c5269dcee05b8dbbfef756b90f1e9c9fef3030666516f7997fe5a8686ff6f88a`
-  - AAB: `jarsigner` → `Signed by "CN=Android Debug, O=Android, C=US"`, `jar verified.`
-  - => **ikke Play-opplastbar.**
-- **Ingen nøkler/passord i git** (re-verifisert):
-  `git ls-files | grep -iE '\.(jks|keystore|p12|pepk)$|keystore\.properties'` → **ingen treff**.
-- `:app:bundlePlaystoreRelease` uten creds feiler fail-closed (krever
-  `BOOKIRO_ALLOW_DEBUG_SIGNING=true` for et TEST-artefakt).
+- Debug/TEST-signert (`CN=Android Debug`) for både full og playstore release i denne
+  kjøringen (eksplisitt `BOOKIRO_ALLOW_DEBUG_SIGNING=true`, kun for lokal TEST).
+- Produksjonssignering forblir fail-closed: `:app:bundlePlaystoreRelease` uten creds feiler.
+- Ingen nøkler/passord i git.
 
 ---
 
-## 5. R8 / minifisering
+## 5. R8 / mapping
 
-- `release`: `isMinifyEnabled = true`, `isShrinkResources = true`. Playstore-AAB og
-  -APK er bygget med R8 (32.6 MB AAB vs. 16.3 MB universal APK).
-- Mapping genereres per buildtype/flavor:
-  `app/build/outputs/mapping/playstoreRelease/mapping.txt` (bevart av AGP).
-- **Gap:** ingen automatisert mapping-opplasting til Play (må lastes opp manuelt).
-
----
-
-## 6. Kjørte kommandoer — faktiske resultater (playstore)
-
-| Kommando | Resultat | Exit |
-|---|---|---|
-| `tools/verify_playstore_variant.sh <playstore AAB>` | **OK: no torrent functionality found** | 0 |
-| `tools/verify_playstore_variant.sh <playstore APK>` | **OK** | 0 |
-| `tools/verify_playstore_variant.sh <full AAB>` | **FAIL: libtorrent4j present** (beviser at sjekken virker) | 1 |
-| `./gradlew :app:testPlaystoreDebugUnitTest` | **BUILD SUCCESSFUL** — 3 tester, 0 feil, 0 errors, 0 skipped | 0 |
-| `./gradlew :app:lintPlaystoreRelease` | **BUILD SUCCESSFUL** — 0 errors, **93 warnings**, 1 info (95 issues) | 0 |
-| `zipalign -c -P 16 -v 4 <playstore APK>` | **Verification successful** | 0 |
-
-Lint-funn (playstore, alle warnings): `GradleDependency` 53, `PluralsCandidate` 26,
-`UnusedResources` 5, `TrustAllX509TrustManager` 3, `Typos` 2, `ExportedService` 2,
-`InsecureBaseConfiguration` 1, `ObsoleteSdkInt` 1, `AutoboxingStateCreation` 1.
-(`UseTomlInstead` er deaktivert fordi AGP-sjekken krasjer med to flavors.)
-
-**Merk:** app-modulen har kun **3 JVM-tester** (`HomeLogicTest`). Det er tynn dekning
-for en release-port; den brede testmassen ligger i bibliotek-modulene
-(`reader/player/library/...`) og kjøres ikke av `:app:testPlaystoreDebugUnitTest`.
+- `isMinifyEnabled = true`, `isShrinkResources = true`.
+- **R8-mappingen er innebygd i AAB-en**: `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`.
+  Tidligere antakelse om at manuell opplasting kreves er **feil** — AAB-en bærer mappingen.
+- Lokale mapping-filer finnes også under `app/build/outputs/mapping/<variant>Release/`.
 
 ---
 
-## 7. Krav-tabell (playstore)
+## 6. Data-safety-fikser anvendt (Phase 3)
+
+| Område | Før | Nå | Bevis |
+|---|---|---|---|
+| DB open | `fallbackToDestructiveMigration()` + auto `deleteDatabase` | ingen destruktiv migrasjon/auto-sletting; `databaseError`-state + error/retry-UI; reset kun ved eksplisitt bekreftelse | `ShelfDatabase.kt`, `ShelfApplication.kt`, `DatabaseRecoveryPolicy(+Test)` |
+| Dedup | kollapset alt med lik tittel+forfatter (og på tvers av format) | kun bevist identitet (samme fil-URI/sti, eller samme ISBN + type + format) | `DuplicateRepairTest` |
+| Dedup-annotasjoner | kun progress flyttet | progress (overskrives ikke) + bokmerker + highlights flyttes til survivor | `DuplicateRepairTest` |
+| Audiobook-consolidate | hard-slettet duplikat (`delete`) | `softDelete` + annotasjoner bevart | `AudiobookRepairTest` |
+| Audiobook-split | splittet alle kapittelnavn i én mappe | kun når sporene spenner ≥2 foreldremapper; én-mappe/SAF urørt | `AudiobookRepairTest` |
+| Metadata/cover | enhver scoret treff kunne vinne | minimums-match (tittel-innhold eller ISBN); mismatch → ingen oppdatering | `MetadataResultSafetyTest` |
+| VIBRATE | deklarert, ubrukt | fjernet | manifest |
+| Sample-bøker | «Load sample books» importerte sub-1 KB stub-er som ikke kunne leses | **fjernet** (UI, worker-gren, `importAssetsSamples`, `SampleBooks`/`SampleData`, død seed-data, strenger, assets) | verifisert på emulator: Import-skjermen viser ingen sample-rad |
+| In-book søk | viste «No matches found» før et søk var kjørt | viser resultatet først etter et fullført søk (`hasSearched`-flagg) | verifisert på emulator: 5 treff etter Search, ingen feilmelding før |
+
+**Ikke gjort / utsatt:** full transaksjonell omslutning av audiobook-merge (Room
+`withTransaction` er ikke testbar i JVM-harnesset); full regresjon for manuelle
+cover-overrides (ingen egen «manual override»-flagg funnet — dokumentert som UKJENT).
+
+---
+
+## 7. Kjørte kommandoer / resultater
+
+| Kommando | Resultat |
+|---|---|
+| `:app:assembleFullDebug :app:assemblePlaystoreDebug` | **SUCCESS** |
+| `:app:bundleFullRelease :app:bundlePlaystoreRelease` (TEST-signering) | **SUCCESS** |
+| full regresjonssuite (12 tasks, alle moduler) | **406 tester, 0 feil, 0 errors** |
+| `:app:lintPlaystoreRelease` | **0 errors**, 94 warnings, 1 info |
+| `tools/verify_playstore_variant.sh` (Playstore AAB) | **OK** |
+| full AAB `libtorrent4j` | 3 treff |
+| `zipalign -c -P 16` (Playstore APK) | **successful** |
+| ELF PT_LOAD-align (alle `.so`) | `0x4000` (16 KB-safe) |
+| AAB mapping-metadata | `proguard.map` innebygd |
+
+---
+
+## 8. Krav-tabell
 
 | # | Krav | Status | Bevis |
 |---|---|---|---|
-| 1 | applicationId/versionCode/versionName/minSdk/targetSdk/compileSdk riktige | **OK** | `aapt2 dump badging` + merged manifest: `com.bookrio.play`, 11, `1.0.0-readium9-play`, 26/36/36 |
-| 2 | Play-variant valgt og anvendt | **OK** | `app/build.gradle.kts` flavors; `docs/BUILD_VARIANTS.md` |
-| 3 | Torrent ekskludert fra Play-artefakt | **OK** | verify-script OK; `unzip -l` = 0 `libtorrent4j`; 0 torrent-klasser/ressurser |
-| 4 | FTP/SMB/WebDAV med (per design) | **OK** | i begge varianter |
-| 5 | Ingen `MANAGE_EXTERNAL_STORAGE` | **OK** | merged manifest grep = 0 |
-| 6 | Alle permissions begrunnet | **FEIL (mindre)** | `VIBRATE` fortsatt der, 0 kode-treff |
-| 7 | FGS-typer + permissions konsistente | **OK** | `mediaPlayback` + `dataSync` med matchende permissions |
-| 8 | `POST_NOTIFICATIONS` håndtert | **OK (UX-gap)** | deklarert; runtime kun i noen skjermer |
-| 9 | Produksjonssignering konfigurert | **FEIL** | release-artefaktene er `CN=Android Debug` |
-| 10 | Ingen nøkler/passord i git | **OK** | `git ls-files` = 0 treff |
-| 11 | Release minifisert med R8 | **OK** | playstore-AAB produsert (32.6 MB) |
-| 12 | Mapping-fil bevart | **OK** | `mapping/playstoreRelease/mapping.txt` |
-| 13 | Automatisk mapping-opplasting til Play | **FEIL (mindre)** | ingen Play Publisher/upload-konfig |
-| 14 | Playstore-enhetstester grønne | **OK** | `:app:testPlaystoreDebugUnitTest` 3/3 |
-| 15 | Lint uten errors (playstore) | **OK** | `:app:lintPlaystoreRelease` 0 errors (93 warnings) |
-| 16 | 16 KB page-size | **OK** | `zipalign -c -P 16 -v 4` → Verification successful |
-| 17 | Device-aksept: leser (EPUB), Auto/DHU, cold start, process death, rotation, offline, upgrade | **UKJENT** | ikke utført |
-| 18 | Data-safety-porter løst/akseptert | **UKJENT** | `docs/REGRESSION_AUDIT.md` §1–§3, §7 |
-| 19 | Privacy policy-URL finnes | **UKJENT/FEIL** | ingen policy-URL i repo/kode/strings |
-| 20 | F2 (automatisk Audible/audnex) disclosert i Play-skjema | **UKJENT** | eier-valg dokumentert i docs, ikke bekreftet i Play |
-| 21 | 16 KB / minSdk / andre Play-formkrav | **OK** | se #16 |
+| 1 | applicationId/version/sdk riktige | **OK** | `aapt2`: `com.bookiro` / `com.bookiro.play`, vc11, 26/36/36 |
+| 2 | Play-variant finnes og er torrent-fri | **OK** | verify-script OK; full har `libtorrent4j` |
+| 3 | Ingen `MANAGE_EXTERNAL_STORAGE` | **OK** | manifest grep = 0 |
+| 4 | `VIBRATE` fjernet | **OK** | aapt2 permissions = 0 treff |
+| 5 | FGS-typer/permissions konsistente | **OK** | manifest |
+| 6 | Produksjonssignering | **FEIL** | debug/TEST-signert |
+| 7 | Ingen nøkler i git | **OK** | `git ls-files` = 0 |
+| 8 | R8 + mapping bevart/innebygd | **OK** | AAB `proguard.map` |
+| 9 | Enhetstester | **OK** | 406/406 |
+| 10 | Lint (Playstore) | **OK** | 0 errors |
+| 11 | 16 KB | **OK** | zipalign + ELF 0x4000 |
+| 12 | DB-tap-fallback fjernet + test | **OK** | `DatabaseRecoveryPolicyTest` |
+| 13 | Dedup kollapser ikke distinkte bøker | **OK** | `DuplicateRepairTest` |
+| 14 | Audiobook hard-sletting fjernet | **OK** | `AudiobookRepairTest` |
+| 15 | Metadata-mismatch avvises | **OK** | `MetadataResultSafetyTest` |
+| 16 | Device-aksept (15 scenarier) | **DELVIS (emulator)** | launcher/onboarding/Home, torrent-tile, EPUB-render + ≥20 sidevendinger + TOC + bokmerke-save, rotasjon, resume, offline, gjentatt import: PASS; søk INCONCLUSIVE; audiobook/kilder/Auto/cert/FileProvider: NOT TESTED. Se `docs/INTERNAL_TEST_ACCEPTANCE.md` |
+| 17 | Data-safety-eierbeslutninger | **UKJENT** | — |
+| 18 | Privacy policy-URL + F2-disclosure | **UKJENT/FEIL** | ingen URL i repo/kode |
+| 19 | Transaksjonell audiobook-merge | **DELVIS** | softDelete + annotasjoner; ikke Room-transaksjon |
+| 20 | Manuell cover-override-beskyttelse | **UKJENT** | ingen egen override-flagg funnet |
 
 ---
 
-## 8. Blokkere — løst vs. gjenstår
+## 9. Gjenstående blokkere
 
-**Løst (siden `4af538c`):**
-- Play-varianten finnes og er torrent-fri (ingen `libtorrent4j`, ingen
-  `com.bookrio.torrent`-klasser, ingen torrent-ressurser/-strenger).
-- Readerens torrent-spesifikke feilmelding fjernet.
-- Lint grønn for begge flavors (AGP `UseTomlInstead`-krasj workaround).
-- 16 KB page-size verifisert på playstore-APK.
-
-**Gjenstår (blokkerende for GO):**
-1. **KRITISK — ingen produksjonssignert artefakt.** Release-artefaktene er
-   debug-signert (`CN=Android Debug`). *Løsning: registrer upload-keystore, injiser de
-   fire `BOOKIRO_*`-secretene, bygg `:app:bundlePlaystoreRelease`, verifiser at
-   cert ≠ "Android Debug".*
-2. **HØY (UKJENT) — device-aksept.** Reader på ekte EPUB, Android Auto/DHU, cold
-   start, process death, rotation, offline, oppgradering fra forrige publiserte bygg.
-3. **HØY (UKJENT) — data-safety-porter** ikke avgjort: stille kollaps av to ulike
-   EPUB-er med lik tittel+forfatter; hard-sletting av audiobook-fragmenter; feil-splitt
-   av kapittelnavn-filer; online-cover kan overskrive embedded cover; `deleteDatabase()`
-   -fallback. Krever eier-aksept eller fiks.
-4. **MIDDELS (UKJENT/FEIL) — privacy policy-URL** mangler, og F2-disclosure er ikke
-   bekreftet i Play-skjemaet. Play krever URL når appen behandler data (F1/F2/F3/F4).
-5. **LAV — `VIBRATE`** permission er ubegrunnet/ubrukt; fjern eller dokumenter.
-6. **LAV — lint-advarsler av sikkerhetsrelevans** (`TrustAllX509TrustManager`,
-   global `cleartextTrafficPermitted="true"`).
-7. **LAV — mapping-opplasting til Play** er ikke automatisert.
-
-**Ingen av disse er UKJENT-avklart, derfor fortsatt NO-GO.**
+1. **KRITISK — produksjonssignert AAB.** Registrer upload-keystore + Play App Signing, bygg
+   `:app:bundlePlaystoreRelease` med `BOOKIRO_*`-secrets, verifiser at cert ≠ "Android Debug".
+2. **HØY (DELVIS) — device-aksept.** Emulator-pass (2026-10-08) dekket launcher/onboarding/Home, torrent-tile per flavor, EPUB-render + ≥20 sidevendinger + TOC + bokmerke-save + in-book søk, rotasjon, resume, offline og gjentatt import (PASS). Gjenstår: audiobook-avspilling (kun stub-er i samples → sample-funksjonen er nå fjernet), podkast↔lyd, kilder/avbrutt overføring, Android Auto/DHU, FileProvider-deling, self-signed cert, og same-id-oppgradering.
+3. **HØY (UKJENT) — data-safety-eierbeslutninger** (privacy-URL, F2-disclosure).
+4. **MIDDELS — transaksjonell audiobook-merge** ikke fullt ut; soft-delete + annotasjoner er
+   på plass, men en krasj midt i en merge kan fortsatt etterlate delvis tilstand.
 
 ---
 
-## 9. Neste steg for intern testing-track i Play Console (playstore-flavor)
+## 10. Neste steg for intern testing (Play Console)
 
-1. **Eier-beslutninger:** bekreft pakke-id `com.bookrio.play` (foreslått rettet til
-   `com.bookiro.play`, se `docs/APPLICATION_ID_PLAN.md` — ikke anvendt ennå),
-   `versionCode`-policy, og F2-disclosure (automatisk Audible/audnex-oppslag).
-2. **Upload-keystore** opprettes offline, legges i secret manager.
-3. **Registrer Play App Signing** når appen opprettes i Play Console.
-4. **Bygg produksjonssignert Play-AAB:**
-   ```
-   BOOKIRO_KEYSTORE_PATH=… BOOKIRO_KEYSTORE_PASSWORD=… BOOKIRO_KEY_ALIAS=… \
-   BOOKIRO_KEY_PASSWORD=… ./gradlew :app:bundlePlaystoreRelease
-   ```
-   Verifiser at `jarsigner -verify --certs` **ikke** sier `Android Debug`.
-5. **Verifiser artefaktet:** `tools/verify_playstore_variant.sh <AAB>` → OK; last opp
-   `mapping/playstoreRelease/mapping.txt`.
-6. **App content:** privacy policy-URL, Data Safety-skjema
-   (`docs/PRIVACY_DATA_FLOW.md` §8), innholdsrating, målgruppe, «No ads», ingen konto.
-7. **Internal testing-track:** last opp AAB, legg til testere, rull ut.
-8. **Ikke promoter** til production før blokkere 1–4 er lukket.
-
----
-
-### Reproduksjon (playstore)
-
-```bash
-tools/verify_playstore_variant.sh app/build/outputs/bundle/playstoreRelease/app-playstore-release.aab   # OK
-tools/verify_playstore_variant.sh app/build/outputs/apk/playstore/release/app-playstore-universal-release.apk  # OK
-tools/verify_playstore_variant.sh app/build/outputs/bundle/fullRelease/app-full-release.aab             # FAIL (torrent present)
-unzip -l app/build/outputs/bundle/playstoreRelease/app-playstore-release.aab | grep '\.so$'
-unzip -l app/build/outputs/bundle/fullRelease/app-full-release.aab       | grep libtorrent4j
-$ANDROID_HOME/build-tools/36.0.0/aapt2 dump badging app/build/outputs/apk/playstore/release/app-playstore-universal-release.apk
-./gradlew :app:testPlaystoreDebugUnitTest :app:lintPlaystoreRelease
-$ANDROID_HOME/build-tools/36.0.0/zipalign -c -P 16 -v 4 app/build/outputs/apk/playstore/release/app-playstore-universal-release.apk
-jarsigner -verify -verbose -certs app/build/outputs/bundle/playstoreRelease/app-playstore-release.aab
-```
+Se `docs/APPLICATION_ID_PLAN.md` §5 og Phase 6-guiden i oppgaven. Kort: opprett Play-app
+under `com.bookiro.play`, lag upload-nøkkel i Android Studio, konfigurer `BOOKIRO_*`,
+bygg signert `:app:bundlePlaystoreRelease`, enrol i Play App Signing, last opp til internal
+testing. Intern testing tilfredsstiller **ikke** kravet om closed testing for nye personlige
+utviklerkontoer. Ikke promoter til produksjon før blokkere 1–3 er lukket.

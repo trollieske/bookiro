@@ -132,7 +132,14 @@ object MetadataFetcher {
             score to r
         }.sortedByDescending { it.first }
 
-        val best = scored.firstOrNull()?.second ?: return null
+        // Minimum-match gate: a candidate is only acceptable when its title matches
+        // the queried title or its ISBN matches a known ISBN. Anything else is a
+        // clearly-mismatched hit and must NOT overwrite good local metadata/cover.
+        // When nothing passes, no metadata update happens (retain existing data).
+        val best = scored
+            .firstOrNull { (_, r) -> matchesQuery(r, raw, rawIsbn) }
+            ?.second
+            ?: return null
 
         val mergedAuthor = if (authorUnknown && best.author != null) best.author
         else best.author ?: rawAuthor
@@ -144,6 +151,20 @@ object MetadataFetcher {
             author = mergedAuthor,
             isbn = mergedIsbn
         )
+    }
+
+    /**
+     * True when a candidate is close enough to the query to be trusted: its title
+     * matches the (cleaned) query title, or its ISBN matches a known ISBN.
+     */
+    private fun matchesQuery(r: FetchedMetadata, rawTitle: String, rawIsbn: String?): Boolean {
+        val t = r.title?.trim()?.lowercase().orEmpty()
+        val titleMatch = t.isNotBlank() &&
+            (t.contains(rawTitle, ignoreCase = true) || rawTitle.contains(t, ignoreCase = true))
+        if (titleMatch) return true
+        val queryIsbn = rawIsbn?.filter { it.isDigit() || it == 'X' || it == 'x' }.orEmpty()
+        val candidateIsbn = r.isbn?.filter { it.isDigit() || it == 'X' || it == 'x' }.orEmpty()
+        return queryIsbn.isNotBlank() && queryIsbn == candidateIsbn
     }
 
     private fun cleanTitleForSearch(t: String): String? {

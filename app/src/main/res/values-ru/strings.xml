@@ -12,7 +12,6 @@
     <string name="menu_import">Импорт</string>
     <string name="import_files">Выбрать файлы</string>
     <string name="import_folder">Импорт папки</string>
-    <string name="import_sample">Загрузить образцы книг</string>
     <string name="import_progress_title">Загрузки и импорт</string>
     <string name="import_tab_downloads">Загрузки</string>
     <string name="import_tab_sync_history">История синхронизации</string>
@@ -135,7 +134,6 @@
     <string name="loading">Загрузка…</string>
     <string name="books_sent_to_import">Книг отправлено на импорт: %1$d.</string>
     <string name="import_from_folder_started">Импорт содержимого выбранной папки…</string>
-    <string name="samples_loading_started">Загрузка образцов книг в фоне…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Плавный переход</string>
@@ -227,7 +225,6 @@
     <string name="import_title">Импортировать книги</string>
     <string name="import_files_sub">Одна или несколько электронных или аудиокниг с вашего устройства.</string>
     <string name="import_folder_sub">Импортирует все книги из папки. Можно отслеживать новые файлы.</string>
-    <string name="import_sample_sub">Классика из общественного достояния, включённая в приложение.</string>
     <string name="import_from_ftp">С FTP-сервера</string>
     <string name="import_from_ftp_sub">Получайте книги с NAS, домашнего сервера или облачного хранилища.</string>
     <string name="import_supported_formats">Поддерживаемые форматы</string>
@@ -309,4 +306,11 @@
     <string name="home_service_sources">Источники</string>
     <string name="home_service_transfers">Передачи</string>
     <string name="home_empty_browse">Открыть библиотеку</string>
+    <string name="db_error_title">База данных библиотеки недоступна</string>
+    <string name="db_error_body">Bookiro не удалось открыть базу данных библиотеки. Ваши данные сохранены, а не удалены. Повторите попытку; если проблема не исчезнет, можно сбросить базу данных.</string>
+    <string name="db_error_retry">Повторить</string>
+    <string name="db_error_reset">Сбросить базу данных…</string>
+    <string name="db_error_reset_confirm_title">Сбросить базу данных?</string>
+    <string name="db_error_reset_confirm_body">Это навсегда удалит локальную базу данных библиотеки на этом устройстве. Ваши исходные файлы и экспортированные резервные копии не затрагиваются. Это действие нельзя отменить.</string>
+    <string name="db_error_reset_confirm_action">Сбросить</string>
 </resources>

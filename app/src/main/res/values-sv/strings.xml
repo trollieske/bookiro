@@ -12,7 +12,6 @@
     <string name="menu_import">Importera</string>
     <string name="import_files">Välj filer</string>
     <string name="import_folder">Importera mapp</string>
-    <string name="import_sample">Ladda exempelböcker</string>
     <string name="import_progress_title">Nedladdningar &amp; import</string>
     <string name="import_tab_downloads">Nedladdningar</string>
     <string name="import_tab_sync_history">Synkhistorik</string>
@@ -135,7 +134,6 @@
     <string name="loading">Läser in…</string>
     <string name="books_sent_to_import">%1$d bok(er) skickade till import.</string>
     <string name="import_from_folder_started">Importerar innehåll från vald mapp…</string>
-    <string name="samples_loading_started">Läser in exempelböcker i bakgrunden…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Immersion Handoff</string>
@@ -227,7 +225,6 @@
     <string name="import_title">Importera böcker</string>
     <string name="import_files_sub">En eller flera e-böcker eller ljudböcker från din enhet.</string>
     <string name="import_folder_sub">Importera alla böcker i en mapp. Kan bevakas för nya filer.</string>
-    <string name="import_sample_sub">Offentliga klassiker som följer med appen.</string>
     <string name="import_from_ftp">Från FTP-server</string>
     <string name="import_from_ftp_sub">Hämta böcker från NAS, hemmaserver eller molnlagring.</string>
     <string name="import_supported_formats">Stödda format</string>
@@ -309,4 +306,11 @@
     <string name="home_service_sources">Källor</string>
     <string name="home_service_transfers">Överföringar</string>
     <string name="home_empty_browse">Bläddra i biblioteket</string>
+    <string name="db_error_title">Biblioteksdatabasen är otillgänglig</string>
+    <string name="db_error_body">Bookiro kunde inte öppna biblioteksdatabasen. Dina data har bevarats, inte raderats. Försök igen; om problemet kvarstår kan du återställa databasen.</string>
+    <string name="db_error_retry">Försök igen</string>
+    <string name="db_error_reset">Återställ databas …</string>
+    <string name="db_error_reset_confirm_title">Återställa databasen?</string>
+    <string name="db_error_reset_confirm_body">Detta raderar den lokala biblioteksdatabasen permanent på den här enheten. Dina originalfiler och eventuella exporterade säkerhetskopior påverkas inte. Detta kan inte ångras.</string>
+    <string name="db_error_reset_confirm_action">Återställ</string>
 </resources>

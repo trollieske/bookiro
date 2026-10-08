@@ -47,7 +47,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.bookrio"
+        applicationId = "com.bookiro"
         minSdk = 26
         targetSdk = 36
         versionCode = 11

@@ -5,7 +5,7 @@ for everything except the torrent client, which Google Play treats as a policy r
 
 | | `full` (side-load / private) | `playstore` (Google Play) |
 |---|---|---|
-| Application id (actual) | `com.bookrio` | `com.bookrio.play` |
+| Application id | `com.bookiro` | `com.bookiro.play` |
 | versionName suffix | — | `-play` |
 | Torrent client (`:torrent`, `libtorrent4j`) | **included** | **removed** |
 | Torrent UI / routes / strings | included | removed |
@@ -13,12 +13,12 @@ for everything except the torrent client, which Google Play treats as a policy r
 | Everything else | identical | identical |
 
 > `debug` builds get the usual `.debug` id suffix on top: full debug is
-> `com.bookrio.debug`, playstore debug is `com.bookrio.play.debug`.
+> `com.bookiro.debug`, playstore debug is `com.bookiro.play.debug`.
 >
-> **applicationId status:** the built artifacts currently use `com.bookrio` /
-> `com.bookrio.play`. A correction to `com.bookiro` / `com.bookiro.play` is proposed in
-> [`docs/APPLICATION_ID_PLAN.md`](APPLICATION_ID_PLAN.md) and is **not applied** until
-> the owner approves. The code namespace stays `com.bookrio.*` either way.
+> **applicationId correction applied** (see
+> [`docs/APPLICATION_ID_PLAN.md`](APPLICATION_ID_PLAN.md)): the ids are now `com.bookiro` /
+> `com.bookiro.play`. The code namespace deliberately stays `com.bookrio.*` (no cosmetic
+> package rename).
 
 ## How the split works
 
