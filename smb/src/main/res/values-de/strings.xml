@@ -33,4 +33,6 @@
     <string name="smbu_err_network">Server nicht erreichbar</string>
     <string name="smbu_err_timeout">Zeitüberschreitung der Verbindung</string>
     <string name="smbu_err_unknown">Etwas ist schiefgelaufen</string>
+    <string name="smbu_count_failed">%1$d fehlgeschlagen</string>
+    <string name="smbu_count_queued">%1$d in Warteschlange</string>
 </resources>

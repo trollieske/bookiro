@@ -14,6 +14,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.util.DebugLogger
 import com.bookrio.core.di.AppDependenciesProvider
+import com.bookrio.core.db.DatabaseRecoveryPolicy
 import com.bookrio.core.gamification.ReadingTrackerFacade
 import com.bookrio.data.gamification.engine.ReadingTrackerEngine
 import com.bookrio.data.local.ShelfDatabase
@@ -21,6 +22,9 @@ import com.bookrio.app.workers.MediaScannerWorker
 import com.bookrio.ftp.worker.FtpPeriodicSyncWorker
 import com.bookrio.ftp.worker.FtpSyncCoordinator
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -32,14 +36,75 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
     private var _database: ShelfDatabase? = null
     val database: ShelfDatabase
         get() = _database ?: synchronized(this) {
-            _database ?: runCatching { ShelfDatabase.getInstance(this) }
-                .getOrElse {
-                    _database = null
-                    deleteDatabase("shelf.db")
-                    ShelfDatabase.getInstance(this)
-                }
-                .also { _database = it }
+            // No deleteDatabase()/recreate fallback here: a transient open failure must
+            // never wipe user data. The getter returns the (lazily built) instance and
+            // open failures are surfaced via [databaseError].
+            _database ?: ShelfDatabase.getInstance(this).also { _database = it }
         }
+
+    private val _databaseError = MutableStateFlow<Throwable?>(null)
+
+    /** Non-null when the database could not be opened. The database file is preserved. */
+    val databaseError: StateFlow<Throwable?> = _databaseError.asStateFlow()
+
+    /**
+     * Opens (and migrates) the database eagerly on the warm-up thread. On failure it
+     * records a non-destructive error state for the UI instead of deleting anything.
+     */
+    fun openDatabaseOrSurfaceError() {
+        runCatching { database.openHelper.writableDatabase }
+            .onSuccess { _databaseError.value = null }
+            .onFailure {
+                android.util.Log.e("Bookiro", "Database open failed; keeping the file for recovery", it)
+                _databaseError.value = it
+            }
+    }
+
+    private val databaseRetryInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * User-initiated retry after a database error. The blocking open runs on a
+     * background thread so the UI thread is never blocked, and the error state is kept
+     * until the retry succeeds so no Room-backed UI runs against a broken database.
+     */
+    fun retryDatabaseOpen() {
+        if (!databaseRetryInProgress.compareAndSet(false, true)) return
+        Thread {
+            runCatching { database.openHelper.writableDatabase }
+                .onSuccess { _databaseError.value = null }
+                .onFailure {
+                    android.util.Log.e("Bookiro", "Database retry failed; keeping the file", it)
+                    _databaseError.value = it
+                }
+            databaseRetryInProgress.set(false)
+        }.apply { name = "shelf-db-retry"; isDaemon = true }.start()
+    }
+
+    /**
+     * Explicit, user-confirmed destructive reset. Runs off the UI thread, then restarts
+     * the process so no ViewModel/repository can keep using the closed database
+     * instance. Never called automatically.
+     */
+    fun resetDatabaseAfterUserConfirmation() {
+        if (!DatabaseRecoveryPolicy.mayDeleteDatabase(userConfirmedReset = true)) return
+        Thread {
+            synchronized(this) {
+                ShelfDatabase.resetInstance()
+                _database = null
+                deleteDatabase("shelf.db")
+                _databaseError.value = null
+            }
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                intent.addFlags(
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                )
+                startActivity(intent)
+            }
+            Runtime.getRuntime().exit(0)
+        }.apply { name = "shelf-db-reset"; isDaemon = true }.start()
+    }
 
     private var _readingTracker: ReadingTrackerEngine? = null
     override val readingTracker: ReadingTrackerFacade
@@ -69,6 +134,22 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
                 database
                 readingTracker
             }
+            // Open/migrate eagerly so an open failure is surfaced as a recoverable
+            // error state (never an automatic delete).
+            openDatabaseOrSurfaceError()
+            // Self-heal duplicate rows and polluted metadata left by earlier builds.
+            // Runs off the main thread, is idempotent, and is cheap once clean.
+            runCatching {
+                val repo = com.bookrio.library.data.BookImportRepository(this, database)
+                kotlinx.coroutines.runBlocking {
+                    // Repair audiobook trails first, then de-duplicate (the split can
+                    // create books that a later scan also imported), then clean titles.
+                    repo.repairDuplicateAudioTracks()
+                    repo.splitMergedAudiobooks()
+                    repo.deduplicateLibrary()
+                    repo.repairTitlesAndAuthors()
+                }
+            }
         }
         warmUpThread.name = "shelf-db-warm"
         warmUpThread.isDaemon = true
@@ -77,8 +158,8 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
         MediaScannerWorker.schedule(this)
         FtpPeriodicSyncWorker.schedule(this)
         runCatching { FtpSyncCoordinator.start(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.schedule(this) }
-        runCatching { com.bookrio.torrent.worker.TorrentDownloadWorker.runNow(this) }
+        // Torrent is full-only; the playstore flavor provides a no-op implementation.
+        runCatching { com.bookrio.app.torrent.TorrentFeatureProvider.feature.applyBackgroundSettings(this) }
         runCatching { com.bookrio.podcast.worker.PodcastFeedSyncWorker.schedulePeriodic(this) }
     }
 

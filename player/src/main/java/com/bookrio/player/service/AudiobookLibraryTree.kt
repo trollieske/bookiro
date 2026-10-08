@@ -58,6 +58,21 @@ object AudiobookLibraryTree {
             ?.toLongOrNull()
             ?.takeIf { it > 0L }
 
+    /**
+     * Media id of one chapter item inside a book timeline: `<bookId>_<chapterIndex>`.
+     * These are the items the service hands the player (never browsed directly).
+     */
+    fun timelineMediaId(bookId: Long, chapterIndex: Int): String = "${bookId}_$chapterIndex"
+
+    /** Book id encoded in a chapter timeline item id (`<bookId>_<chapterIndex>`), or null. */
+    fun timelineBookIdOf(mediaId: String): Long? {
+        val separator = mediaId.indexOf('_')
+        if (separator <= 0 || separator == mediaId.lastIndex) return null
+        val bookId = mediaId.substring(0, separator).toLongOrNull() ?: return null
+        val chapterIndex = mediaId.substring(separator + 1).toLongOrNull() ?: return null
+        return bookId.takeIf { it > 0L && chapterIndex >= 0L }
+    }
+
     fun bookEntry(book: BookEntity): LibraryEntry = LibraryEntry(
         mediaId = bookMediaId(book.id),
         bookId = book.id,

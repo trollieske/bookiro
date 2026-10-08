@@ -29,8 +29,6 @@ import com.bookrio.data.local.entity.ImportSourceEntity
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.library.data.BookImportRepository
 import kotlinx.coroutines.flow.first
-import java.net.HttpURLConnection
-import java.net.URL
 
 class ImportWorker(
     private val appContext: Context,
@@ -108,9 +106,6 @@ class ImportWorker(
         }
 
         val cnt = when {
-            inputData.getBoolean(KEY_SAMPLES, false) -> {
-                repo.importAssetsSamples()
-            }
             treeUri != null -> {
                 repo.importFolderTree(Uri.parse(treeUri))
             }
@@ -215,7 +210,6 @@ class ImportWorker(
         const val KEY_URIS = "KEY_URIS"
         const val KEY_TREE_URI = "KEY_TREE_URI"
         const val KEY_SOURCE = "KEY_SOURCE"
-        const val KEY_SAMPLES = "KEY_SAMPLES"
 
         private const val CHANNEL_ID = "import_channel_id"
         private const val NOTIFICATION_ID = 10001
@@ -252,39 +246,12 @@ class ImportWorker(
 
             return workManager.enqueue(request)
         }
-
-        fun enqueueSamples(workManager: WorkManager): Operation {
-            val data = Data.Builder()
-                .putBoolean(KEY_SAMPLES, true)
-                .build()
-
-            val request = OneTimeWorkRequest.Builder(ImportWorker::class.java)
-                .setInputData(data)
-                .build()
-
-            return workManager.enqueue(request)
-        }
     }
 
     // #region debug-point shared:worker-http
     private fun dbg(hypothesisId: String, msg: String, data: String) {
-        Thread {
-            try {
-                val safeMsg = msg.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-                val safeData = data.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-                val body = """{"sessionId":"ebook-audio-crash","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"ImportWorker","msg":"[DEBUG] $safeMsg","data":{"info":"$safeData"},"ts":${System.currentTimeMillis()}}"""
-                val conn = (URL("http://192.168.1.10:7777/event").openConnection() as HttpURLConnection)
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 1500
-                conn.readTimeout = 1500
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.outputStream.use { it.write(body.toByteArray()) }
-                runCatching { conn.inputStream.close() }
-                conn.disconnect()
-            } catch (_: Throwable) {
-            }
-        }.start()
+        // Removed before Play: used to POST diagnostics to a hardcoded LAN debug
+        // server. Intentionally a no-op now.
     }
     // #endregion
 }

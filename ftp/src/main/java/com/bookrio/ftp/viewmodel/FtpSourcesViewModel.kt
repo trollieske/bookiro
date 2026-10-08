@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.bookrio.ftp.data.FtpGraph
 import com.bookrio.ftp.worker.FtpSyncWorker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -24,8 +25,9 @@ class FtpSourcesViewModel(application: Application) : AndroidViewModel(applicati
     val summaries: StateFlow<List<FtpSourceSummary>> = combine(
         graph.sourceRepository.sources,
         graph.transferRepository.transfers,
-        FtpGraph.runtime.active
-    ) { sources, transfers, active ->
+        FtpGraph.runtime.active,
+        FtpGraph.runtime.preparing
+    ) { sources, transfers, active, preparing ->
         val byServer = transfers
             .filter { it.serverId != null }
             .groupBy { it.serverId!! }
@@ -33,16 +35,24 @@ class FtpSourcesViewModel(application: Application) : AndroidViewModel(applicati
             FtpSourceSummary(
                 source = source,
                 counts = countsOf(byServer[source.id].orEmpty()),
-                active = active.filter { it.serverId == source.id }
+                active = active.filter { it.serverId == source.id },
+                preparing = preparing[source.id]
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun syncNow(serverId: Long) = viewModelScope.launch(Dispatchers.IO) {
         val source = graph.sourceRepository.getSource(serverId) ?: return@launch
+        // Immediate feedback: the worker may take a moment to start and then has to
+        // list a large remote library before the first download begins.
+        FtpGraph.runtime.beginPreparing(serverId)
         // "Continue" resumes paused rows first, then hands off to the worker.
         graph.transferRepository.resume(serverId)
         FtpSyncWorker.enqueueOrRestart(getApplication(), source)
+        delay(90_000)
+        if (!FtpSyncWorker.isExecuting(getApplication(), serverId)) {
+            FtpGraph.runtime.endPreparing(serverId)
+        }
     }
 
     fun pause(serverId: Long) = viewModelScope.launch(Dispatchers.IO) {

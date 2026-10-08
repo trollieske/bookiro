@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_services">FTP · SMB · WebDAV · Calibre</string>
+    <string name="settings_sources_row_sub">FTP, SMB, WebDAV, Calibre</string>
+</resources>

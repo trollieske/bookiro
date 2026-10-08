@@ -6,10 +6,12 @@ import com.bookrio.data.local.entity.FtpSourceStateEntity
 import com.bookrio.data.local.entity.TransferCounts
 import com.bookrio.ftp.data.FtpSource
 import com.bookrio.ftp.transfer.ActiveTransfer
+import com.bookrio.ftp.transfer.PreparingTransfer
 
 /** Coarse status shown on a source card. */
 enum class SourceStatus {
     CONNECTED,
+    PREPARING,
     SYNCING,
     PAUSED,
     RETRYING,
@@ -22,7 +24,8 @@ enum class SourceStatus {
 data class FtpSourceSummary(
     val source: FtpSource,
     val counts: TransferCounts,
-    val active: List<ActiveTransfer>
+    val active: List<ActiveTransfer>,
+    val preparing: PreparingTransfer? = null
 ) {
     val status: SourceStatus
         get() = when {
@@ -30,6 +33,7 @@ data class FtpSourceSummary(
             source.state == FtpSourceStateEntity.NEEDS_AUTH -> SourceStatus.NEEDS_AUTH
             source.state == FtpSourceStateEntity.CONNECTION_ERROR -> SourceStatus.ERROR
             active.isNotEmpty() || counts.running > 0 -> SourceStatus.SYNCING
+            preparing != null -> SourceStatus.PREPARING
             counts.paused > 0 -> SourceStatus.PAUSED
             counts.retrying > 0 -> SourceStatus.RETRYING
             counts.queued > 0 -> SourceStatus.CONNECTED
@@ -37,7 +41,7 @@ data class FtpSourceSummary(
         }
 
     val hasWork: Boolean
-        get() = counts.queued > 0 || counts.running > 0 || active.isNotEmpty()
+        get() = counts.queued > 0 || counts.running > 0 || active.isNotEmpty() || preparing != null
 
     val currentFileName: String?
         get() = active.firstOrNull()?.name

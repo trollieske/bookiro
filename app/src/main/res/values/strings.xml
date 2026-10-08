@@ -12,7 +12,6 @@
     <string name="menu_import">Import</string>
     <string name="import_files">Choose files</string>
     <string name="import_folder">Import folder</string>
-    <string name="import_sample">Load sample books</string>
     <string name="import_progress_title">Downloads &amp; import</string>
     <string name="import_tab_downloads">Downloads</string>
     <string name="import_tab_sync_history">Sync history</string>
@@ -27,8 +26,6 @@
     <string name="smb_subtitle">Windows / NAS</string>
     <string name="webdav_title">WebDAV</string>
     <string name="webdav_subtitle">Nextcloud / Owncloud</string>
-    <string name="torrent_title">Torrent</string>
-    <string name="torrent_subtitle">Peer-to-peer</string>
     <string name="reader_theme_light">Light</string>
     <string name="reader_theme_sepia">Sepia</string>
     <string name="reader_theme_dark">Dark</string>
@@ -38,7 +35,14 @@
     <string name="settings_title">Settings</string>
     <string name="onboarding_title">Welcome to Bookiro</string>
     <string name="onboarding_body">Read and listen. Local. No noise.</string>
-    <string name="onboarding_cta">Open the shelf</string>
+    <string name="onboarding_cta">Enter Bookiro</string>
+    <string name="onboarding_folder_title">Your library folder</string>
+    <string name="onboarding_folder_body">Choose where Bookiro finds and stores your files. Nothing leaves your device.</string>
+    <string name="onboarding_folder_choose">Choose folder</string>
+    <string name="onboarding_folder_change">Change folder</string>
+    <string name="onboarding_folder_skip">Skip for now</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
+
     <string name="settings_reader">Reader</string>
     <string name="settings_sync_storage_title">Storage &amp; sync</string>
     <string name="settings_sync_section_title">Sync</string>
@@ -69,6 +73,19 @@
     <string name="settings_library_folder_chosen">Library folder set</string>
     <string name="settings_online_cover">Online cover lookup</string>
     <string name="settings_online_cover_sub">Search for covers on the internet</string>
+    <string name="metadata_refresh_notif_channel">Metadata refresh</string>
+    <string name="metadata_refresh_notif_channel_desc">Shows progress while fetching metadata and covers</string>
+    <string name="metadata_refresh_notif_title">Refreshing metadata…</string>
+    <string name="metadata_refresh_notif_text">%1$d of %2$d</string>
+    <string name="settings_metadata_refresh">Refresh metadata &amp; covers</string>
+    <string name="settings_metadata_refresh_sub">Look up the correct title, author and cover online.</string>
+    <string name="settings_metadata_refresh_dialog_title">Refresh from the internet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro will query Open Library, Google Books and iTunes. This replaces generic covers and fills in missing or wrong metadata. Needs a network connection.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Only books that look wrong</string>
+    <string name="settings_metadata_refresh_scope_all">All books (slower)</string>
+    <string name="settings_metadata_refresh_start">Start</string>
+    <string name="settings_metadata_refresh_need_online">Turn on “Online cover lookup” first.</string>
+    <string name="settings_metadata_refresh_started">Refresh started. You can keep using the app.</string>
     <string name="settings_about_description">Bookiro — a private, ad-free reader and audiobook player</string>
     <string name="action_continue">Continue</string>
     <string name="action_save">Save</string>
@@ -118,7 +135,6 @@
     <string name="loading">Loading…</string>
     <string name="books_sent_to_import">%1$d book(s) sent to import.</string>
     <string name="import_from_folder_started">Importing contents from selected folder…</string>
-    <string name="samples_loading_started">Loading sample books in background…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Immersion Handoff</string>
@@ -164,6 +180,11 @@
     <string name="lan_done_found">Scan complete. %1$d possible source(s) found – tap to open / add.</string>
     <string name="lan_confidence">%1$d%% likely</string>
 
+    <string name="lan_type_ftp">FTP server</string>
+    <string name="lan_type_smb">SMB / Windows file share</string>
+    <string name="lan_type_webdav">WebDAV (possibly Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre book server</string>
+    <string name="lan_type_http">HTTP server (possibly a library)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Results are shown here when auto-sync runs.</string>
     <string name="ip_source_sync">Sync</string>
@@ -205,7 +226,6 @@
     <string name="import_title">Import books</string>
     <string name="import_files_sub">One or more ebooks or audiobooks from your device.</string>
     <string name="import_folder_sub">Import all books in a folder. Can be watched for new files.</string>
-    <string name="import_sample_sub">Public classics that ship with the app.</string>
     <string name="import_from_ftp">From FTP server</string>
     <string name="import_from_ftp_sub">Fetch books from NAS, home server or cloud storage.</string>
     <string name="import_supported_formats">Supported formats</string>
@@ -225,9 +245,6 @@
     <string name="settings_autoplay_next_sub">When the last chapter finishes</string>
     <string name="settings_import_button">Import</string>
     <string name="settings_smb_sync_sub">Windows / NAS / Samba</string>
-    <string name="settings_torrent_bg">Torrent (background)</string>
-    <string name="settings_torrent_bg_sub">Continue downloads when the app is closed</string>
-    <string name="settings_torrent_min_battery">Minimum battery</string>
     <string name="settings_handoff_precision_desc">Choose how precise the switch between audiobook and ebook should be. Default: Smart.</string>
     <string name="settings_handoff_show_toast_sub">Continuation position (chapter or percent) is shown as a brief message.</string>
     <string name="settings_handoff_scan_progress_label">%1$d / %2$d · %3$d links created</string>
@@ -276,5 +293,26 @@
     <string name="home_duration_hm">%1$dh %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_section_reading">Continue reading</string>
+    <string name="home_section_listening">Continue listening</string>
+    <string name="home_section_up_next">Up next</string>
+    <string name="home_section_media">Your media</string>
+    <string name="home_section_services">Sources &amp; tools</string>
+    <string name="home_media_ebooks">Ebooks</string>
+    <string name="home_media_audiobooks">Audiobooks</string>
+    <string name="home_media_podcasts">Podcasts</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Import</string>
+    <string name="home_service_sources">Sources</string>
+    <string name="home_service_transfers">Transfers</string>
+    <string name="home_empty_sources">Connect a source</string>
     <string name="home_empty_browse">Browse library</string>
+    <!-- Database open failure: data is preserved; reset is explicit and separate. -->
+    <string name="db_error_title">Library database unavailable</string>
+    <string name="db_error_body">Bookiro could not open your library database. Your data has been kept, not deleted. Try again; if the problem persists you can reset the database.</string>
+    <string name="db_error_retry">Try again</string>
+    <string name="db_error_reset">Reset database…</string>
+    <string name="db_error_reset_confirm_title">Reset the database?</string>
+    <string name="db_error_reset_confirm_body">This permanently deletes the local library database on this device. Your original files and any exported backups are not affected. This cannot be undone.</string>
+    <string name="db_error_reset_confirm_action">Reset</string>
 </resources>

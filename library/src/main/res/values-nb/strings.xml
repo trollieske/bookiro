@@ -27,4 +27,5 @@
     <string name="lib_dir_za">Å–A</string>
     <string name="lib_dir_oldest">Eldste først</string>
     <string name="lib_dir_newest">Nyeste først</string>
+    <string name="lib_view_toggle_a11y">Bytt mellom rutenett og liste</string>
 </resources>

@@ -29,19 +29,6 @@ data class HomeContinueItem(
     val progressPercent: Float,
     val isAudio: Boolean,
     val remainingMs: Long?,
-    val spineColor: Int?,
-    val coverPath: String?
-)
-
-/** One card in the Home audiobooks row: in-progress first, then recently added. */
-data class HomeAudiobookItem(
-    val bookId: Long,
-    val title: String,
-    val author: String,
-    val progressPercent: Float,
-    val remainingMs: Long?,
-    val inProgress: Boolean,
-    val spineColor: Int?,
     val coverPath: String?
 )
 
@@ -66,18 +53,13 @@ data class HomeUiState(
     val podcastCount: Int = 0,
     val inProgressCount: Int = 0,
     val streakDays: Int = 0,
-    val continueItems: List<HomeContinueItem> = emptyList(),
-    val audiobooks: List<HomeAudiobookItem> = emptyList(),
+    val continueReading: List<HomeContinueItem> = emptyList(),
+    val continueListening: List<HomeContinueItem> = emptyList(),
     val resumeEpisodes: List<HomeEpisodeItem> = emptyList(),
     val latestEpisodes: List<HomeEpisodeItem> = emptyList()
 ) {
     /** The library has books or the user follows at least one podcast. */
     val hasLibrary: Boolean get() = ebookCount > 0 || audiobookCount > 0 || podcastCount > 0
-
-    /** Any section has something to show. */
-    val hasSections: Boolean
-        get() = continueItems.isNotEmpty() || audiobooks.isNotEmpty() ||
-            resumeEpisodes.isNotEmpty() || latestEpisodes.isNotEmpty()
 }
 
 /** Remaining time split for localized "3h 12m" style labels. */
@@ -103,20 +85,6 @@ internal fun audioRemainingMs(positionMs: Long?, durationMs: Long?): Long? {
     if (position <= 0L) return null
     return (durationMs - position).coerceAtLeast(0L)
 }
-
-/**
- * Merges the ebook and audiobook resume candidates into one activity-ordered
- * list, so Home shows every started book (not a single "+N" strip).
- */
-internal fun mergeContinueOrder(
-    ebooks: List<ResumeSelector.ResumeCandidate>,
-    audiobooks: List<ResumeSelector.ResumeCandidate>
-): List<ResumeSelector.ResumeCandidate> =
-    (ebooks + audiobooks).sortedWith(
-        compareByDescending<ResumeSelector.ResumeCandidate> { it.lastActivity }
-            .thenByDescending { it.updatedAt }
-            .thenBy { it.id }
-    )
 
 class HomeViewModel(
     application: Application,
@@ -167,7 +135,6 @@ class HomeViewModel(
         fun percentOf(bookId: Long): Float =
             (progressByBook[bookId]?.progressPercent ?: 0f).coerceIn(0f, 1f)
 
-        // ── Continue: every started ebook + audiobook, merged via ResumeSelector ──
         val resumeInputs = books.map { b ->
             val p = progressByBook[b.id]
             ResumeSelector.ResumeBook(
@@ -184,48 +151,24 @@ class HomeViewModel(
                 isDeleted = b.isDeleted
             )
         }
-        val ebookCandidates = ResumeSelector.select(resumeInputs, wantAudio = false, max = Int.MAX_VALUE)
-        val audioCandidates = ResumeSelector.select(resumeInputs, wantAudio = true, max = Int.MAX_VALUE)
-        val activeCandidates = mergeContinueOrder(ebookCandidates, audioCandidates)
+        // ── Continue: every started ebook + audiobook, split per media type ──
+        val ebookActive = ResumeSelector.select(resumeInputs, wantAudio = false, max = Int.MAX_VALUE)
+        val audioActive = ResumeSelector.select(resumeInputs, wantAudio = true, max = Int.MAX_VALUE)
 
-        val continueItems = activeCandidates.take(CONTINUE_LIMIT).mapNotNull { candidate ->
-            val book = booksById[candidate.bookId] ?: return@mapNotNull null
-            val pct = percentOf(book.id)
-            HomeContinueItem(
+        fun continueItem(candidate: ResumeSelector.ResumeCandidate): HomeContinueItem? {
+            val book = booksById[candidate.bookId] ?: return null
+            return HomeContinueItem(
                 bookId = book.id,
                 title = book.title.ifBlank { book.sortTitle },
                 author = book.author,
-                progressPercent = pct,
+                progressPercent = percentOf(book.id),
                 isAudio = book.type == BookTypeEntity.AUDIOBOOK,
                 remainingMs = audioRemainingMs(progressByBook[book.id]?.positionMs, book.durationMs),
-                spineColor = book.spineColor,
                 coverPath = coverPathFor(book, filesDir)
             )
         }
-
-        // ── Audiobooks: in-progress first (activity order), then recently added ──
-        val audioRank = audioCandidates.withIndex().associate { (index, c) -> c.bookId to index }
-        val audiobooks = books.asSequence()
-            .filter { it.type == BookTypeEntity.AUDIOBOOK }
-            .sortedWith(
-                compareBy<BookEntity> { audioRank[it.id] ?: Int.MAX_VALUE }
-                    .thenByDescending { it.dateAdded }
-                    .thenBy { it.id }
-            )
-            .take(AUDIOBOOK_LIMIT)
-            .map { book ->
-                HomeAudiobookItem(
-                    bookId = book.id,
-                    title = book.title.ifBlank { book.sortTitle },
-                    author = book.author,
-                    progressPercent = percentOf(book.id),
-                    remainingMs = audioRemainingMs(progressByBook[book.id]?.positionMs, book.durationMs),
-                    inProgress = audioRank.containsKey(book.id),
-                    spineColor = book.spineColor,
-                    coverPath = coverPathFor(book, filesDir)
-                )
-            }
-            .toList()
+        val continueReading = ebookActive.take(CONTINUE_LIMIT).mapNotNull { continueItem(it) }
+        val continueListening = audioActive.take(CONTINUE_LIMIT).mapNotNull { continueItem(it) }
 
         // ── Podcasts: continue-listening first, then latest episodes ──
         val resumeById = resumeItems.associateBy { it.episodeId }
@@ -277,10 +220,10 @@ class HomeViewModel(
             ebookCount = books.count { it.type != BookTypeEntity.AUDIOBOOK },
             audiobookCount = books.count { it.type == BookTypeEntity.AUDIOBOOK },
             podcastCount = feeds.size,
-            inProgressCount = activeCandidates.size,
+            inProgressCount = ebookActive.size + audioActive.size,
             streakDays = streakDays,
-            continueItems = continueItems,
-            audiobooks = audiobooks,
+            continueReading = continueReading,
+            continueListening = continueListening,
             resumeEpisodes = resumeEpisodes,
             latestEpisodes = latestEpisodes
         )
@@ -296,7 +239,6 @@ class HomeViewModel(
 
     private companion object {
         const val CONTINUE_LIMIT = 12
-        const val AUDIOBOOK_LIMIT = 12
         const val LATEST_SECTION_LIMIT = 8
         const val RESUME_QUERY_LIMIT = 25
         const val LATEST_QUERY_LIMIT = 25

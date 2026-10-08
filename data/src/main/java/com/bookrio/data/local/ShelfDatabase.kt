@@ -239,25 +239,32 @@ abstract class ShelfDatabase : RoomDatabase() {
 
         private fun build(context: Context): ShelfDatabase {
             val holder = DbHolder()
-            val base = Room.databaseBuilder(
+            // Deliberately NO fallbackToDestructiveMigration() and NO deleteDatabase()
+            // here. A transient or corrupt open must never wipe the user's library;
+            // open failures surface to the caller, which shows a recoverable
+            // error/retry state instead. Destructive reset is only every explicit
+            // and user-confirmed (see ShelfApplication.resetDatabaseAfterUserConfirmation).
+            val db = Room.databaseBuilder(
                 context.applicationContext,
                 ShelfDatabase::class.java,
                 DB_NAME
             )
                 .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
-                .fallbackToDestructiveMigration()
-            val db = runCatching {
-                base
-                    .addCallback(SeedCallback { holder.db ?: error("DB not assigned during onCreate") })
-                    .build()
-            }.getOrElse { _: Throwable ->
-                runCatching {
-                    context.deleteDatabase(DB_NAME)
-                }
-                base.build()
-            }
+                .addCallback(SeedCallback { holder.db ?: error("DB not assigned during onCreate") })
+                .build()
             holder.db = db
             return db
+        }
+
+        /**
+         * Clears the cached instance so a user-confirmed reset can rebuild it.
+         * Never deletes the database file itself.
+         */
+        fun resetInstance() {
+            synchronized(this) {
+                runCatching { INSTANCE?.close() }
+                INSTANCE = null
+            }
         }
     }
 }

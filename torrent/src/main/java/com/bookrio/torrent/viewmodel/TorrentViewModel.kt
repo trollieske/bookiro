@@ -82,17 +82,24 @@ class TorrentViewModel(
     fun addMagnet(magnet: String) = viewModelScope.launch(dispatchers.io) {
         val clean = magnet.trim()
         if (!clean.startsWith("magnet:")) {
-            toastFlow.tryEmit("Ugyldig magnet-lenke")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_invalid_magnet))
             return@launch
         }
-        val id = engine.addFromMagnet(
-            magnetUri = clean,
-            saveDir = engine.defaultSaveDir(),
-            autoImport = formState.value.defaultAutoImport,
-            priority = TorrentPriorityEntity.NORMAL
-        )
+        val id = runCatching {
+            engine.addFromMagnet(
+                magnetUri = clean,
+                saveDir = engine.defaultSaveDir(),
+                autoImport = formState.value.defaultAutoImport,
+                priority = TorrentPriorityEntity.NORMAL
+            )
+        }.getOrElse { t ->
+            toastFlow.tryEmit(
+                getApplication<Application>().getString(R.string.toru_error, t.message ?: t.javaClass.simpleName)
+            )
+            return@launch
+        }
         formState.value = formState.value.copy(magnetInput = "")
-        toastFlow.tryEmit("Lagt til torrent")
+        toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_added))
         id
     }
 
@@ -107,12 +114,12 @@ class TorrentViewModel(
                     saveDir = engine.defaultSaveDir(),
                     autoImport = formState.value.defaultAutoImport
                 )
-                toastFlow.tryEmit("Lagt til torrent")
+                toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_added))
                 runCatching { tmp.delete() }
                 id
             }
         }.getOrElse {
-            toastFlow.tryEmit("Feil: ${it.message}")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_error, it.message))
             null
         }
     }
@@ -120,19 +127,26 @@ class TorrentViewModel(
     fun addInfoHash(hash: String, displayName: String? = null) = viewModelScope.launch(dispatchers.io) {
         val clean = hash.trim().uppercase()
         if (clean.length != 40) {
-            toastFlow.tryEmit("Ugyldig info-hash (må være 40 tegn SHA-1)")
+            toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_invalid_infohash))
             return@launch
         }
-        val id = engine.addFromInfoHash(
-            infoHash = clean,
-            // Never inject public trackers here: a private infohash would leak.
-            // A magnet/.torrent with tracker info is the correct input instead.
-            trackers = emptyList(),
-            displayName = displayName,
-            saveDir = engine.defaultSaveDir(),
-            autoImport = formState.value.defaultAutoImport
-        )
-        toastFlow.tryEmit("Lagt til torrent")
+        val id = runCatching {
+            engine.addFromInfoHash(
+                infoHash = clean,
+                // Never inject public trackers here: a private infohash would leak.
+                // A magnet/.torrent with tracker info is the correct input instead.
+                trackers = emptyList(),
+                displayName = displayName,
+                saveDir = engine.defaultSaveDir(),
+                autoImport = formState.value.defaultAutoImport
+            )
+        }.getOrElse { t ->
+            toastFlow.tryEmit(
+                getApplication<Application>().getString(R.string.toru_error, t.message ?: t.javaClass.simpleName)
+            )
+            return@launch
+        }
+        toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_added))
         id
     }
 
@@ -154,7 +168,7 @@ class TorrentViewModel(
 
     fun deleteDownload(id: Long, withFiles: Boolean = false) = viewModelScope.launch(dispatchers.io) {
         engine.deleteDownload(id, withFiles)
-        toastFlow.tryEmit("Fjernet fra liste")
+        toastFlow.tryEmit(getApplication<Application>().getString(R.string.toru_removed))
     }
 
     fun reimportTorrent(id: Long) = viewModelScope.launch(dispatchers.io) {
@@ -166,25 +180,33 @@ class TorrentViewModel(
         val importRepo = com.bookrio.library.data.BookImportRepository(getApplication(), db, dispatchers)
         var importedCount = 0
 
-        // Step 1: Delete any existing tiny placeholder books for this torrent
+        // Step 1: Delete tiny placeholder stub books for this torrent. Only
+        // delete genuinely tiny (<=1 KB) torrent-imported rows: matching on a
+        // title prefix could delete an unrelated real book that shares a name.
         val torrentTitle = dl.displayName ?: ""
         if (torrentTitle.isNotBlank()) {
             val existingBooks = db.bookDao().getAllOnce().filter { !it.isDeleted }
             val placeholders = existingBooks.filter { book ->
                 book.importSource == com.bookrio.data.local.entity.ImportSourceEntity.TORRENT_DOWNLOAD &&
-                (book.fileSizeBytes <= 1024L || (book.title.contains(torrentTitle.take(15), ignoreCase = true)))
+                    book.fileSizeBytes <= 1024L
             }
             for (placeholder in placeholders) {
-                db.bookDao().delete(placeholder)
-                android.util.Log.i("TorrentVM", "Deleted placeholder book id=${placeholder.id} '${placeholder.title}'")
+                runCatching {
+                    db.bookDao().delete(placeholder)
+                    android.util.Log.i("TorrentVM", "Deleted placeholder book id=${placeholder.id} '${placeholder.title}'")
+                }
             }
         }
 
         // Step 2: Scan the torrent's save path
         val saveDir = File(dl.savePath)
         if (saveDir.exists()) {
-            val res = importRepo.importDirectoryOrArchive(saveDir, com.bookrio.data.local.entity.ImportSourceEntity.TORRENT_DOWNLOAD)
-            importedCount += res.size
+            runCatching {
+                importRepo.importDirectoryOrArchive(saveDir, com.bookrio.data.local.entity.ImportSourceEntity.TORRENT_DOWNLOAD)
+            }.onSuccess { importedCount += it.size }
+                .onFailure { t ->
+                    android.util.Log.w("TorrentVM", "reimport scan failed: ${t.javaClass.simpleName}")
+                }
         }
 
         // Step 3: If nothing found, scan common download locations (including BiglyBT, qBittorrent, etc.)
@@ -232,7 +254,10 @@ class TorrentViewModel(
     fun importCustomTorrentFolder(torrentId: Long, folderUri: Uri) = viewModelScope.launch(dispatchers.io) {
         val dl = db.torrentDownloadDao().getById(torrentId)
         val importRepo = com.bookrio.library.data.BookImportRepository(getApplication(), db, dispatchers)
-        val count = importRepo.importFolderTree(folderUri)
+        val count = runCatching { importRepo.importFolderTree(folderUri) }.getOrElse { t ->
+            android.util.Log.w("TorrentVM", "folder import failed: ${t.javaClass.simpleName}")
+            0
+        }
         if (count > 0) {
             if (dl != null) {
                 db.torrentDownloadDao().update(

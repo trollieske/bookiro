@@ -46,7 +46,6 @@ sealed class ShelfDestinations(val route: String) {
     object CalibreBrowse : ShelfDestinations("calibre/browser/{sourceId}") {
         fun routeFor(sourceId: Long) = "calibre/browser/$sourceId"
     }
-    object Torrent : ShelfDestinations("torrent")
     object Podcasts : ShelfDestinations("podcasts")
     object PodcastDiscover : ShelfDestinations("podcasts/discover")
     object PodcastDetail : ShelfDestinations("podcasts/feed/{feedId}") {

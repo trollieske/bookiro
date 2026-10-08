@@ -12,7 +12,6 @@
     <string name="menu_import">Импорт</string>
     <string name="import_files">Выбрать файлы</string>
     <string name="import_folder">Импорт папки</string>
-    <string name="import_sample">Загрузить образцы книг</string>
     <string name="import_progress_title">Загрузки и импорт</string>
     <string name="import_tab_downloads">Загрузки</string>
     <string name="import_tab_sync_history">История синхронизации</string>
@@ -27,8 +26,6 @@
     <string name="smb_subtitle">Windows / NAS</string>
     <string name="webdav_title">WebDAV</string>
     <string name="webdav_subtitle">Nextcloud / Owncloud</string>
-    <string name="torrent_title">Torrent</string>
-    <string name="torrent_subtitle">Одноранговая сеть</string>
     <string name="reader_theme_light">Светлая</string>
     <string name="reader_theme_sepia">Сепия</string>
     <string name="reader_theme_dark">Тёмная</string>
@@ -39,6 +36,12 @@
     <string name="onboarding_title">Добро пожаловать в Bookiro</string>
     <string name="onboarding_body">Читайте и слушайте. Локально. Без лишнего шума.</string>
     <string name="onboarding_cta">Открыть полку</string>
+    <string name="onboarding_folder_title">Ваша папка библиотеки</string>
+    <string name="onboarding_folder_body">Выберите, где Bookiro находит и хранит ваши файлы. Данные не покидают устройство.</string>
+    <string name="onboarding_folder_choose">Выбрать папку</string>
+    <string name="onboarding_folder_change">Сменить папку</string>
+    <string name="onboarding_folder_skip">Пропустить</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Читатель</string>
     <string name="settings_sync_storage_title">Хранилище и синхронизация</string>
     <string name="settings_sync_section_title">Синхронизация</string>
@@ -69,6 +72,19 @@
     <string name="settings_library_folder_chosen">Папка библиотеки задана</string>
     <string name="settings_online_cover">Поиск обложек онлайн</string>
     <string name="settings_online_cover_sub">Искать обложки в интернете</string>
+    <string name="metadata_refresh_notif_channel">Обновление метаданных</string>
+    <string name="metadata_refresh_notif_channel_desc">Показывает прогресс загрузки метаданных и обложек</string>
+    <string name="metadata_refresh_notif_title">Обновление метаданных…</string>
+    <string name="metadata_refresh_notif_text">%1$d из %2$d</string>
+    <string name="settings_metadata_refresh">Обновить метаданные и обложки</string>
+    <string name="settings_metadata_refresh_sub">Найти правильное название, автора и обложку в интернете.</string>
+    <string name="settings_metadata_refresh_dialog_title">Обновить из интернета</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro обращается к Open Library, Google Books и iTunes. Заменяет стандартные обложки и дополняет отсутствующие или неверные метаданные. Требуется подключение к сети.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Только книги с явными ошибками</string>
+    <string name="settings_metadata_refresh_scope_all">Все книги (медленнее)</string>
+    <string name="settings_metadata_refresh_start">Начать</string>
+    <string name="settings_metadata_refresh_need_online">Сначала включите «Поиск обложек в интернете».</string>
+    <string name="settings_metadata_refresh_started">Обновление началось. Можно продолжать пользоваться приложением.</string>
     <string name="settings_about_description">Bookiro — частный читатель и плеер аудиокниг без рекламы</string>
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>
@@ -118,7 +134,6 @@
     <string name="loading">Загрузка…</string>
     <string name="books_sent_to_import">Книг отправлено на импорт: %1$d.</string>
     <string name="import_from_folder_started">Импорт содержимого выбранной папки…</string>
-    <string name="samples_loading_started">Загрузка образцов книг в фоне…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Плавный переход</string>
@@ -164,6 +179,11 @@
     <string name="lan_done_found">Сканирование завершено. Найдено возможных источников: %1$d – нажмите, чтобы открыть/добавить.</string>
     <string name="lan_confidence">Вероятность %1$d%%</string>
 
+    <string name="lan_type_ftp">FTP-сервер</string>
+    <string name="lan_type_smb">SMB / файловый ресурс Windows</string>
+    <string name="lan_type_webdav">WebDAV (возможно Nextcloud)</string>
+    <string name="lan_type_calibre">Сервер книг Calibre</string>
+    <string name="lan_type_http">HTTP-сервер (возможно, библиотека)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Здесь появятся результаты, когда запустится автосинхронизация.</string>
     <string name="ip_source_sync">Синхр.</string>
@@ -205,7 +225,6 @@
     <string name="import_title">Импортировать книги</string>
     <string name="import_files_sub">Одна или несколько электронных или аудиокниг с вашего устройства.</string>
     <string name="import_folder_sub">Импортирует все книги из папки. Можно отслеживать новые файлы.</string>
-    <string name="import_sample_sub">Классика из общественного достояния, включённая в приложение.</string>
     <string name="import_from_ftp">С FTP-сервера</string>
     <string name="import_from_ftp_sub">Получайте книги с NAS, домашнего сервера или облачного хранилища.</string>
     <string name="import_supported_formats">Поддерживаемые форматы</string>
@@ -225,9 +244,6 @@
     <string name="settings_autoplay_next_sub">Когда закончится последняя глава</string>
     <string name="settings_import_button">Импорт</string>
     <string name="settings_smb_sync_sub">Windows / NAS / Samba</string>
-    <string name="settings_torrent_bg">Torrent (в фоне)</string>
-    <string name="settings_torrent_bg_sub">Продолжать загрузки, когда приложение закрыто</string>
-    <string name="settings_torrent_min_battery">Минимальный заряд</string>
     <string name="settings_handoff_precision_desc">Выберите, насколько точным должен быть переход между аудиокнигой и электронной книгой. По умолчанию: Умная.</string>
     <string name="settings_handoff_show_toast_sub">Позиция продолжения (глава или процент) показывается кратким сообщением.</string>
     <string name="settings_handoff_scan_progress_label">%1$d / %2$d · создано связей: %3$d</string>
@@ -276,5 +292,25 @@
     <string name="home_duration_hm">%1$d ч %2$d мин</string>
     <string name="home_duration_m">%1$d мин</string>
 
+    <string name="home_empty_sources">Подключить источник</string>
+    <string name="home_media_audiobooks">Аудиокниги</string>
+    <string name="home_media_ebooks">Книги</string>
+    <string name="home_media_podcasts">Подкасты</string>
+    <string name="home_section_listening">Продолжить слушать</string>
+    <string name="home_section_media">Ваши материалы</string>
+    <string name="home_section_reading">Продолжить чтение</string>
+    <string name="home_section_services">Источники и инструменты</string>
+    <string name="home_section_up_next">Далее</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Импорт</string>
+    <string name="home_service_sources">Источники</string>
+    <string name="home_service_transfers">Передачи</string>
     <string name="home_empty_browse">Открыть библиотеку</string>
+    <string name="db_error_title">База данных библиотеки недоступна</string>
+    <string name="db_error_body">Bookiro не удалось открыть базу данных библиотеки. Ваши данные сохранены, а не удалены. Повторите попытку; если проблема не исчезнет, можно сбросить базу данных.</string>
+    <string name="db_error_retry">Повторить</string>
+    <string name="db_error_reset">Сбросить базу данных…</string>
+    <string name="db_error_reset_confirm_title">Сбросить базу данных?</string>
+    <string name="db_error_reset_confirm_body">Это навсегда удалит локальную базу данных библиотеки на этом устройстве. Ваши исходные файлы и экспортированные резервные копии не затрагиваются. Это действие нельзя отменить.</string>
+    <string name="db_error_reset_confirm_action">Сбросить</string>
 </resources>

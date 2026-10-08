@@ -34,4 +34,6 @@
     <string name="wdav_err_network">No se pudo contactar con el servidor</string>
     <string name="wdav_err_timeout">Tiempo de conexión agotado</string>
     <string name="wdav_err_unknown">Algo salió mal</string>
+    <string name="wdav_count_failed">%1$d fallidos</string>
+    <string name="wdav_count_queued">%1$d en cola</string>
 </resources>

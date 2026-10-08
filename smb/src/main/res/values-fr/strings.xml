@@ -33,4 +33,6 @@
     <string name="smbu_err_network">Impossible de joindre le serveur</string>
     <string name="smbu_err_timeout">Délai de connexion dépassé</string>
     <string name="smbu_err_unknown">Une erreur est survenue</string>
+    <string name="smbu_count_failed">%1$d échoués</string>
+    <string name="smbu_count_queued">%1$d en file d\'attente</string>
 </resources>

@@ -225,7 +225,7 @@ class BookLoaderEngine(
                 format = book.format,
                 type = book.type,
                 percent = percent,
-                error = "Feil ved lesing av fil: ${t.message ?: "Ukjent feil"}"
+                error = ctx.getString(R.string.rdr_error_read_file, t.message ?: ctx.getString(R.string.rdr_error_unknown))
             )
         }
         val bytesForDrm: ByteArray = packet.drmScan
@@ -262,14 +262,14 @@ class BookLoaderEngine(
         if (definitelyDamagedOrDrm) {
             val drmHint = when {
                 book.format in mobiFormatsHere ->
-                    "Denne ${book.format.name}-filen kunne ikke leses (ugyldig format, skadet, eller støtten er endret). " +
-                        "Prøv å importere boken på nytt, eller bruk en DRM-fri EPUB-versjon av boken."
-                book.format == FormatEntity.UNKNOWN ->
-                    "Filtypen er ikke gjenkjent som en bok (${book.filePath?.substringAfterLast('/')
-                        ?: book.fileUri?.substringAfterLast('/')?.substringBefore('?') ?: "ukjent"}). " +
-                        "Hvis dette skulle vært en bok, prøv å gi filen et riktig navn (f.eks. .epub, .mobi eller .pdf) og importer på nytt."
+                    ctx.getString(R.string.rdr_error_mobi_unreadable, book.format.name)
+                book.format == FormatEntity.UNKNOWN -> {
+                    val fileLabel = book.filePath?.substringAfterLast('/')
+                        ?: book.fileUri?.substringAfterLast('/')?.substringBefore('?') ?: "?"
+                    ctx.getString(R.string.rdr_error_unknown_type, fileLabel)
+                }
                 else ->
-                    "Filen kan være skadet, tom, ha en DRM-beskyttelse, eller ha et støttet format som ikke kunne tolkes."
+                    ctx.getString(R.string.rdr_error_damaged)
             }
             return@withContext ReaderBookState(
                 bookId = bookId,
@@ -278,7 +278,7 @@ class BookLoaderEngine(
                 format = book.format,
                 type = book.type,
                 percent = percent,
-                error = "Klarte ikke å åpne ${book.format.name}-filen. $drmHint"
+                error = ctx.getString(R.string.rdr_error_cannot_open_format, book.format.name, drmHint)
             )
         }
 
@@ -289,13 +289,7 @@ class BookLoaderEngine(
         // Prevents the infamous "4:pathl...eedd6:lengthi...e" (BitTorrent Bencode) display bug.
         runCatching { detectStructuredGarbage(bytes) }.getOrNull()?.let { garbageHint ->
             Log.w(TAG, "Rejecting raw-text decode for book=$bookId (format=${book.format}): $garbageHint")
-            val what = if (garbageHint.contains("torrent", ignoreCase = true))
-                "Dette er en BitTorrent-fil (.torrent) eller torrent-metadata. " +
-                    "Åpne den i Torrent-skjermstedet for å laste ned bøkene, ikke i leseren!"
-            else
-                "Innholdet ser ikke ut som en bok (oppdaget $garbageHint). " +
-                    "Sjekk at filen er riktig format (.epub, .mobi, .pdf, .txt osv.) og ikke en " +
-                    "zip, skadet eller binærfil som er feilnavngitt."
+            val what = ctx.getString(R.string.rdr_error_garbage_generic, garbageHint)
             return@withContext ReaderBookState(
                 bookId = bookId,
                 bookTitle = book.title,
@@ -303,7 +297,7 @@ class BookLoaderEngine(
                 format = book.format,
                 type = book.type,
                 percent = percent,
-                error = "Kan ikke vise innhold. $what"
+                error = ctx.getString(R.string.rdr_error_cannot_display, what)
             )
         }
         val rawContent = try {
@@ -325,7 +319,7 @@ class BookLoaderEngine(
                 format = book.format,
                 type = book.type,
                 percent = percent,
-                error = "Klarte ikke å lese filinnholdet som tekst."
+                error = ctx.getString(R.string.rdr_error_cannot_read_text)
             )
         }
         val chapters = buildChapters(book.format, rawContent, totalBytes)
@@ -392,7 +386,7 @@ class BookLoaderEngine(
                         bookId = book.id,
                         bookTitle = book.title, author = book.author,
                         format = book.format, type = book.type, percent = percent,
-                        error = "MOBI-filen var tom eller kunne ikke leses."
+                        error = ctx.getString(R.string.rdr_error_mobi_empty)
                     )
                 }
                 baos.toByteArray()
@@ -402,7 +396,7 @@ class BookLoaderEngine(
                 bookId = book.id,
                 bookTitle = book.title, author = book.author,
                 format = book.format, type = book.type, percent = percent,
-                error = "Feil ved lesing av ${book.format.name}-fil: ${t.message ?: "Ukjent feil"}"
+                error = ctx.getString(R.string.rdr_error_read_format_file, book.format.name, t.message ?: ctx.getString(R.string.rdr_error_unknown))
             )
         }
 
@@ -415,22 +409,21 @@ class BookLoaderEngine(
                 bookId = book.id,
                 bookTitle = book.title, author = book.author,
                 format = book.format, type = book.type, percent = percent,
-                error = "Denne ${book.format.name}-filen er DRM-beskyttet (${drm.message ?: "ukjent DRM"}). " +
-                        "Det er ikke tillatt å omgå DRM. Prøv en DRM-fri kopi, EPUB-versjonen, eller importer bok fra en ekstern kilde som tilbyr åpne formater."
+                error = ctx.getString(R.string.rdr_error_drm_protected, book.format.name, drm.message ?: ctx.getString(R.string.rdr_error_unknown_drm))
             )
         } catch (mp: MobiParseException) {
             return@withContext ReaderBookState(
                 bookId = book.id,
                 bookTitle = book.title, author = book.author,
                 format = book.format, type = book.type, percent = percent,
-                error = "Kunne ikke tolke ${book.format.name}-filen: ${mp.message ?: "Ugyldig format"}"
+                error = ctx.getString(R.string.rdr_error_parse_format_file, book.format.name, mp.message ?: ctx.getString(R.string.rdr_error_invalid_format))
             )
         } catch (t: Throwable) {
             return@withContext ReaderBookState(
                 bookId = book.id,
                 bookTitle = book.title, author = book.author,
                 format = book.format, type = book.type, percent = percent,
-                error = "Ugyldig ${book.format.name}-fil: ${t.message ?: "Ukjent feil"}"
+                error = ctx.getString(R.string.rdr_error_invalid_format_file, book.format.name, t.message ?: ctx.getString(R.string.rdr_error_unknown))
             )
         }
         if (preMeta.hasDrm) {
@@ -438,8 +431,7 @@ class BookLoaderEngine(
                 bookId = book.id,
                 bookTitle = book.title, author = book.author,
                 format = book.format, type = book.type, percent = percent,
-                error = "Denne ${book.format.name}-filen er DRM-beskyttet (${preMeta.drmReason ?: "Amazon/Kindle DRM"}). " +
-                        "Det er ikke tillatt å omgå DRM. Prøv en DRM-fri kopi, EPUB-versjonen, eller importer bok fra en ekstern kilde som tilbyr åpne formater."
+                error = ctx.getString(R.string.rdr_error_drm_protected, book.format.name, preMeta.drmReason ?: "Amazon/Kindle DRM")
             )
         }
 
@@ -466,8 +458,7 @@ class BookLoaderEngine(
                     bookId = book.id,
                     bookTitle = book.title, author = book.author,
                     format = book.format, type = book.type, percent = percent,
-                    error = "Denne ${book.format.name}-filen er DRM-beskyttet (${drm.message ?: "ukjent DRM"}). " +
-                            "Det er ikke tillatt å omgå DRM."
+                    error = ctx.getString(R.string.rdr_error_drm_protected_short, book.format.name, drm.message ?: ctx.getString(R.string.rdr_error_unknown_drm))
                 )
             } catch (mp: MobiParseException) {
                 cachedEpub.delete()
@@ -476,7 +467,7 @@ class BookLoaderEngine(
                     bookId = book.id,
                     bookTitle = book.title, author = book.author,
                     format = book.format, type = book.type, percent = percent,
-                    error = "Kunne ikke konvertere ${book.format.name}-fil til lesbart format: ${mp.message ?: "Ugyldig MOBI-format"}"
+                    error = ctx.getString(R.string.rdr_error_convert_format, book.format.name, mp.message ?: ctx.getString(R.string.rdr_error_invalid_mobi))
                 )
             } catch (t: Throwable) {
                 cachedEpub.delete()
@@ -485,7 +476,7 @@ class BookLoaderEngine(
                     bookId = book.id,
                     bookTitle = book.title, author = book.author,
                     format = book.format, type = book.type, percent = percent,
-                    error = "Feil ved konvertering av ${book.format.name}-fil: ${t.message ?: "Ukjent konverteringsfeil"}"
+                    error = ctx.getString(R.string.rdr_error_conversion_failed, book.format.name, t.message ?: ctx.getString(R.string.rdr_error_unknown_conversion))
                 )
             }
         }
@@ -544,7 +535,7 @@ class BookLoaderEngine(
             bookTitle = preMeta.title?.ifBlank { book.title } ?: book.title,
             author = preMeta.author?.ifBlank { book.author } ?: book.author,
             format = book.format, type = book.type, percent = percent,
-            error = "Konverterte ${book.format.name}→EPUB, men kunne ikke tolke resultatet. Prøv å konvertere boken til EPUB i forveien (f.eks. i Calibre), eller benytt en annen DRM-fri kopi av boken."
+            error = ctx.getString(R.string.rdr_error_converted_unreadable, book.format.name)
         )
     }
 
@@ -673,7 +664,7 @@ class BookLoaderEngine(
             || headStr.contains(Regex("""^\s*d\s*8:announce"""))
             || headStr.contains(Regex("""4:name\d{1,4}:"""))
         ) {
-            return "BitTorrent-metadata (Bencode filliste med .epub oppføringer)"
+            return "Bencode (binary metadata)"
         }
 
         // === #2: Bencode-like structural density without sentence punctuation ===
@@ -682,33 +673,33 @@ class BookLoaderEngine(
             Regex("""i\d{1,10}e""").findAll(headStr).count()
         val sentences = Regex("""[.!?]\s+[A-ZÆØÅ]""").findAll(headStr).count()
         if (bencodeTokens >= 6 && sentences <= 1) {
-            return "strukturerte data (Bencode-lignende token-tetthet=$bencodeTokens)"
+            return "Bencode (structured tokens: $bencodeTokens)"
         }
 
         // === #3: ZIP / RAR / 7z / EXE / ELF headers ===
         val head4 = bytes.copyOfRange(0, minOf(bytes.size, 4))
         val s4 = head4.joinToString("") { "%02X".format(it.toInt() and 0xFF) }
-        if (s4.startsWith("504B0304") || s4.startsWith("504B0506") || s4.startsWith("504B0708")) return "ZIP-fil-header (PK)"
-        if (s4.startsWith("52617221")) return "RAR-arkiv-header (Rar!)"
-        if (s4.startsWith("377ABCAF")) return "7z-arkiv-header"
-        if (s4.startsWith("4D5A")) return "PE/EXE kjørbar Windows-fil"
-        if (s4.startsWith("7F454C46")) return "ELF kjørbar Linux-fil"
-        if (s4.startsWith("CAFEBABE")) return "Java Class-fil"
-        if (s4.startsWith("1F8B")) return "gzip-komprimert data (.gz)"
-        if (s4.startsWith("FD377A58")) return "XZ/LZMA komprimert data (.xz)"
-        if (s4.startsWith("425A68")) return "bzip2 komprimert data (.bz2)"
-        if (s4.startsWith("89504E47")) return "PNG bildefil"
-        if (s4.startsWith("FFD8FFE0")) return "JPEG bildefil"
-        if (s4.startsWith("25504446")) return "PDF-fil (bruk PDF-leseren, ikke rå tekst)"
+        if (s4.startsWith("504B0304") || s4.startsWith("504B0506") || s4.startsWith("504B0708")) return "ZIP (PK)"
+        if (s4.startsWith("52617221")) return "RAR (Rar!)"
+        if (s4.startsWith("377ABCAF")) return "7z"
+        if (s4.startsWith("4D5A")) return "PE/EXE"
+        if (s4.startsWith("7F454C46")) return "ELF"
+        if (s4.startsWith("CAFEBABE")) return "Java Class"
+        if (s4.startsWith("1F8B")) return "gzip (.gz)"
+        if (s4.startsWith("FD377A58")) return "XZ/LZMA (.xz)"
+        if (s4.startsWith("425A68")) return "bzip2 (.bz2)"
+        if (s4.startsWith("89504E47")) return "PNG"
+        if (s4.startsWith("FFD8FFE0")) return "JPEG"
+        if (s4.startsWith("25504446")) return "PDF"
         if (s4.startsWith("00000018") || s4.startsWith("00000020")) {
             // ftyp box (MP4/M4B)
             if (bytes.size >= 12) {
                 val ftyp = bytes.copyOfRange(4, 8).toString(Charsets.US_ASCII)
-                if (ftyp == "ftyp") return "MP4/M4B lyd-container (bruk spilleren, ikke rå tekst)"
+                if (ftyp == "ftyp") return "MP4/M4B"
             }
         }
         if (bytes.size >= 3 && bytes[0] == 0x49.toByte() && bytes[1] == 0x44.toByte() && bytes[2] == 0x33.toByte()) {
-            return "MP3-lydfil (ID3-header) (bruk spilleren, ikke rå tekst)"
+            return "MP3 (ID3)"
         }
 
         // === #4: Non-printable ratio ===
@@ -719,7 +710,7 @@ class BookLoaderEngine(
         }
         val printableRatio = printable.toDouble() / headSize.toDouble()
         if (printableRatio < 0.85) {
-            return "lav andel printbare tegn (${(printableRatio*100).toInt()}% — binær data)"
+            return "binary data (${(printableRatio*100).toInt()}% printable)"
         }
 
         // === #5: Whitespace sanity (normal books have ~20% whitespace, data dumps ~2%) ===
@@ -730,7 +721,7 @@ class BookLoaderEngine(
         }
         val wsRatio = whitespace.toDouble() / headSize.toDouble()
         if (wsRatio < 0.04 && bencodeTokens >= 4) {
-            return "manglende mellomrom/avsnitt (strukturerte data, ikke bok)"
+            return "structured data (no whitespace)"
         }
 
         return null

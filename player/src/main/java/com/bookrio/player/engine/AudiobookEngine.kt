@@ -168,7 +168,7 @@ class AudiobookEngine(
         val identity = "${book.fileSizeBytes}:${book.lastModifiedAt}"
         val alreadyAttempted = attemptedRefresh.put(book.id, identity) == identity
         if (alreadyAttempted) {
-            chapterDiag("SKIP id=${book.id} ext=$ext reason=$reason (samme identitet forsøkt)")
+            chapterDiag("SKIP id=${book.id} ext=$ext reason=$reason (same identity already attempted)")
             // En annen kalller (view model / service) kan nettopp ha persistert nye
             // kapitler. Les på nytt fra DB så vi aldri returnerer et utdatert snapshot.
             val fresh = runCatching { db.bookDao().getById(book.id) }.getOrNull() ?: book
@@ -249,7 +249,7 @@ class AudiobookEngine(
         val netPrefs = ctx.getSharedPreferences("chapter_net_lookup", Context.MODE_PRIVATE)
         val netKey = "v$NET_LOOKUP_VERSION:${book.id}:$identity"
         if (netPrefs.getStringSet("attempted", emptySet())?.contains(netKey) == true) {
-            chapterDiag("NET-SKIP id=${book.id} (allerede forsøkt)")
+            chapterDiag("NET-SKIP id=${book.id} (already attempted)")
             return base
         }
         // Kjøletid for bom: hindrer gjentatte serielle HTTP-forsøk på
@@ -287,7 +287,7 @@ class AudiobookEngine(
             }
         } else {
             netPrefs.edit().putLong("failed_at:$netKey", System.currentTimeMillis()).apply()
-            chapterDiag("NET-MISS id=${book.id} (ingen treff, prøver igjen ved behov)")
+            chapterDiag("NET-MISS id=${book.id} (no match, retry on demand)")
         }
         return updated
     }
@@ -417,10 +417,15 @@ class AudiobookEngine(
         // 2) MediaStore: finn «<base>.cue» (samme mappe hvis mulig), bygg dokument-URI
         //    innenfor det allerede gitte treet.
         val prefix = docId.substringBefore(':') + ":" // f.eks. "msf:"
-        for (collection in listOf(
-            android.provider.MediaStore.Downloads.getContentUri("external"),
-            android.provider.MediaStore.Files.getContentUri("external"),
-        )) {
+        // MediaStore.Downloads exists only on API 29+; referencing it on older
+        // devices throws NoClassDefFoundError. Fall back to MediaStore.Files.
+        val collections = buildList {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                add(android.provider.MediaStore.Downloads.getContentUri("external"))
+            }
+            add(android.provider.MediaStore.Files.getContentUri("external"))
+        }
+        for (collection in collections) {
             runCatching {
                 ctx.contentResolver.query(
                     collection,

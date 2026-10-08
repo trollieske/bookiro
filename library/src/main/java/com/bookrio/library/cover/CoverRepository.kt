@@ -99,7 +99,15 @@ class CoverRepository(
 
     private fun generatedFile(id: Long) = File(coversDir, "book_$id.webp")
 
-    private suspend fun renderAndPersist(book: BookEntity): File {
+    /** Force a fresh online metadata + cover lookup, overriding an embedded cover. */
+    suspend fun refreshOnline(book: BookEntity): File = withContext(dispatchers.io) {
+        evictCacheFor(book)
+        runCatching { book.coverPath?.let { File(it) }?.takeIf { it.exists() }?.delete() }
+        runCatching { generatedFile(book.id).takeIf { it.exists() }?.delete() }
+        renderAndPersist(book, forceOnlineRefresh = true)
+    }
+
+    private suspend fun renderAndPersist(book: BookEntity, forceOnlineRefresh: Boolean = false): File {
         val file = generatedFile(book.id)
         val spineColorArgb = DomainMappers.pickSpineColor(book.id, book.spineColor).colorToArgb()
 
@@ -107,7 +115,8 @@ class CoverRepository(
         var effectiveAuthor: String = book.author ?: ""
         var effectiveIsbn: String = book.isbn ?: ""
 
-        val needsEnrichment = MetadataFetcher.isAuthorUnknown(book.author) ||
+        val needsEnrichment = forceOnlineRefresh ||
+                MetadataFetcher.isAuthorUnknown(book.author) ||
                 book.title.isBlank() ||
                 looksLikeFilenameOnly(book.title)
 
@@ -128,7 +137,9 @@ class CoverRepository(
 
         if (enriched != null) {
             if (!enriched.title.isNullOrBlank()) effectiveTitle = enriched.title ?: ""
-            if (MetadataFetcher.isAuthorUnknown(effectiveAuthor) && !enriched.author.isNullOrBlank()) {
+            if (forceOnlineRefresh && !enriched.author.isNullOrBlank()) {
+                effectiveAuthor = enriched.author ?: ""
+            } else if (MetadataFetcher.isAuthorUnknown(effectiveAuthor) && !enriched.author.isNullOrBlank()) {
                 effectiveAuthor = enriched.author ?: ""
             }
             if (effectiveIsbn.isBlank() && !enriched.isbn.isNullOrBlank()) {
@@ -199,14 +210,18 @@ class CoverRepository(
             }
         }
 
-        val bitmap = embedded ?: onlineCover ?: renderTypographicCover(
-            title = effectiveTitle,
-            author = effectiveAuthor,
-            spineColorArgb = spineColorArgb,
-            formatBadge = book.format.name,
-            widthPx = 600,
-            heightPx = 900
-        )
+        val bitmap = if (forceOnlineRefresh && onlineCover != null) {
+            onlineCover
+        } else {
+            embedded ?: onlineCover ?: renderTypographicCover(
+                title = effectiveTitle,
+                author = effectiveAuthor,
+                spineColorArgb = spineColorArgb,
+                formatBadge = book.format.name,
+                widthPx = 600,
+                heightPx = 900
+            )
+        }
 
         file.outputStream().buffered().use { os ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

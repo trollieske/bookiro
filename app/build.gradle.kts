@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,14 +8,48 @@ plugins {
     id("androidx.navigation.safeargs.kotlin")
 }
 
+// ─── Production signing (never commit secrets) ────────────────────────────────
+// Credentials are read from (in order): environment variables, then an ignored
+// `keystore.properties` at the repo root. See docs/RELEASE_SIGNING.md.
+// A release build FAILS clearly when neither production credentials nor an
+// explicit `BOOKIRO_ALLOW_DEBUG_SIGNING=true` opt-in is present, so a debug-signed
+// artifact can never be mistaken for a Play-ready build.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+fun signingValue(env: String, property: String): String? =
+    System.getenv(env) ?: keystoreProperties.getProperty(property)
+
+val releaseStorePath = signingValue("BOOKIRO_KEYSTORE_PATH", "storeFile")
+val releaseStorePassword = signingValue("BOOKIRO_KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("BOOKIRO_KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("BOOKIRO_KEY_PASSWORD", "keyPassword")
+val hasProductionSigning = !releaseStorePath.isNullOrBlank() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank() &&
+    rootProject.file(releaseStorePath).exists()
+val allowDebugSigning = System.getenv("BOOKIRO_ALLOW_DEBUG_SIGNING")?.toBoolean() == true
+val releaseRequested = gradle.startParameter.taskNames.any { name ->
+    val task = name.substringAfterLast(':')
+    val packaging = task.startsWith("assemble") || task.startsWith("bundle") ||
+        task.startsWith("package") || task.startsWith("install") || task == "build"
+    val nonPackaging = task.startsWith("lint") || task.startsWith("compile") ||
+        task.startsWith("test") || task.endsWith("UnitTest")
+    packaging && !nonPackaging && (task.contains("Release") || task == "assemble" || task == "bundle" || task == "build")
+}
+
 android {
     namespace = "com.bookrio"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.bookrio"
+        applicationId = "com.bookiro"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 11
         versionName = "1.0.0-readium9"
 
@@ -21,11 +57,45 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // ─── Store flavors ──────────────────────────────────────────────────────────
+    // `full`      = side-load / private build WITH the torrent client (id com.bookiro)
+    // `playstore` = Play-safe build WITHOUT `:torrent` (id com.bookiro.play)
+    // The torrent module is only wired for `full` (see dependencies below); the
+    // playstore source set provides a no-op TorrentFeature so no torrent code, UI,
+    // strings or native libraries can enter the Play artifact.
+    flavorDimensions += "store"
+    productFlavors {
+        create("full") {
+            dimension = "store"
+        }
+        create("playstore") {
+            dimension = "store"
+            applicationIdSuffix = ".play"
+            versionNameSuffix = "-play"
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseRequested && !hasProductionSigning && !allowDebugSigning) {
+                throw GradleException(
+                    "Production release signing is not configured. Provide " +
+                        "BOOKIRO_KEYSTORE_PATH / BOOKIRO_KEYSTORE_PASSWORD / " +
+                        "BOOKIRO_KEY_ALIAS / BOOKIRO_KEY_PASSWORD (env or ignored " +
+                        "keystore.properties). For a NON-production test artifact only, " +
+                        "set BOOKIRO_ALLOW_DEBUG_SIGNING=true to accept debug signing. " +
+                        "See docs/RELEASE_SIGNING.md."
+                )
+            }
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasProductionSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                // Only reachable with the explicit BOOKIRO_ALLOW_DEBUG_SIGNING opt-in;
+                // such an artifact is TEST-only and must never be published as Play-ready.
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -44,6 +114,16 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        if (hasProductionSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
         }
     }
 
@@ -65,6 +145,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        // AGP's `UseTomlInstead` quick-fix crashes with a ConcurrentModificationException
+        // inside `TomlUtilities` when the two store flavors are present (an AGP/lint bug,
+        // not a code issue). The check only produces a refactor suggestion, so disable it.
+        disable += "UseTomlInstead"
     }
 
     packaging {
@@ -102,7 +189,8 @@ dependencies {
     implementation(project(":smb"))
     implementation(project(":webdav"))
     implementation(project(":calibre"))
-    implementation(project(":torrent"))
+    // Torrent is intentionally full-only. The playstore variant must not link it.
+    "fullImplementation"(project(":torrent"))
     implementation(project(":podcast"))
 
     implementation(platform(libs.androidx.compose.bom))

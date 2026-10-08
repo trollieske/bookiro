@@ -2,7 +2,6 @@ package com.bookrio.app.ui
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,10 +42,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bookrio.app.storage.LibraryFolderLauncher
+import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.core.dispatchers.DefaultDispatcherProvider
 import com.bookrio.core.dispatchers.DispatcherProvider
 import com.bookrio.core.domain.model.DarkModePref
-import com.bookrio.core.storage.LibraryFolderNames
 import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
@@ -237,40 +236,7 @@ class SettingsViewModel(
      * ifra i stedet for å melde falsk suksess.
      */
     suspend fun setLibraryFolder(ctx: Context, uri: Uri?): Boolean = withContext(dispatchers.io) {
-        val previous = runCatching { prefs.libraryFolderUri.first() }.getOrNull()
-        if (uri == null) {
-            releasePersistedGrant(ctx, previous)
-            prefs.setLibraryFolderUri(null)
-            return@withContext true
-        }
-        // Skrivetilgang innvilges ikke alltid; fall tilbake til lesetilgang.
-        val granted = runCatching {
-            ctx.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-        }.isSuccess || runCatching {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }.isSuccess
-        if (!granted) return@withContext false
-        if (previous != null && previous != uri.toString()) releasePersistedGrant(ctx, previous)
-        prefs.setLibraryFolderUri(uri.toString())
-        true
-    }
-
-    /** Frigjør en gammel persistabel URI-tilgang så vi ikke lekker opptil grant-taket. */
-    private fun releasePersistedGrant(ctx: Context, uriString: String?) {
-        val parsed = uriString?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: return
-        runCatching {
-            ctx.contentResolver.releasePersistableUriPermission(
-                parsed,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-        }.onFailure {
-            runCatching {
-                ctx.contentResolver.releasePersistableUriPermission(parsed, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        }
+        com.bookrio.app.storage.LibraryFolderStore.setLibraryFolder(ctx, prefs, uri)
     }
 
     fun setFtpSyncEnabled(b: Boolean) = viewModelScope.launch(dispatchers.io) {
@@ -335,18 +301,22 @@ class SettingsViewModel(
 
     fun setTorrentBackgroundEnabled(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentBackgroundEnabled(b)
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setTorrentWifiOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentWifiOnly(b)
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setTorrentChargingOnly(b: Boolean) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentChargingOnly(b)
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setTorrentMinBattery(pct: Int) = viewModelScope.launch(dispatchers.io) {
         prefs.setTorrentMinBatteryPct(pct)
+        TorrentFeatureProvider.feature.applyBackgroundSettings(getApplication())
     }
 
     fun setLibraryFormatFilter(b: Boolean) = viewModelScope.launch(dispatchers.io) {
@@ -439,7 +409,8 @@ private fun LibraryFolderRow(
     onRemove: () -> Unit,
 ) {
     var showActions by remember { mutableStateOf(false) }
-    val label = LibraryFolderNames.treeDocumentPath(uri)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val label = com.bookrio.app.storage.LibraryFolderDisplay.nameFor(context, uri)
     val hasFolder = !uri.isNullOrBlank()
     val notSet = stringResource(R.string.settings_library_folder_not_set)
     val subtitle = label ?: uri ?: notSet
@@ -1271,88 +1242,17 @@ fun SettingsScreen(
                         onChargingOnlyChange = { vm.setWebdavChargingOnly(it) }
                     )
 
-                    // Torrent background row
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.SwapHoriz, null,
-                                    tint = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        stringResource(R.string.settings_torrent_bg),
-                                        style = ShelfTypography.BodyLarge,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        stringResource(R.string.settings_torrent_bg_sub),
-                                        style = ShelfTypography.BodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Switch(
-                                    checked = state.torrentBackgroundEnabled,
-                                    onCheckedChange = { vm.setTorrentBackgroundEnabled(it) }
-                                )
-                            }
-                            if (state.torrentBackgroundEnabled) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(stringResource(R.string.settings_sync_only_wifi), style = ShelfTypography.BodyMedium, modifier = Modifier.weight(1f))
-                                    Switch(
-                                        checked = state.torrentWifiOnly,
-                                        onCheckedChange = { vm.setTorrentWifiOnly(it) }
-                                    )
-                                }
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(stringResource(R.string.settings_sync_only_charging), style = ShelfTypography.BodyMedium, modifier = Modifier.weight(1f))
-                                    Switch(
-                                        checked = state.torrentChargingOnly,
-                                        onCheckedChange = { vm.setTorrentChargingOnly(it) }
-                                    )
-                                }
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        stringResource(R.string.settings_torrent_min_battery),
-                                        style = ShelfTypography.BodyMedium,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        "${state.torrentMinBattery}%",
-                                        style = ShelfTypography.LabelMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                                Slider(
-                                    value = state.torrentMinBattery.toFloat(),
-                                    onValueChange = { vm.setTorrentMinBattery(it.toInt()) },
-                                    valueRange = 0f..100f,
-                                    steps = 19,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
-                                        activeTrackColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6).copy(alpha = 0.6f)
-                                    )
-                                )
-                            }
-                        }
-                    }
+                    // Torrent background row (full build only; no-op in the playstore build).
+                    TorrentFeatureProvider.feature.SettingsSection(
+                        backgroundEnabled = state.torrentBackgroundEnabled,
+                        wifiOnly = state.torrentWifiOnly,
+                        chargingOnly = state.torrentChargingOnly,
+                        minBattery = state.torrentMinBattery,
+                        onBackgroundEnabledChange = { vm.setTorrentBackgroundEnabled(it) },
+                        onWifiOnlyChange = { vm.setTorrentWifiOnly(it) },
+                        onChargingOnlyChange = { vm.setTorrentChargingOnly(it) },
+                        onMinBatteryChange = { vm.setTorrentMinBattery(it) }
+                    )
 
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -1375,6 +1275,97 @@ fun SettingsScreen(
                         Switch(
                             checked = state.onlineCoverLookup,
                             onCheckedChange = { vm.setOnlineCover(it) }
+                        )
+                    }
+
+                    var showMetadataRefreshDialog by rememberSaveable { mutableStateOf(false) }
+                    var metadataRefreshAll by rememberSaveable { mutableStateOf(false) }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showMetadataRefreshDialog = true },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_metadata_refresh),
+                                style = ShelfTypography.BodyLarge
+                            )
+                            Text(
+                                stringResource(R.string.settings_metadata_refresh_sub),
+                                style = ShelfTypography.BodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (showMetadataRefreshDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showMetadataRefreshDialog = false },
+                            title = { Text(stringResource(R.string.settings_metadata_refresh_dialog_title)) },
+                            text = {
+                                Column {
+                                    Text(
+                                        stringResource(R.string.settings_metadata_refresh_dialog_body),
+                                        style = ShelfTypography.BodySmall
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = !metadataRefreshAll,
+                                            onClick = { metadataRefreshAll = false }
+                                        )
+                                        Text(stringResource(R.string.settings_metadata_refresh_scope_suspects))
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = metadataRefreshAll,
+                                            onClick = { metadataRefreshAll = true }
+                                        )
+                                        Text(stringResource(R.string.settings_metadata_refresh_scope_all))
+                                    }
+                                    if (!state.onlineCoverLookup) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            stringResource(R.string.settings_metadata_refresh_need_online),
+                                            style = ShelfTypography.BodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        val target = if (metadataRefreshAll) {
+                                            com.bookrio.app.workers.MetadataRefreshWorker.SCOPE_ALL
+                                        } else {
+                                            com.bookrio.app.workers.MetadataRefreshWorker.SCOPE_SUSPECTS
+                                        }
+                                        com.bookrio.app.workers.MetadataRefreshWorker.enqueue(ctx, target)
+                                        showMetadataRefreshDialog = false
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                ctx.getString(R.string.settings_metadata_refresh_started)
+                                            )
+                                        }
+                                    },
+                                    enabled = state.onlineCoverLookup
+                                ) {
+                                    Text(stringResource(R.string.settings_metadata_refresh_start))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showMetadataRefreshDialog = false }) {
+                                    Text(stringResource(R.string.action_cancel))
+                                }
+                            }
                         )
                     }
                 }

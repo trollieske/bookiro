@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_title">Torrent</string>
+    <string name="torrent_subtitle">Одноранговая сеть</string>
+    <string name="home_service_torrent">Торрент</string>
+    <string name="settings_torrent_bg">Torrent (в фоне)</string>
+    <string name="settings_torrent_bg_sub">Продолжать загрузки, когда приложение закрыто</string>
+    <string name="settings_torrent_min_battery">Минимальный заряд</string>
+</resources>

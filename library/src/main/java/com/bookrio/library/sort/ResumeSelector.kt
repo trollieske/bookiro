@@ -12,7 +12,6 @@ package com.bookrio.library.sort
  */
 object ResumeSelector {
 
-    const val MAX_CANDIDATES = 5
     const val COMPLETED_THRESHOLD = 0.99f
 
     data class ResumeBook(

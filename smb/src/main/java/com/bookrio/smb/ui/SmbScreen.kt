@@ -233,7 +233,10 @@ private fun SavedSmbServersPanel(
                         if (active > 0 || summary.counts.failed > 0) {
                             Text(
                                 "${summary.counts.running} / ${summary.counts.total} · " +
-                                    (if (summary.counts.failed > 0) "${summary.counts.failed} feilet" else "${summary.counts.queued} i kø"),
+                                    (if (summary.counts.failed > 0)
+                                        stringResource(R.string.smbu_count_failed, summary.counts.failed)
+                                    else
+                                        stringResource(R.string.smbu_count_queued, summary.counts.queued)),
                                 style = ShelfTypography.BodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )

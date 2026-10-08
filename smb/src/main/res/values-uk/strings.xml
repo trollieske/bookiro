@@ -33,4 +33,6 @@
     <string name="smbu_err_network">Не вдалося зв’язатися із сервером</string>
     <string name="smbu_err_timeout">Час очікування з’єднання вичерпано</string>
     <string name="smbu_err_unknown">Щось пішло не так</string>
+    <string name="smbu_count_failed">%1$d не вдалося</string>
+    <string name="smbu_count_queued">%1$d у черзі</string>
 </resources>

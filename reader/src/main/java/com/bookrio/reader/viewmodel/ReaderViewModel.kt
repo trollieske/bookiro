@@ -12,6 +12,7 @@ import com.bookrio.data.local.entity.BookTypeEntity
 import com.bookrio.data.local.entity.FormatEntity
 import com.bookrio.data.local.entity.ReadingProgressEntity
 import com.bookrio.data.prefs.UserPreferencesRepository
+import com.bookrio.reader.R
 import com.bookrio.reader.engine.BookLoaderEngine
 import com.bookrio.reader.engine.PageIndexMath
 import com.bookrio.reader.engine.ReaderBookState
@@ -67,7 +68,7 @@ class ReaderViewModel(
                 val restoredPage = existing?.pageIndex ?: 0
                 val mergedError = engineState.error
                     ?: if (engineState.chapters.isEmpty() && engineState.bookTitle.isNotBlank())
-                        "Fant ingen lesbare kapitler i boken. Filen kan være skadet, tom, eller ha et støttet format som ikke kunne tolkes."
+                        getApplication<Application>().getString(R.string.rdr_error_no_readable_chapters)
                     else null
 
                 engineState.copy(
@@ -87,8 +88,8 @@ class ReaderViewModel(
             }.onFailure { t ->
                 val prior = _state.value
                 _state.value = prior.copy(
-                    error = t.message ?: "Kan ikke åpne boken (ukjent feil)",
-                    bookTitle = prior.bookTitle.ifBlank { "Kan ikke åpne bok" },
+                    error = t.message ?: getApplication<Application>().getString(R.string.rdr_error_cannot_open_book_unknown),
+                    bookTitle = prior.bookTitle.ifBlank { getApplication<Application>().getString(R.string.rdr_error_cannot_open_book) },
                 )
             }
         }
@@ -243,21 +244,23 @@ class ReaderViewModel(
                     .getByBookSectionPage(bookId, BookmarkTypeEntity.GENERIC, chapterIdx, page)
                 if (existing != null) {
                     db.bookmarkDao().delete(existing)
-                    "Bokmerke fjernet"
+                    getApplication<Application>().getString(R.string.rdr_bookmark_removed)
                 } else {
                     val chapterTitle = state.chapters.getOrNull(chapterIdx)?.title
+                    val app = getApplication<Application>()
+                    val chapterLabel = app.getString(R.string.rdr_chapter, chapterIdx + 1)
                     db.bookmarkDao().insert(
                         BookmarkEntity(
                             bookId = bookId,
                             type = BookmarkTypeEntity.GENERIC,
-                            title = chapterTitle?.let { "Chap ${chapterIdx + 1}: $it" },
-                            snippet = "Page ${page + 1}",
+                            title = chapterTitle?.let { "$chapterLabel: $it" },
+                            snippet = app.getString(R.string.rdr_page_n, page + 1),
                             pageIndex = page,
                             chapterIndex = chapterIdx,
                             positionPercent = pct.coerceIn(0f, 1f),
                         )
                     )
-                    "Bokmerke lagret"
+                    app.getString(R.string.rdr_bookmark_saved)
                 }
             }.onSuccess { _bookmarkHudMessage.value = it }
         }

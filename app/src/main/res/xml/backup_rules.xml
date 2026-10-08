@@ -6,5 +6,13 @@
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="shelf_ftp_servers_enc.xml" />
+    <!-- Legacy plaintext FTP prefs, named from the applicationId (`${packageName}_ftp_plain`).
+         Kept for every applicationId this app has ever shipped under. -->
     <exclude domain="sharedpref" path="com.bookrio_ftp_plain.xml" />
+    <exclude domain="sharedpref" path="com.bookiro_ftp_plain.xml" />
+    <exclude domain="sharedpref" path="com.bookiro.play_ftp_plain.xml" />
+    <exclude domain="sharedpref" path="com.bookiro.debug_ftp_plain.xml" />
+    <exclude domain="sharedpref" path="com.bookiro.play.debug_ftp_plain.xml" />
+    <exclude domain="sharedpref" path="shelf_smb_servers_enc.xml" />
+    <exclude domain="sharedpref" path="shelf_webdav_servers_enc.xml" />
 </full-backup-content>

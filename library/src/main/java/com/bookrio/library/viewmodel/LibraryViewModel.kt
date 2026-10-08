@@ -13,8 +13,6 @@ import com.bookrio.library.cover.CoverRepository
 import com.bookrio.library.data.BookImportRepository
 import com.bookrio.library.mapper.DomainMappers.toBookVisual
 import com.bookrio.library.sort.LibrarySorter
-import com.bookrio.library.R
-import com.bookrio.library.sort.ResumeSelector
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.BookEntity
 import com.bookrio.data.local.entity.BookTypeEntity
@@ -30,15 +28,6 @@ sealed class LibraryMode {
     data object Audio : LibraryMode()
 }
 
-/** Tynn fortsett-linje: tittel + prosent (ebok) eller gjenstående tid (lydbok). */
-data class ResumeItem(
-    val bookId: Long,
-    val title: String,
-    val author: String,
-    val detail: String,
-    val coverPath: String? = null
-)
-
 /** Rutenett-oppføringer: full-bredde seksjonsetikett (kun HYLLE) eller bokomslag. */
 sealed interface GridEntry {
     data class SectionLabel(val text: String) : GridEntry
@@ -53,8 +42,6 @@ data class LibraryUiState(
     val viewType: LibraryViewType = LibraryViewType.GRID,
     val gridEntries: List<GridEntry> = emptyList(),
     val flatGridBooks: List<BookVisual> = emptyList(),
-    val resumeEbooks: List<ResumeItem> = emptyList(),
-    val resumeAudios: List<ResumeItem> = emptyList(),
     val error: String? = null
 )
 
@@ -81,8 +68,12 @@ class LibraryViewModel(
                 fragmentedAudiobooksRepaired = true
                 runCatching {
                     val repo = BookImportRepository(app, db, dispatchers)
+                    // Fix narrator-as-author first: audiobook grouping depends on the author.
+                    repo.repairNarratorAuthors()
                     repo.consolidateFragmentedAudiobooks()
                     repo.repairOneChapterAudiobooks()
+                    repo.repairTitlesAndAuthors()
+                    repo.deduplicateLibrary()
                 }
             }
             val coversDir = java.io.File(app.filesDir, "covers")
@@ -138,14 +129,11 @@ class LibraryViewModel(
     private fun buildStateFlow(p: Params): Flow<LibraryUiState> =
         combine(
             booksMatching(p.query, p.mode),
-            progressRows(),
-            db.bookDao().observeAll()
-        ) { matching, rows, all ->
+            progressRows()
+        ) { matching, rows ->
             val filesDir = getApplication<Application>().filesDir
             val pct: (Long) -> Float = { rows[it]?.progressPercent ?: 0f }
             val visual: (BookEntity) -> BookVisual = { toBookVisual(it, pct(it.id), filesDir) }
-
-            val totalActive = all.filter { !it.isDeleted }
 
             // ── Sorting: single source of truth (LibrarySorter) ──
             val sortBooks = matching.map { b ->
@@ -181,40 +169,6 @@ class LibraryViewModel(
             }
             val flatGridBooks = sortedEntities.map(visual).distinctBy { it.id }
 
-            // ── Fortsett-linje: smart multi-bok kandidater per fane ──
-            val resumeInputs = totalActive.map { b ->
-                ResumeSelector.ResumeBook(
-                    id = b.id,
-                    title = b.title,
-                    author = b.author,
-                    progressPercent = pct(b.id),
-                    positionMs = rows[b.id]?.positionMs ?: 0L,
-                    durationMs = b.durationMs ?: 0L,
-                    isAudio = b.type == BookTypeEntity.AUDIOBOOK,
-                    lastActivity = rows[b.id]?.updatedAt ?: b.lastOpenedAt ?: 0L,
-                    updatedAt = rows[b.id]?.updatedAt ?: b.lastModifiedAt,
-                    dateFinished = b.dateFinished,
-                    isDeleted = b.isDeleted
-                )
-            }
-            val remainingLabel: (Long) -> String = { ms ->
-                val totalMin = ((ms + 59_999) / 60_000).coerceAtLeast(1)
-                val h = totalMin / 60
-                val m = totalMin % 60
-                val timeText = if (h > 0) "${h}h ${m}min" else "${m}min"
-                getApplication<Application>().getString(R.string.lib_remaining, timeText)
-            }
-            val ebookResume = ResumeSelector.select(resumeInputs, wantAudio = false, remainingLabel = remainingLabel)
-            val audioResume = ResumeSelector.select(resumeInputs, wantAudio = true, remainingLabel = remainingLabel)
-
-            val allActiveById = totalActive.associateBy { it.id }
-            fun resolvedCover(bookId: Long): String? {
-                val b = allActiveById[bookId] ?: return null
-                val direct = b.coverPath?.takeIf { java.io.File(it).exists() }
-                return direct ?: java.io.File(filesDir, "covers/book_${b.id}.webp")
-                    .takeIf { it.exists() }?.absolutePath
-            }
-
             LibraryUiState(
                 query = p.query,
                 sortMode = p.sortMode,
@@ -223,12 +177,6 @@ class LibraryViewModel(
                 viewType = p.viewType,
                 gridEntries = gridEntries,
                 flatGridBooks = flatGridBooks,
-                resumeEbooks = ebookResume.map { r ->
-                    ResumeItem(r.bookId, r.title, r.author, r.detail, resolvedCover(r.bookId))
-                },
-                resumeAudios = audioResume.map { r ->
-                    ResumeItem(r.bookId, r.title, r.author, r.detail, resolvedCover(r.bookId))
-                },
                 error = null
             )
         }

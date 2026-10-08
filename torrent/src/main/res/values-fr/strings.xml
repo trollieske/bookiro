@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="toru_title">Client torrent</string>
+    <string name="toru_rights_notice">Ne téléchargez que du contenu dont vous détenez les droits.</string>
     <string name="toru_back">Retour</string>
     <string name="toru_torrent_file">.torrent</string>
     <string name="toru_magnet">Magnet</string>
@@ -83,4 +84,8 @@
     <string name="toru_import_no_books">Aucun livre trouvé — utilisez « Choisir un dossier » pour indiquer le bon dossier de téléchargement</string>
     <string name="toru_imported_from_folder">%1$d livres importés depuis le dossier sélectionné !</string>
     <string name="toru_import_no_supported">Aucun livre pris en charge trouvé dans le dossier sélectionné</string>
+    <string name="toru_error">Erreur : %1$s</string>
+    <string name="toru_invalid_infohash">Info-hash non valide (doit comporter 40 caractères SHA-1)</string>
+    <string name="toru_invalid_magnet">Lien magnet non valide</string>
+    <string name="toru_added">Torrent ajouté</string>
 </resources>

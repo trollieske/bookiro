@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_title">Torrent</string>
+    <string name="torrent_subtitle">Pair à pair</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="settings_torrent_bg">Torrent (arrière-plan)</string>
+    <string name="settings_torrent_bg_sub">Continuer les téléchargements lorsque l\'application est fermée</string>
+    <string name="settings_torrent_min_battery">Batterie minimale</string>
+</resources>

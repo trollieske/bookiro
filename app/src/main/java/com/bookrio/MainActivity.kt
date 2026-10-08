@@ -56,7 +56,6 @@ import com.bookrio.data.prefs.UserPreferencesRepository
 import com.bookrio.designsystem.theme.ShelfTheme
 import com.bookrio.library.ui.LibraryScreen
 import com.bookrio.library.viewmodel.LibraryMode
-import com.bookrio.library.ui.SampleBooks
 import com.bookrio.reader.ui.ReaderScreen
 import com.bookrio.player.ui.PlayerScreen
 import com.bookrio.player.service.AudiobookPlaybackService
@@ -80,7 +79,7 @@ import com.bookrio.webdav.ui.WebdavScreen
 import com.bookrio.calibre.ui.CalibreBrowserScreen
 import com.bookrio.calibre.ui.CalibreConnectionScreen
 import com.bookrio.calibre.ui.CalibreSourcesScreen
-import com.bookrio.torrent.ui.TorrentScreen
+import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.app.BookDetailsScreen
 import com.bookrio.app.ImportScreen
 import com.bookrio.app.OnboardingScreen
@@ -137,11 +136,83 @@ private fun NavItemIcon(item: BottomNavItem, label: String) {
     }
 }
 
+@Composable
+private fun DatabaseErrorScreen(
+    onRetry: () -> Unit,
+    onResetConfirmed: () -> Unit
+) {
+    var showResetConfirm by remember { mutableStateOf(false) }
+    Surface(color = OmarchyColors.Bg, modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                stringResource(R.string.db_error_title),
+                style = ShelfTypography.HeadlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = OmarchyColors.FgBright
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.db_error_body),
+                style = ShelfTypography.BodyMedium,
+                color = OmarchyColors.Dim
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onRetry) {
+                Text(stringResource(R.string.db_error_retry))
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { showResetConfirm = true }) {
+                Text(stringResource(R.string.db_error_reset))
+            }
+        }
+    }
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text(stringResource(R.string.db_error_reset_confirm_title)) },
+            text = { Text(stringResource(R.string.db_error_reset_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    onResetConfirmed()
+                }) {
+                    Text(stringResource(R.string.db_error_reset_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = null) {
     val navController = rememberNavController()
     val hasSeenOnboardingState by prefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
+
+    // If the database could not be opened, keep the data and show a recoverable
+    // error/retry path instead of wiping anything. This gate runs BEFORE any
+    // Room-backed flow is created below, so no database query runs until the DB is
+    // known to be usable.
+    val dbApp = LocalContext.current.applicationContext as? ShelfApplication
+    val dbError = dbApp?.databaseError?.collectAsStateWithLifecycle(initialValue = null)?.value
+    if (dbApp != null && dbError != null) {
+        DatabaseErrorScreen(
+            onRetry = { dbApp.retryDatabaseOpen() },
+            onResetConfirmed = { dbApp.resetDatabaseAfterUserConfirmation() }
+        )
+        return
+    }
 
     // Library tab counts (Settings → "Show counts on library tabs").
     val appContextForCounts = LocalContext.current.applicationContext
@@ -366,8 +437,17 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onOpenEpisode = { episodeId ->
                         navController.navigate(ShelfDestinations.PodcastPlayer.routeFor(episodeId))
                     },
+                    onOpenEbooks = { navController.navigate(ShelfDestinations.Books.route) },
+                    onOpenAudiobooks = { navController.navigate(ShelfDestinations.Audiobooks.route) },
+                    onOpenPodcasts = { navController.navigate(ShelfDestinations.Podcasts.route) },
                     onOpenImport = { navController.navigate(ShelfDestinations.Import.route) },
-                    onOpenLibrary = { navController.navigate(ShelfDestinations.Books.route) }
+                    onOpenFtp = { navController.navigate(ShelfDestinations.Ftp.route) },
+                    onOpenTorrent = {
+                        val torrent = TorrentFeatureProvider.feature
+                        if (torrent.isAvailable) navController.navigate(torrent.route)
+                    },
+                    onOpenSources = { navController.navigate(ShelfDestinations.Sources.route) },
+                    onOpenTransfers = { navController.navigate(ShelfDestinations.Transfers.route) }
                 )
             }
             composable(ShelfDestinations.Podcasts.route) {
@@ -418,7 +498,10 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onFtpClick = { navController.navigate(ShelfDestinations.Ftp.route) },
                     onSmbClick = { navController.navigate(ShelfDestinations.Smb.route) },
                     onWebdavClick = { navController.navigate(ShelfDestinations.Webdav.route) },
-                    onTorrentClick = { navController.navigate(ShelfDestinations.Torrent.route) },
+                    onTorrentClick = {
+                        val torrent = TorrentFeatureProvider.feature
+                        if (torrent.isAvailable) navController.navigate(torrent.route)
+                    },
                     onCalibreClick = { navController.navigate(ShelfDestinations.Calibre.route) },
                     onImportClick = { navController.navigate(ShelfDestinations.Import.route) },
                     onImportProgressClick = { navController.navigate(ShelfDestinations.ImportProgress.route) },
@@ -483,10 +566,15 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
                     onImport = { navController.navigate(ShelfDestinations.Import.route) }
                 )
             }
-            composable(ShelfDestinations.Torrent.route) {
-                TorrentScreen(
-                    onBack = { navController.popBackStack() }
-                )
+            if (TorrentFeatureProvider.feature.isAvailable) {
+                composable(TorrentFeatureProvider.feature.route) {
+                    // The torrent worker posts its progress notification; ask for
+                    // POST_NOTIFICATIONS so it is actually visible on Android 13+.
+                    RequestNotificationPermissionIfNeeded()
+                    TorrentFeatureProvider.feature.Screen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
             }
             composable(ShelfDestinations.Calibre.route) {
                 CalibreSourcesScreen(
@@ -577,7 +665,7 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
             composable(ShelfDestinations.Onboarding.route) {
                 OnboardingScreen(
                     onDone = {
-                        navController.navigate(ShelfDestinations.Books.route) {
+                        navController.navigate(ShelfDestinations.Home.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     }
@@ -783,13 +871,7 @@ private fun SourcesOverviewScreen(
                     tint = OmarchyColors.Fg,
                     onClick = onWebdavClick
                 )
-                SourceCard(
-                    title = stringResource(R.string.torrent_title),
-                    subtitle = stringResource(R.string.torrent_subtitle),
-                    icon = Icons.Default.SwapHoriz,
-                    tint = OmarchyColors.Fg,
-                    onClick = onTorrentClick
-                )
+                TorrentFeatureProvider.feature.SourceCard(onClick = onTorrentClick)
                 SourceCard(
                     title = stringResource(com.bookrio.calibre.R.string.calibre_title),
                     subtitle = stringResource(com.bookrio.calibre.R.string.calibre_subtitle),
@@ -869,7 +951,7 @@ private fun SourcesOverviewScreen(
 
 /** Flat kilderekke: panel, 4dp hjørner, ingen heving — enkel liste, ikke dashbord. */
 @Composable
-private fun SourceCard(
+internal fun SourceCard(
     modifier: Modifier = Modifier,
     title: String,
     subtitle: String,
@@ -991,7 +1073,16 @@ private fun LanDiscoverySection(
                                     .padding(horizontal = 4.dp, vertical = 8.dp),
                                 headline = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(cand.label, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            when (cand.type) {
+                                                com.bookrio.core.net.DiscoveredSourceType.FTP -> stringResource(R.string.lan_type_ftp)
+                                                com.bookrio.core.net.DiscoveredSourceType.SMB -> stringResource(R.string.lan_type_smb)
+                                                com.bookrio.core.net.DiscoveredSourceType.WEBDAV -> stringResource(R.string.lan_type_webdav)
+                                                com.bookrio.core.net.DiscoveredSourceType.CALIBRE -> stringResource(R.string.lan_type_calibre)
+                                                com.bookrio.core.net.DiscoveredSourceType.HTTP_CANDIDATE -> stringResource(R.string.lan_type_http)
+                                            },
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                         Spacer(Modifier.width(8.dp))
                                         Text(
                                             stringResource(R.string.lan_confidence, cand.confidencePct),
@@ -1363,8 +1454,4 @@ private fun formatBytes(bytes: Long): String = when {
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"
     bytes < 1024 * 1024 * 1024 -> "${"%.1f".format(bytes.toDouble() / (1024 * 1024))} MB"
     else -> "${"%.2f".format(bytes.toDouble() / (1024 * 1024 * 1024))} GB"
-}
-
-object SampleData {
-    val demoBooks = SampleBooks.books
 }

@@ -33,4 +33,6 @@
     <string name="smbu_err_network">No se pudo contactar con el servidor</string>
     <string name="smbu_err_timeout">Tiempo de conexión agotado</string>
     <string name="smbu_err_unknown">Algo salió mal</string>
+    <string name="smbu_count_failed">%1$d fallidos</string>
+    <string name="smbu_count_queued">%1$d en cola</string>
 </resources>

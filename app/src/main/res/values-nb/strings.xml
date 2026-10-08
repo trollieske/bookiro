@@ -12,7 +12,6 @@
     <string name="menu_import">Importer</string>
     <string name="import_files">Velg filer</string>
     <string name="import_folder">Importer mappe</string>
-    <string name="import_sample">Last inn prøvebøker</string>
     <string name="import_progress_title">Nedlastinger &amp; import</string>
     <string name="import_tab_downloads">Nedlastinger</string>
     <string name="import_tab_sync_history">Synk-historikk</string>
@@ -27,8 +26,6 @@
     <string name="smb_subtitle">Windows / NAS</string>
     <string name="webdav_title">WebDAV</string>
     <string name="webdav_subtitle">Nextcloud / Owncloud</string>
-    <string name="torrent_title">Torrent</string>
-    <string name="torrent_subtitle">Peer-to-peer</string>
     <string name="reader_theme_light">Lys</string>
     <string name="reader_theme_sepia">Sepia</string>
     <string name="reader_theme_dark">Mørk</string>
@@ -38,7 +35,14 @@
     <string name="settings_title">Innstillinger</string>
     <string name="onboarding_title">Velkommen til Bookiro</string>
     <string name="onboarding_body">Les og lytt. Lokalt. Uten støy.</string>
-    <string name="onboarding_cta">Åpne hylla</string>
+    <string name="onboarding_cta">Åpne Bookiro</string>
+    <string name="onboarding_folder_title">Bibliotekmappen din</string>
+    <string name="onboarding_folder_body">Velg hvor Bookiro finner og lagrer filene dine. Ingenting forlater enheten.</string>
+    <string name="onboarding_folder_choose">Velg mappe</string>
+    <string name="onboarding_folder_change">Bytt mappe</string>
+    <string name="onboarding_folder_skip">Hopp over nå</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
+
     <string name="settings_reader">Leser</string>
     <string name="settings_sync_storage_title">Lagring &amp; synkronisering</string>
     <string name="settings_sync_section_title">Synkronisering</string>
@@ -69,6 +73,19 @@
     <string name="settings_library_folder_chosen">Bibliotekmappe valgt</string>
     <string name="settings_online_cover">Online cover-oppslag</string>
     <string name="settings_online_cover_sub">Søk etter omslag på Internett</string>
+    <string name="metadata_refresh_notif_channel">Metadata-oppdatering</string>
+    <string name="metadata_refresh_notif_channel_desc">Viser framdrift mens metadata og omslag hentes</string>
+    <string name="metadata_refresh_notif_title">Oppdaterer metadata …</string>
+    <string name="metadata_refresh_notif_text">%1$d av %2$d</string>
+    <string name="settings_metadata_refresh">Oppdater metadata og omslag</string>
+    <string name="settings_metadata_refresh_sub">Slå opp riktig tittel, forfatter og omslag på nettet.</string>
+    <string name="settings_metadata_refresh_dialog_title">Oppdater fra internett</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro spør Open Library, Google Books og iTunes. Dette erstatter generiske omslag og fyller inn manglende eller feil metadata. Krever nettverk.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Bare bøker som ser feil ut</string>
+    <string name="settings_metadata_refresh_scope_all">Alle bøker (langsommere)</string>
+    <string name="settings_metadata_refresh_start">Start</string>
+    <string name="settings_metadata_refresh_need_online">Slå på «Nettbasert omslagsoppslag» først.</string>
+    <string name="settings_metadata_refresh_started">Oppdatering startet. Du kan fortsette å bruke appen.</string>
     <string name="settings_about_description">Bookiro – en privat, reklamefri leser og lydbokspiller</string>
     <string name="action_continue">Fortsett</string>
     <string name="action_save">Lagre</string>
@@ -118,7 +135,6 @@
     <string name="loading">Laster inn…</string>
     <string name="books_sent_to_import">%1$d bok(er) sendt til import.</string>
     <string name="import_from_folder_started">Importerer innhold fra valgt mappe…</string>
-    <string name="samples_loading_started">Laster inn prøvebøker i bakgrunnen…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Immersion Handoff</string>
@@ -164,6 +180,11 @@
     <string name="lan_done_found">Skanning ferdig. %1$d mulige kilde(r) funnet – klikk for å åpne/legge til.</string>
     <string name="lan_confidence">%1$d%% sannsynlig</string>
 
+    <string name="lan_type_ftp">FTP-server</string>
+    <string name="lan_type_smb">SMB/Windows-fildeling</string>
+    <string name="lan_type_webdav">WebDAV (mulig Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre bokserver</string>
+    <string name="lan_type_http">HTTP-tjener (mulig bibliotek)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Når auto-synk kjører vises resultatet her.</string>
     <string name="ip_source_sync">Synk</string>
@@ -205,7 +226,6 @@
     <string name="import_title">Importer bøker</string>
     <string name="import_files_sub">En eller flere ebøker eller lydbøker fra enheten.</string>
     <string name="import_folder_sub">Importer alle bøker i en mappe. Kan overvåkes for nye filer.</string>
-    <string name="import_sample_sub">Offentlige klassikere som følger med appen.</string>
     <string name="import_from_ftp">Fra FTP-server</string>
     <string name="import_from_ftp_sub">Hent bøker fra NAS, hjemmeserver eller nettlagring.</string>
     <string name="import_supported_formats">Støttede formater</string>
@@ -225,9 +245,6 @@
     <string name="settings_autoplay_next_sub">Når siste kapittel er ferdig</string>
     <string name="settings_import_button">Importer</string>
     <string name="settings_smb_sync_sub">Windows / NAS / Samba</string>
-    <string name="settings_torrent_bg">Torrent (bakgrunn)</string>
-    <string name="settings_torrent_bg_sub">Fortsett nedlasting når appen er lukket</string>
-    <string name="settings_torrent_min_battery">Minste batteri</string>
     <string name="settings_handoff_precision_desc">Velg hvor nøyaktig overgang mellom lydbok og ebok skal være. Standard: Smart.</string>
     <string name="settings_handoff_show_toast_sub">Fortsettelsesposisjon (kapittel eller prosent) vises som en kort melding.</string>
     <string name="settings_handoff_scan_progress_label">%1$d / %2$d · %3$d koblinger opprettet</string>
@@ -276,5 +293,25 @@
     <string name="home_duration_hm">%1$dt %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_section_reading">Fortsett å lese</string>
+    <string name="home_section_listening">Fortsett å lytte</string>
+    <string name="home_section_up_next">Neste opp</string>
+    <string name="home_section_media">Ditt innhold</string>
+    <string name="home_section_services">Kilder og verktøy</string>
+    <string name="home_media_ebooks">Ebøker</string>
+    <string name="home_media_audiobooks">Lydbøker</string>
+    <string name="home_media_podcasts">Podkaster</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Import</string>
+    <string name="home_service_sources">Kilder</string>
+    <string name="home_service_transfers">Overføringer</string>
+    <string name="home_empty_sources">Koble til en kilde</string>
     <string name="home_empty_browse">Bla i biblioteket</string>
+    <string name="db_error_title">Bibliotekdatabasen er utilgjengelig</string>
+    <string name="db_error_body">Bookiro kunne ikke åpne bibliotekdatabasen. Dataene dine er beholdt, ikke slettet. Prøv igjen; hvis problemet vedvarer kan du nullstille databasen.</string>
+    <string name="db_error_retry">Prøv igjen</string>
+    <string name="db_error_reset">Nullstill database …</string>
+    <string name="db_error_reset_confirm_title">Nullstille databasen?</string>
+    <string name="db_error_reset_confirm_body">Dette sletter den lokale bibliotekdatabasen permanent på denne enheten. Originalfilene dine og eventuelle eksporterte sikkerhetskopier påvirkes ikke. Dette kan ikke angres.</string>
+    <string name="db_error_reset_confirm_action">Nullstill</string>
 </resources>

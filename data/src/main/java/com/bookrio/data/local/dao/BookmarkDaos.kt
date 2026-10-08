@@ -27,6 +27,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): BookmarkEntity?
 
+    @Query("SELECT * FROM bookmarks WHERE book_id = :bookId ORDER BY COALESCE(position_percent, 0) ASC, created_at ASC")
+    suspend fun getForBook(bookId: Long): List<BookmarkEntity>
+
     @Transaction
     @Query("SELECT * FROM bookmarks WHERE book_id = :bookId ORDER BY COALESCE(position_percent, 0) ASC, created_at ASC")
     fun observeByBook(bookId: Long): Flow<List<BookmarkEntity>>
@@ -78,6 +81,9 @@ interface HighlightDao {
 
     @Query("SELECT * FROM highlights WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): HighlightEntity?
+
+    @Query("SELECT * FROM highlights WHERE book_id = :bookId ORDER BY COALESCE(position_percent, 0) ASC, created_at ASC")
+    suspend fun getForBook(bookId: Long): List<HighlightEntity>
 
     @Transaction
     @Query("SELECT * FROM highlights WHERE book_id = :bookId ORDER BY COALESCE(position_percent, 0) ASC, created_at ASC")

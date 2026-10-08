@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_title">Torrent</string>
+    <string name="torrent_subtitle">Peer-to-Peer</string>
+    <string name="home_service_torrent">Torrent</string>
+    <string name="settings_torrent_bg">Torrent (Hintergrund)</string>
+    <string name="settings_torrent_bg_sub">Downloads fortsetzen, wenn die App geschlossen ist</string>
+    <string name="settings_torrent_min_battery">Mindest-Akku</string>
+</resources>

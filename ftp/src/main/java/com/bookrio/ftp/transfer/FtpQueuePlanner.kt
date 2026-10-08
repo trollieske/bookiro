@@ -18,7 +18,7 @@ class FtpQueuePlanner(
 ) {
 
     /** @return number of newly queued media files. */
-    suspend fun plan(source: FtpSource): Int {
+    suspend fun plan(source: FtpSource, onProgress: suspend (filesFound: Int) -> Unit = {}): Int {
         val credentials = sourceRepository.credentialsFor(source.id) ?: return 0
         val client = sourceRepository.clientFactory.create()
         return try {
@@ -27,7 +27,7 @@ class FtpQueuePlanner(
             }
             sourceRepository.markConnected(source.id)
             val base = source.basePath.ifBlank { "/" }
-            val entries = client.listDirectoryRecursive(base, maxDepth)
+            val entries = client.listDirectoryRecursive(base, maxDepth, onProgress)
                 .filter { MediaFormats.isBook(it.name) }
             if (entries.isEmpty()) return 0
             transferRepository.enqueue(source.id, base, entries).added

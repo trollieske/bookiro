@@ -12,7 +12,6 @@
     <string name="menu_import">Importera</string>
     <string name="import_files">Välj filer</string>
     <string name="import_folder">Importera mapp</string>
-    <string name="import_sample">Ladda exempelböcker</string>
     <string name="import_progress_title">Nedladdningar &amp; import</string>
     <string name="import_tab_downloads">Nedladdningar</string>
     <string name="import_tab_sync_history">Synkhistorik</string>
@@ -27,8 +26,6 @@
     <string name="smb_subtitle">Windows / NAS</string>
     <string name="webdav_title">WebDAV</string>
     <string name="webdav_subtitle">Nextcloud / Owncloud</string>
-    <string name="torrent_title">Torrent</string>
-    <string name="torrent_subtitle">Peer-to-peer</string>
     <string name="reader_theme_light">Ljus</string>
     <string name="reader_theme_sepia">Sepia</string>
     <string name="reader_theme_dark">Mörk</string>
@@ -39,6 +36,12 @@
     <string name="onboarding_title">Välkommen till Bookiro</string>
     <string name="onboarding_body">Läs och lyssna. Lokalt. Utan brus.</string>
     <string name="onboarding_cta">Öppna hyllan</string>
+    <string name="onboarding_folder_title">Din biblioteksmapp</string>
+    <string name="onboarding_folder_body">Välj var Bookiro hittar och lagrar dina filer. Inget lämnar din enhet.</string>
+    <string name="onboarding_folder_choose">Välj mapp</string>
+    <string name="onboarding_folder_change">Byt mapp</string>
+    <string name="onboarding_folder_skip">Hoppa över nu</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Läsare</string>
     <string name="settings_sync_storage_title">Lagring &amp; synkronisering</string>
     <string name="settings_sync_section_title">Synkronisering</string>
@@ -69,6 +72,19 @@
     <string name="settings_library_folder_chosen">Biblioteksmapp angiven</string>
     <string name="settings_online_cover">Omslagssökning online</string>
     <string name="settings_online_cover_sub">Sök efter omslag på internet</string>
+    <string name="metadata_refresh_notif_channel">Metadatauppdatering</string>
+    <string name="metadata_refresh_notif_channel_desc">Visar förlopp medan metadata och omslag hämtas</string>
+    <string name="metadata_refresh_notif_title">Uppdaterar metadata …</string>
+    <string name="metadata_refresh_notif_text">%1$d av %2$d</string>
+    <string name="settings_metadata_refresh">Uppdatera metadata och omslag</string>
+    <string name="settings_metadata_refresh_sub">Slå upp rätt titel, författare och omslag online.</string>
+    <string name="settings_metadata_refresh_dialog_title">Uppdatera från internet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro frågar Open Library, Google Books och iTunes. Detta ersätter generiska omslag och fyller i saknade eller felaktiga metadata. Kräver nätverk.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Endast böcker som ser fel ut</string>
+    <string name="settings_metadata_refresh_scope_all">Alla böcker (långsammare)</string>
+    <string name="settings_metadata_refresh_start">Start</string>
+    <string name="settings_metadata_refresh_need_online">Slå på ”Omslagssökning online” först.</string>
+    <string name="settings_metadata_refresh_started">Uppdatering startad. Du kan fortsätta använda appen.</string>
     <string name="settings_about_description">Bookiro – en privat, reklamfri läsare och ljudboksapp</string>
     <string name="action_continue">Fortsätt</string>
     <string name="action_save">Spara</string>
@@ -118,7 +134,6 @@
     <string name="loading">Läser in…</string>
     <string name="books_sent_to_import">%1$d bok(er) skickade till import.</string>
     <string name="import_from_folder_started">Importerar innehåll från vald mapp…</string>
-    <string name="samples_loading_started">Läser in exempelböcker i bakgrunden…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Immersion Handoff</string>
@@ -164,6 +179,11 @@
     <string name="lan_done_found">Skannings klar. %1$d möjliga källa(or) hittade – tryck för att öppna/lägga till.</string>
     <string name="lan_confidence">%1$d%% troligt</string>
 
+    <string name="lan_type_ftp">FTP-server</string>
+    <string name="lan_type_smb">SMB/Windows-filresurs</string>
+    <string name="lan_type_webdav">WebDAV (möjligen Nextcloud)</string>
+    <string name="lan_type_calibre">Calibre-bokserver</string>
+    <string name="lan_type_http">HTTP-server (möjligen ett bibliotek)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Resultat visas här när auto-synk körs.</string>
     <string name="ip_source_sync">Synk</string>
@@ -205,7 +225,6 @@
     <string name="import_title">Importera böcker</string>
     <string name="import_files_sub">En eller flera e-böcker eller ljudböcker från din enhet.</string>
     <string name="import_folder_sub">Importera alla böcker i en mapp. Kan bevakas för nya filer.</string>
-    <string name="import_sample_sub">Offentliga klassiker som följer med appen.</string>
     <string name="import_from_ftp">Från FTP-server</string>
     <string name="import_from_ftp_sub">Hämta böcker från NAS, hemmaserver eller molnlagring.</string>
     <string name="import_supported_formats">Stödda format</string>
@@ -225,9 +244,6 @@
     <string name="settings_autoplay_next_sub">När sista kapitlet är klart</string>
     <string name="settings_import_button">Importera</string>
     <string name="settings_smb_sync_sub">Windows / NAS / Samba</string>
-    <string name="settings_torrent_bg">Torrent (bakgrund)</string>
-    <string name="settings_torrent_bg_sub">Fortsätt nedladdningar när appen är stängd</string>
-    <string name="settings_torrent_min_battery">Minsta batteri</string>
     <string name="settings_handoff_precision_desc">Välj hur precis övergången mellan ljudbok och e-bok ska vara. Standard: Smart.</string>
     <string name="settings_handoff_show_toast_sub">Fortsättningsposition (kapitel eller procent) visas som ett kort meddelande.</string>
     <string name="settings_handoff_scan_progress_label">%1$d / %2$d · %3$d kopplingar skapade</string>
@@ -276,5 +292,25 @@
     <string name="home_duration_hm">%1$dt %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_empty_sources">Anslut en källa</string>
+    <string name="home_media_audiobooks">Ljudböcker</string>
+    <string name="home_media_ebooks">E-böcker</string>
+    <string name="home_media_podcasts">Poddar</string>
+    <string name="home_section_listening">Fortsätt lyssna</string>
+    <string name="home_section_media">Ditt innehåll</string>
+    <string name="home_section_reading">Fortsätt läsa</string>
+    <string name="home_section_services">Källor och verktyg</string>
+    <string name="home_section_up_next">Härnäst</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Importera</string>
+    <string name="home_service_sources">Källor</string>
+    <string name="home_service_transfers">Överföringar</string>
     <string name="home_empty_browse">Bläddra i biblioteket</string>
+    <string name="db_error_title">Biblioteksdatabasen är otillgänglig</string>
+    <string name="db_error_body">Bookiro kunde inte öppna biblioteksdatabasen. Dina data har bevarats, inte raderats. Försök igen; om problemet kvarstår kan du återställa databasen.</string>
+    <string name="db_error_retry">Försök igen</string>
+    <string name="db_error_reset">Återställ databas …</string>
+    <string name="db_error_reset_confirm_title">Återställa databasen?</string>
+    <string name="db_error_reset_confirm_body">Detta raderar den lokala biblioteksdatabasen permanent på den här enheten. Dina originalfiler och eventuella exporterade säkerhetskopior påverkas inte. Detta kan inte ångras.</string>
+    <string name="db_error_reset_confirm_action">Återställ</string>
 </resources>

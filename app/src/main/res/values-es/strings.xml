@@ -12,7 +12,6 @@
     <string name="menu_import">Importar</string>
     <string name="import_files">Elegir archivos</string>
     <string name="import_folder">Importar carpeta</string>
-    <string name="import_sample">Cargar libros de muestra</string>
     <string name="import_progress_title">Descargas e importación</string>
     <string name="import_tab_downloads">Descargas</string>
     <string name="import_tab_sync_history">Historial de sincronización</string>
@@ -27,8 +26,6 @@
     <string name="smb_subtitle">Windows / NAS</string>
     <string name="webdav_title">WebDAV</string>
     <string name="webdav_subtitle">Nextcloud / Owncloud</string>
-    <string name="torrent_title">Torrent</string>
-    <string name="torrent_subtitle">Punto a punto</string>
     <string name="reader_theme_light">Claro</string>
     <string name="reader_theme_sepia">Sepia</string>
     <string name="reader_theme_dark">Oscuro</string>
@@ -39,6 +36,12 @@
     <string name="onboarding_title">Bienvenido a Bookiro</string>
     <string name="onboarding_body">Lee y escucha. Local. Sin ruido.</string>
     <string name="onboarding_cta">Abrir la estantería</string>
+    <string name="onboarding_folder_title">Tu carpeta de biblioteca</string>
+    <string name="onboarding_folder_body">Elige dónde Bookiro encuentra y guarda tus archivos. Nada sale de tu dispositivo.</string>
+    <string name="onboarding_folder_choose">Elegir carpeta</string>
+    <string name="onboarding_folder_change">Cambiar carpeta</string>
+    <string name="onboarding_folder_skip">Omitir por ahora</string>
+    <string name="onboarding_services">FTP · Torrent · SMB · WebDAV · Calibre</string>
     <string name="settings_reader">Lector</string>
     <string name="settings_sync_storage_title">Almacenamiento y sincronización</string>
     <string name="settings_sync_section_title">Sincronización</string>
@@ -69,6 +72,19 @@
     <string name="settings_library_folder_chosen">Carpeta de biblioteca definida</string>
     <string name="settings_online_cover">Búsqueda de portadas en línea</string>
     <string name="settings_online_cover_sub">Buscar portadas en Internet</string>
+    <string name="metadata_refresh_notif_channel">Actualización de metadatos</string>
+    <string name="metadata_refresh_notif_channel_desc">Muestra el progreso mientras se obtienen metadatos y portadas</string>
+    <string name="metadata_refresh_notif_title">Actualizando metadatos…</string>
+    <string name="metadata_refresh_notif_text">%1$d de %2$d</string>
+    <string name="settings_metadata_refresh">Actualizar metadatos y portadas</string>
+    <string name="settings_metadata_refresh_sub">Busca en línea el título, autor y portada correctos.</string>
+    <string name="settings_metadata_refresh_dialog_title">Actualizar desde internet</string>
+    <string name="settings_metadata_refresh_dialog_body">Bookiro consulta Open Library, Google Books e iTunes. Reemplaza portadas genéricas y completa metadatos faltantes o incorrectos. Requiere conexión de red.</string>
+    <string name="settings_metadata_refresh_scope_suspects">Solo libros que parecen incorrectos</string>
+    <string name="settings_metadata_refresh_scope_all">Todos los libros (más lento)</string>
+    <string name="settings_metadata_refresh_start">Iniciar</string>
+    <string name="settings_metadata_refresh_need_online">Activa primero «Búsqueda de portadas en línea».</string>
+    <string name="settings_metadata_refresh_started">Actualización iniciada. Puedes seguir usando la app.</string>
     <string name="settings_about_description">Bookiro: un lector y reproductor de audiolibros privado y sin anuncios</string>
     <string name="action_continue">Continuar</string>
     <string name="action_save">Guardar</string>
@@ -118,7 +134,6 @@
     <string name="loading">Cargando…</string>
     <string name="books_sent_to_import">%1$d libro(s) enviado(s) a importación.</string>
     <string name="import_from_folder_started">Importando contenido de la carpeta seleccionada…</string>
-    <string name="samples_loading_started">Cargando libros de muestra en segundo plano…</string>
 
     <!-- Immersion Handoff -->
     <string name="settings_handoff_title">Cambio inmersivo</string>
@@ -164,6 +179,11 @@
     <string name="lan_done_found">Escaneo completado. Se encontraron %1$d posible(s) fuente(s): toca para abrir/añadir.</string>
     <string name="lan_confidence">%1$d%% probable</string>
 
+    <string name="lan_type_ftp">Servidor FTP</string>
+    <string name="lan_type_smb">Recurso compartido SMB/Windows</string>
+    <string name="lan_type_webdav">WebDAV (posiblemente Nextcloud)</string>
+    <string name="lan_type_calibre">Servidor de libros Calibre</string>
+    <string name="lan_type_http">Servidor HTTP (posiblemente una biblioteca)</string>
     <!-- Import progress / sync history (MainActivity) -->
     <string name="ip_empty_history_hint">Los resultados aparecen aquí cuando se ejecuta la auto-sincronización.</string>
     <string name="ip_source_sync">Sinc.</string>
@@ -205,7 +225,6 @@
     <string name="import_title">Importar libros</string>
     <string name="import_files_sub">Uno o más ebooks o audiolibros de tu dispositivo.</string>
     <string name="import_folder_sub">Importa todos los libros de una carpeta. Puede vigilarse en busca de archivos nuevos.</string>
-    <string name="import_sample_sub">Clásicos de dominio público incluidos con la aplicación.</string>
     <string name="import_from_ftp">Desde servidor FTP</string>
     <string name="import_from_ftp_sub">Obtén libros de NAS, servidor doméstico o almacenamiento en la nube.</string>
     <string name="import_supported_formats">Formatos compatibles</string>
@@ -225,9 +244,6 @@
     <string name="settings_autoplay_next_sub">Cuando termine el último capítulo</string>
     <string name="settings_import_button">Importar</string>
     <string name="settings_smb_sync_sub">Windows / NAS / Samba</string>
-    <string name="settings_torrent_bg">Torrent (segundo plano)</string>
-    <string name="settings_torrent_bg_sub">Continuar descargas con la aplicación cerrada</string>
-    <string name="settings_torrent_min_battery">Batería mínima</string>
     <string name="settings_handoff_precision_desc">Elige la precisión del cambio entre audiolibro y ebook. Predeterminado: Inteligente.</string>
     <string name="settings_handoff_show_toast_sub">La posición de continuación (capítulo o porcentaje) se muestra como un breve mensaje.</string>
     <string name="settings_handoff_scan_progress_label">%1$d / %2$d · %3$d vínculos creados</string>
@@ -276,5 +292,25 @@
     <string name="home_duration_hm">%1$dh %2$dm</string>
     <string name="home_duration_m">%1$dm</string>
 
+    <string name="home_empty_sources">Conectar una fuente</string>
+    <string name="home_media_audiobooks">Audiolibros</string>
+    <string name="home_media_ebooks">Ebooks</string>
+    <string name="home_media_podcasts">Pódcasts</string>
+    <string name="home_section_listening">Seguir escuchando</string>
+    <string name="home_section_media">Tu contenido</string>
+    <string name="home_section_reading">Seguir leyendo</string>
+    <string name="home_section_services">Fuentes y herramientas</string>
+    <string name="home_section_up_next">A continuación</string>
+    <string name="home_service_ftp">FTP</string>
+    <string name="home_service_import">Importar</string>
+    <string name="home_service_sources">Fuentes</string>
+    <string name="home_service_transfers">Transferencias</string>
     <string name="home_empty_browse">Explorar biblioteca</string>
+    <string name="db_error_title">Base de datos de la biblioteca no disponible</string>
+    <string name="db_error_body">Bookiro no pudo abrir la base de datos de la biblioteca. Tus datos se han conservado, no se han eliminado. Inténtalo de nuevo; si el problema persiste, puedes restablecer la base de datos.</string>
+    <string name="db_error_retry">Reintentar</string>
+    <string name="db_error_reset">Restablecer base de datos…</string>
+    <string name="db_error_reset_confirm_title">¿Restablecer la base de datos?</string>
+    <string name="db_error_reset_confirm_body">Esto elimina permanentemente la base de datos local de la biblioteca en este dispositivo. Tus archivos originales y las copias de seguridad exportadas no se ven afectados. Esta acción no se puede deshacer.</string>
+    <string name="db_error_reset_confirm_action">Restablecer</string>
 </resources>

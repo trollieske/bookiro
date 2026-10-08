@@ -34,4 +34,6 @@
     <string name="wdav_err_network">Impossible de joindre le serveur</string>
     <string name="wdav_err_timeout">Délai de connexion dépassé</string>
     <string name="wdav_err_unknown">Une erreur est survenue</string>
+    <string name="wdav_count_failed">%1$d échoués</string>
+    <string name="wdav_count_queued">%1$d en file d\'attente</string>
 </resources>

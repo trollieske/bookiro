@@ -27,4 +27,5 @@
     <string name="lib_dir_za">Я–А</string>
     <string name="lib_dir_oldest">Спочатку старі</string>
     <string name="lib_dir_newest">Спочатку нові</string>
+    <string name="lib_view_toggle_a11y">Перемкнути вигляд: сітка або список</string>
 </resources>

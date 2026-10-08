@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="toru_title">Torrent-клієнт</string>
+    <string name="toru_rights_notice">Завантажуйте лише той контент, на який маєте права.</string>
     <string name="toru_back">Назад</string>
     <string name="toru_torrent_file">.torrent</string>
     <string name="toru_magnet">Magnet</string>
@@ -83,4 +84,8 @@
     <string name="toru_import_no_books">Книг не знайдено — скористайтеся «Вибрати папку», щоб указати теку завантажень</string>
     <string name="toru_imported_from_folder">Імпортовано книг із вибраної папки: %1$d!</string>
     <string name="toru_import_no_supported">У вибраній папці не знайдено підтримуваних книг</string>
+    <string name="toru_error">Помилка: %1$s</string>
+    <string name="toru_invalid_infohash">Недійсний info-hash (має містити 40 символів SHA-1)</string>
+    <string name="toru_invalid_magnet">Недійсне magnet-посилання</string>
+    <string name="toru_added">Торент додано</string>
 </resources>

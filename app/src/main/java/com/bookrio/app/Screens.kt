@@ -53,9 +53,6 @@ import com.bookrio.designsystem.components.BookFormat
 import com.bookrio.designsystem.components.BookVisual
 import com.bookrio.designsystem.theme.ShelfColors
 import com.bookrio.designsystem.theme.ShelfTypography
-import com.bookrio.library.ui.SampleBooks
-import java.net.HttpURLConnection
-import java.net.URL
 
 private val GENERIC_CHAPTER_TITLE =
     Regex("^(kapittel|kapitel|chapter)\\s*\\d+$", RegexOption.IGNORE_CASE)
@@ -134,23 +131,9 @@ private fun parseChapters(json: String?, ctx: Context): List<String> {
 }
 
 private fun dbgUi(location: String, hypothesisId: String, msg: String, data: String) {
-    Thread {
-        try {
-            val safeMsg = msg.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-            val safeData = data.replace("\\", "/").replace("\"", "'").replace("\n", " ")
-            val body = """{"sessionId":"ebook-audio-crash","runId":"pre-fix","hypothesisId":"$hypothesisId","location":"$location","msg":"[DEBUG] $safeMsg","data":{"info":"$safeData"},"ts":${System.currentTimeMillis()}}"""
-            val conn = (URL("http://192.168.1.10:7777/event").openConnection() as HttpURLConnection)
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 1500
-            conn.readTimeout = 1500
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.outputStream.use { it.write(body.toByteArray()) }
-            runCatching { conn.inputStream.close() }
-            conn.disconnect()
-        } catch (_: Throwable) {
-        }
-    }.start()
+    // Removed before Play: this used to POST diagnostics (including file URIs and
+    // paths) to a hardcoded LAN debug server. Kept as an explicit no-op so the
+    // former debug-point call sites stay harmless. Do not re-enable remote telemetry.
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -1076,12 +1059,6 @@ fun ImportScreen(
         }
     }
 
-    fun launchSamples() {
-        ImportWorker.enqueueSamples(WorkManager.getInstance(ctx))
-        snackbarScope.launch {
-            snackbarHostState.showSnackbar(ctx.getString(R.string.samples_loading_started))
-        }
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1134,23 +1111,6 @@ fun ImportScreen(
                     )
                     // #endregion
                     openFolderLauncher.launch(null)
-                }
-            )
-            ImportCard(
-                title = stringResource(R.string.import_sample),
-                subtitle = stringResource(R.string.import_sample_sub),
-                icon = Icons.Default.AutoAwesome,
-                color = com.bookrio.designsystem.theme.OmarchyColors.Accent,
-                onClick = {
-                    // #region debug-point UI:samples-launch
-                    dbgUi(
-                        location = "ImportScreen",
-                        hypothesisId = "A",
-                        msg = "sample-import-launch",
-                        data = "source=samples"
-                    )
-                    // #endregion
-                    launchSamples()
                 }
             )
             ImportCard(
@@ -1286,91 +1246,259 @@ private fun ImportCard(
 }
 
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     onDone: () -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val prefs = remember { com.bookrio.data.prefs.UserPreferencesRepository(ctx) }
+    val prefs = remember { UserPreferencesRepository(ctx) }
+    val omarchy = com.bookrio.designsystem.theme.OmarchyColors
+    val accent = omarchy.Accent
     var showLanguagePicker by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Surface(color = com.bookrio.designsystem.theme.OmarchyColors.Bg, modifier = Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // 1px CRT-bezel-ramme rundt innholdet
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, com.bookrio.designsystem.theme.OmarchyColors.Hairline)
-                    .padding(horizontal = 24.dp, vertical = 48.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Brand mark + wordmark
-                Image(
-                    painter = painterResource(com.bookrio.designsystem.R.drawable.bookrio_mark),
-                    contentDescription = stringResource(R.string.app_name),
-                    modifier = Modifier.size(96.dp)
-                )
-                Spacer(Modifier.height(20.dp))
-                Text(
-                    "BOOKRIO",
-                    style = ShelfTypography.TitleLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
-                    letterSpacing = 8.sp,
-                    color = com.bookrio.designsystem.theme.OmarchyColors.Accent
-                )
-                Spacer(Modifier.height(32.dp))
-                Text(
-                    stringResource(R.string.onboarding_title),
-                    style = ShelfTypography.TitleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = com.bookrio.designsystem.theme.OmarchyColors.FgBright,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    stringResource(R.string.onboarding_body),
-                    style = ShelfTypography.BodyMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                    color = com.bookrio.designsystem.theme.OmarchyColors.Dim,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(48.dp))
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            prefs.setHasSeenOnboarding(true)
-                            onDone()
-                        }
-                    },
-                    shape = RoundedCornerShape(0.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, com.bookrio.designsystem.theme.OmarchyColors.Accent),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        contentColor = com.bookrio.designsystem.theme.OmarchyColors.Accent
-                    ),
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.onboarding_cta),
-                        style = ShelfTypography.LabelLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
+    val persistedFolder by produceState<String?>(initialValue = null) {
+        prefs.libraryFolderUri.collect { value = it }
+    }
+    var chosenLabel by remember { mutableStateOf<String?>(null) }
+    val folderLabel = chosenLabel
+        ?: persistedFolder?.let { com.bookrio.app.storage.LibraryFolderDisplay.nameFor(ctx, it) }
+
+    fun finish() {
+        scope.launch {
+            prefs.setHasSeenOnboarding(true)
+            onDone()
+        }
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { tree: Uri? ->
+        if (tree != null) {
+            scope.launch {
+                val saved = com.bookrio.app.storage.LibraryFolderStore.setLibraryFolder(ctx, prefs, tree)
+                if (saved) {
+                    // A chosen library folder is meaningful only when watched:
+                    // enable it and scan once so a pre-filled folder appears at once.
+                    runCatching { prefs.setWatchLibraryFolder(true) }
+                    runCatching { com.bookrio.app.workers.MediaScannerWorker.runOnce(ctx) }
+                    chosenLabel = com.bookrio.app.storage.LibraryFolderDisplay.nameFor(ctx, tree.toString())
+                        ?: tree.toString()
+                } else {
+                    snackbarHostState.showSnackbar(
+                        ctx.getString(R.string.settings_library_folder_no_permission)
                     )
                 }
             }
         }
+    }
+    val chooseFolder: () -> Unit = {
+        runCatching { folderPicker.launch(null) }.onFailure {
+            scope.launch {
+                snackbarHostState.showSnackbar(ctx.getString(R.string.settings_library_folder_open_failed))
+            }
+        }
+    }
 
-            // Stille språkhandling øverst til høyre — åpner samme egennavn-velger som Innstillinger.
+    Scaffold(
+        containerColor = omarchy.Bg,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { pad ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(accent.copy(alpha = 0.10f), omarchy.Bg),
+                        radius = 900f
+                    )
+                )
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(Modifier.height(28.dp))
+                Image(
+                    painter = painterResource(com.bookrio.designsystem.R.drawable.bookrio_mark),
+                    contentDescription = stringResource(R.string.app_name),
+                    modifier = Modifier.size(88.dp)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "BOOKIRO",
+                    style = ShelfTypography.TitleLarge.copy(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp,
+                    letterSpacing = 8.sp,
+                    color = accent
+                )
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    stringResource(R.string.onboarding_title),
+                    style = ShelfTypography.TitleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = omarchy.FgBright,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.onboarding_body),
+                    style = ShelfTypography.BodyMedium.copy(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    ),
+                    color = omarchy.Dim,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(26.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OnboardingFeatureChip(Icons.Default.AutoStories, stringResource(R.string.home_media_ebooks))
+                    OnboardingFeatureChip(Icons.Default.Headphones, stringResource(R.string.home_media_audiobooks))
+                    OnboardingFeatureChip(Icons.Default.Podcasts, stringResource(R.string.home_media_podcasts))
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.onboarding_services),
+                    style = ShelfTypography.LabelSmall,
+                    color = omarchy.Dim,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(36.dp))
+
+                // Folder card: the one setup decision that matters.
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(omarchy.Panel, RoundedCornerShape(10.dp))
+                        .border(
+                            1.dp,
+                            if (folderLabel != null) accent else omarchy.Hairline,
+                            RoundedCornerShape(10.dp)
+                        )
+                        .padding(20.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = if (folderLabel != null) accent else omarchy.Dim,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            stringResource(R.string.onboarding_folder_title),
+                            style = ShelfTypography.TitleMedium,
+                            color = omarchy.FgBright,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (folderLabel != null) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.onboarding_folder_body),
+                        style = ShelfTypography.BodySmall,
+                        color = omarchy.Dim
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    if (folderLabel == null) {
+                        Button(
+                            onClick = chooseFolder,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accent,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.onboarding_folder_choose),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else {
+                        Text(
+                            folderLabel,
+                            style = ShelfTypography.LabelMedium.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            color = accent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = chooseFolder,
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, omarchy.Hairline),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = omarchy.Fg),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                        ) {
+                            Text(stringResource(R.string.onboarding_folder_change))
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(28.dp))
+                Button(
+                    onClick = { finish() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accent,
+                        contentColor = Color.Black
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.onboarding_cta),
+                        style = ShelfTypography.LabelLarge.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        ),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+                if (folderLabel == null) {
+                    TextButton(onClick = { finish() }) {
+                        Text(
+                            stringResource(R.string.onboarding_folder_skip),
+                            style = ShelfTypography.LabelMedium,
+                            color = omarchy.Dim
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+            }
+
+            // Quiet language action top-right — same picker as Settings.
             TextButton(
                 onClick = { showLanguagePicker = true },
                 modifier = Modifier
@@ -1381,14 +1509,14 @@ fun OnboardingScreen(
                 Icon(
                     Icons.Default.Language,
                     contentDescription = null,
-                    tint = com.bookrio.designsystem.theme.OmarchyColors.Dim,
+                    tint = omarchy.Dim,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
                     stringResource(R.string.welcome_language_label),
                     style = ShelfTypography.LabelMedium,
-                    color = com.bookrio.designsystem.theme.OmarchyColors.Dim,
+                    color = omarchy.Dim,
                     maxLines = 1
                 )
             }
@@ -1396,5 +1524,40 @@ fun OnboardingScreen(
     }
     if (showLanguagePicker) {
         LanguagePickerSheet(onDismiss = { showLanguagePicker = false })
+    }
+}
+
+@Composable
+private fun OnboardingFeatureChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String
+) {
+    Row(
+        modifier = Modifier
+            .background(
+                com.bookrio.designsystem.theme.OmarchyColors.Panel,
+                RoundedCornerShape(50)
+            )
+            .border(
+                1.dp,
+                com.bookrio.designsystem.theme.OmarchyColors.Hairline,
+                RoundedCornerShape(50)
+            )
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = com.bookrio.designsystem.theme.OmarchyColors.Accent,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            style = ShelfTypography.LabelSmall,
+            color = com.bookrio.designsystem.theme.OmarchyColors.Dim,
+            maxLines = 1
+        )
     }
 }
