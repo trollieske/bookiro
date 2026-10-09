@@ -2,4 +2,5 @@
 <resources>
     <string name="onboarding_services">FTP · SMB · WebDAV · Calibre</string>
     <string name="settings_sources_row_sub">FTP, SMB, WebDAV, Calibre</string>
+    <string name="backup_opt_p2p">Одноранговий</string>
 </resources>

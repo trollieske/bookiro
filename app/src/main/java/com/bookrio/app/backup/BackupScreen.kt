@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bookrio.BuildConfig
 import com.bookrio.R
+import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.designsystem.theme.OmarchyColors
 import com.bookrio.designsystem.theme.ShelfTypography
 import kotlinx.coroutines.delay
@@ -483,7 +484,9 @@ private fun OptionsCard(
             OptionToggle(stringResource(R.string.backup_opt_covers), o.includeCovers) { onOptions(o.copy(includeCovers = it)) }
             OptionToggle(stringResource(R.string.backup_opt_converted), o.includeConverted) { onOptions(o.copy(includeConverted = it)) }
             OptionToggle(stringResource(R.string.backup_opt_remote), o.includeRemoteDownloads) { onOptions(o.copy(includeRemoteDownloads = it)) }
-            OptionToggle(stringResource(R.string.backup_opt_torrents), o.includeTorrents) { onOptions(o.copy(includeTorrents = it)) }
+            if (TorrentFeatureProvider.feature.isAvailable) {
+                OptionToggle(stringResource(R.string.backup_opt_p2p), o.includeTorrents) { onOptions(o.copy(includeTorrents = it)) }
+            }
             OptionToggle(stringResource(R.string.backup_opt_podcasts), o.includePodcastDownloads) { onOptions(o.copy(includePodcastDownloads = it)) }
             OptionToggle(stringResource(R.string.backup_opt_external), o.includeExternalMedia) { onOptions(o.copy(includeExternalMedia = it)) }
             OptionToggle(stringResource(R.string.backup_opt_sources), o.includeSources) { onOptions(o.copy(includeSources = it)) }

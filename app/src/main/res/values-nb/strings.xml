@@ -360,7 +360,7 @@
     <string name="backup_opt_covers">Omslag og bilder</string>
     <string name="backup_opt_converted">Konverterte filer</string>
     <string name="backup_opt_remote">Fjerndownloads (FTP/SMB/WebDAV)</string>
-    <string name="backup_opt_torrents">Torrenter</string>
+    <string name="backup_opt_p2p">Torrenter</string>
     <string name="backup_opt_podcasts">Podkastlyd</string>
     <string name="backup_opt_external">Eksterne / SAF-medier</string>
     <string name="backup_opt_sources">Serverkilder</string>

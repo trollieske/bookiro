@@ -359,7 +359,7 @@
     <string name="backup_opt_covers">Covers &amp; artwork</string>
     <string name="backup_opt_converted">Converted files</string>
     <string name="backup_opt_remote">Remote downloads (FTP/SMB/WebDAV)</string>
-    <string name="backup_opt_torrents">Torrents</string>
+    <string name="backup_opt_p2p">Torrents</string>
     <string name="backup_opt_podcasts">Podcast audio</string>
     <string name="backup_opt_external">External / SAF media</string>
     <string name="backup_opt_sources">Server sources</string>
