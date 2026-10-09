@@ -28,6 +28,9 @@
     <string name="ply_notif_skip_forward">30 s en avant</string>
     <string name="ply_notif_next">Suivant</string>
     <string name="ply_library_root">Bibliothèque Bookiro</string>
+    <string name="ply_aa_continue">Continuer l\'écoute</string>
+    <string name="ply_aa_audiobooks">Livres audio</string>
+    <string name="ply_aa_podcasts">Podcasts</string>
     <string name="ply_notif_channel">Lecture</string>
     <string name="ply_notif_channel_desc">Notifications de lecture audio</string>
     <string name="ply_prepare_error">Impossible de préparer le livre audio</string>

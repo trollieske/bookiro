@@ -39,6 +39,9 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.SettableFuture
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.BookEntity
+import com.bookrio.data.local.entity.PodcastEpisodeEntity
+import com.bookrio.data.local.entity.PodcastFeedEntity
+import com.bookrio.data.local.entity.PodcastPlaybackEntity
 import com.bookrio.player.AudiobookNowPlaying
 import com.bookrio.player.engine.AudiobookChapter
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -52,6 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -85,6 +89,14 @@ class AudiobookPlaybackService : MediaLibraryService() {
         const val ACTION_SKIP_BACK = "com.bookrio.player.SKIP_BACK"
         const val ACTION_SKIP_FORWARD = "com.bookrio.player.SKIP_FORWARD"
         const val ACTION_STOP = "com.bookrio.player.STOP"
+
+        // Podcast engine contract. The player module must not depend on the
+        // podcast module, so the service class name and extras are matched by
+        // string exactly as PodcastPlaybackService declares them.
+        private const val PODCAST_SERVICE_CLASS = "com.bookrio.podcast.playback.PodcastPlaybackService"
+        private const val PODCAST_ACTION_LOAD_EPISODE = "com.bookrio.podcast.LOAD_EPISODE"
+        private const val PODCAST_EXTRA_EPISODE_ID = "extra_episode_id"
+        private const val PODCAST_EXTRA_FORCE_PLAY = "extra_force_play"
 
         /** Bounded browse-artwork cache size (entries are a few tens of KB). */
         private const val MAX_COVER_CACHE_ENTRIES = 256
@@ -313,21 +325,51 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 caller: MediaSession.ControllerInfo,
                 mediaId: String
             ): ListenableFuture<LibraryResult<MediaItem>> = libraryFuture {
-                if (mediaId == AudiobookLibraryTree.ROOT_MEDIA_ID) {
-                    return@libraryFuture LibraryResult.ofItem(buildLibraryRootItem(), null)
+                when (mediaId) {
+                    BookiroLibraryTree.HOME_MEDIA_ID ->
+                        LibraryResult.ofItem(buildLibraryRootItem(), null)
+                    BookiroLibraryTree.CONTINUE_MEDIA_ID -> LibraryResult.ofItem(
+                        sectionItem(BookiroLibraryTree.CONTINUE_MEDIA_ID, getString(R.string.ply_aa_continue)),
+                        null
+                    )
+                    BookiroLibraryTree.AUDIOBOOKS_MEDIA_ID -> LibraryResult.ofItem(
+                        sectionItem(BookiroLibraryTree.AUDIOBOOKS_MEDIA_ID, getString(R.string.ply_aa_audiobooks)),
+                        null
+                    )
+                    BookiroLibraryTree.PODCASTS_MEDIA_ID -> LibraryResult.ofItem(
+                        sectionItem(BookiroLibraryTree.PODCASTS_MEDIA_ID, getString(R.string.ply_aa_podcasts)),
+                        null
+                    )
+                    else -> {
+                        val feedId = BookiroLibraryTree.feedIdOf(mediaId)
+                        val episodeId = BookiroLibraryTree.episodeIdOf(mediaId)
+                        val bookId = AudiobookLibraryTree.bookIdOf(mediaId)
+                        when {
+                            feedId != null -> {
+                                val feed = db?.podcastFeedDao()?.getById(feedId)
+                                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                                LibraryResult.ofItem(feedItem(feed), null)
+                            }
+                            episodeId != null -> {
+                                val episode = db?.podcastEpisodeDao()?.getById(episodeId)
+                                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                                val feed = db?.podcastFeedDao()?.getById(episode.feedId)
+                                val playback = db?.podcastPlaybackDao()?.getByEpisode(episodeId)
+                                LibraryResult.ofItem(episodeItem(episode, feed, playback), null)
+                            }
+                            bookId != null -> {
+                                val book = db?.bookDao()?.getById(bookId)?.takeIf { !it.isDeleted }
+                                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                                val entry = BookiroLibraryTree.bookEntry(book)
+                                LibraryResult.ofItem(
+                                    entryToMediaItem(entry, coverBytesFor(book.id, book.coverPath)),
+                                    null
+                                )
+                            }
+                            else -> LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                        }
+                    }
                 }
-                val dao = db?.bookDao()
-                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                val bookId = AudiobookLibraryTree.bookIdOf(mediaId)
-                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                val book = dao.getById(bookId)?.takeIf { !it.isDeleted }
-                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                val entry = AudiobookLibraryTree.itemForMediaId(mediaId, listOf(book))
-                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                LibraryResult.ofItem(
-                    entryToMediaItem(entry, coverBytesFor(entry.bookId, entry.coverPath)),
-                    null
-                )
             }
 
             override fun onGetChildren(
@@ -338,16 +380,49 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 pageSize: Int,
                 params: LibraryParams?
             ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = libraryFuture {
-                val dao = db?.bookDao()
-                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                // Exact children of the requested parent: root -> audiobooks, a book
-                // id -> nothing (books are playable leaves; chapters are NOT
-                // browsable, the engine owns one chapter timeline per book), anything
-                // else -> error. Previously every parent returned the whole library.
-                val entries = AudiobookLibraryTree.childrenOf(parentId, dao.getAllOnce())
-                    ?: return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                val items = AudiobookLibraryTree.page(entries, page, pageSize).map { entry ->
-                    entryToMediaItem(entry, coverBytesFor(entry.bookId, entry.coverPath))
+                // Home -> the three option folders; a section -> its children; a feed
+                // -> its episodes; a book/episode leaf -> nothing (playable leaves
+                // are not browsable — the engine owns their timeline). Anything else
+                // is not a node in this tree.
+                val entries: List<BookiroLibraryTree.Entry> = when (parentId) {
+                    BookiroLibraryTree.HOME_MEDIA_ID -> homeChildren()
+                    BookiroLibraryTree.AUDIOBOOKS_MEDIA_ID -> {
+                        val books = db?.bookDao()?.getAllOnce().orEmpty()
+                        BookiroLibraryTree.audiobookEntries(books)
+                    }
+                    BookiroLibraryTree.CONTINUE_MEDIA_ID -> buildContinueEntries()
+                    BookiroLibraryTree.PODCASTS_MEDIA_ID -> {
+                        val feeds = db?.podcastFeedDao()?.getFollowed().orEmpty()
+                        BookiroLibraryTree.sortedFeeds(feeds).map(BookiroLibraryTree::feedEntry)
+                    }
+                    else -> {
+                        val feedId = BookiroLibraryTree.feedIdOf(parentId)
+                        if (feedId != null) {
+                            val feed = db?.podcastFeedDao()?.getById(feedId)
+                            val episodes = db?.podcastEpisodeDao()
+                                ?.listByFeed(feedId, BookiroLibraryTree.FEED_EPISODE_LIMIT)
+                                .orEmpty()
+                            BookiroLibraryTree.sortedEpisodes(episodes).map { episode ->
+                                val playback = db?.podcastPlaybackDao()?.getByEpisode(episode.id)
+                                BookiroLibraryTree.episodeEntry(episode, feed, playback)
+                            }
+                        } else if (
+                            AudiobookLibraryTree.bookIdOf(parentId) != null ||
+                            BookiroLibraryTree.episodeIdOf(parentId) != null
+                        ) {
+                            emptyList()
+                        } else {
+                            return@libraryFuture LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                        }
+                    }
+                }
+                val items = BookiroLibraryTree.page(entries, page, pageSize).map { entry ->
+                    val artwork = if (entry.kind == BookiroLibraryTree.Kind.BOOK) {
+                        coverBytesFor(entry.bookId ?: -1L, entry.coverPath)
+                    } else {
+                        null
+                    }
+                    entryToMediaItem(entry, artwork)
                 }
                 LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
             }
@@ -370,12 +445,20 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo,
                 mediaItems: List<MediaItem>
-            ): ListenableFuture<List<MediaItem>> =
-                Futures.transformAsync<ResolvedSelection, List<MediaItem>>(
-                    resolveSelection(mediaItems, C.INDEX_UNSET, C.TIME_END_OF_SOURCE),
+            ): ListenableFuture<List<MediaItem>> {
+                val remaining = routePodcastSelections(mediaItems)
+                if (remaining.isEmpty()) {
+                    // Every requested item belonged to the podcast engine, which was
+                    // just started and owns its own session/notification. Handing the
+                    // audiobook player an empty timeline keeps a single active session.
+                    return Futures.immediateFuture(emptyList())
+                }
+                return Futures.transformAsync<ResolvedSelection, List<MediaItem>>(
+                    resolveSelection(remaining, C.INDEX_UNSET, C.TIME_END_OF_SOURCE),
                     { selection: ResolvedSelection -> Futures.immediateFuture(selection.items) },
                     MoreExecutors.directExecutor()
                 )
+            }
 
             /**
              * The actual entry point for `playFromMediaId` (Android Auto) and for
@@ -389,9 +472,21 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 mediaItems: List<MediaItem>,
                 startIndex: Int,
                 startPositionMs: Long
-            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
-                Futures.transformAsync<ResolvedSelection, MediaSession.MediaItemsWithStartPosition>(
-                    resolveSelection(mediaItems, startIndex, startPositionMs),
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val remaining = routePodcastSelections(mediaItems)
+                if (remaining.isEmpty()) {
+                    return Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            ImmutableList.of(), C.INDEX_UNSET, 0L
+                        )
+                    )
+                }
+                // Episodes were removed from the request, so a caller startIndex can
+                // no longer point at the same element; an opaque play request (Auto)
+                // already passes INDEX_UNSET.
+                val adjustedStart = if (remaining.size == mediaItems.size) startIndex else C.INDEX_UNSET
+                return Futures.transformAsync<ResolvedSelection, MediaSession.MediaItemsWithStartPosition>(
+                    resolveSelection(remaining, adjustedStart, startPositionMs),
                     { selection: ResolvedSelection ->
                         Futures.immediateFuture(
                             MediaSession.MediaItemsWithStartPosition(
@@ -403,6 +498,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     },
                     MoreExecutors.directExecutor()
                 )
+            }
         }
 
         val sessionIntent = Intent().apply {
@@ -1235,10 +1331,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
         return future
     }
 
-    /** Browsable, non-playable library root of the audiobook branch. */
+    /** Browsable, non-playable Android Auto home root. */
     private fun buildLibraryRootItem(): MediaItem =
         MediaItem.Builder()
-            .setMediaId(AudiobookLibraryTree.ROOT_MEDIA_ID)
+            .setMediaId(BookiroLibraryTree.HOME_MEDIA_ID)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(getString(R.string.ply_library_root))
@@ -1249,27 +1345,156 @@ class AudiobookPlaybackService : MediaLibraryService() {
             )
             .build()
 
-    /** The single Media3 conversion of a pure [AudiobookLibraryTree.LibraryEntry]. */
-    private fun entryToMediaItem(entry: AudiobookLibraryTree.LibraryEntry, artwork: ByteArray?): MediaItem =
+    /**
+     * The home's option folders, mirroring the app's Home menu. "Continue
+     * listening" is only offered when there is something to continue.
+     */
+    private suspend fun homeChildren(): List<BookiroLibraryTree.Entry> {
+        val children = ArrayList<BookiroLibraryTree.Entry>(3)
+        if (buildContinueEntries().isNotEmpty()) {
+            children += BookiroLibraryTree.section(
+                BookiroLibraryTree.Kind.CONTINUE,
+                BookiroLibraryTree.CONTINUE_MEDIA_ID,
+                getString(R.string.ply_aa_continue)
+            )
+        }
+        children += BookiroLibraryTree.section(
+            BookiroLibraryTree.Kind.AUDIOBOOKS,
+            BookiroLibraryTree.AUDIOBOOKS_MEDIA_ID,
+            getString(R.string.ply_aa_audiobooks)
+        )
+        children += BookiroLibraryTree.section(
+            BookiroLibraryTree.Kind.PODCASTS,
+            BookiroLibraryTree.PODCASTS_MEDIA_ID,
+            getString(R.string.ply_aa_podcasts)
+        )
+        return children
+    }
+
+    /**
+     * Mixed "Continue listening": in-progress audiobooks (newest progress first)
+     * followed by resumable podcast episodes. Runs on the library IO dispatcher.
+     */
+    private suspend fun buildContinueEntries(): List<BookiroLibraryTree.Entry> {
+        val books = runCatching { db?.bookDao()?.getAllOnce().orEmpty() }.getOrDefault(emptyList())
+        val progressByBook = runCatching {
+            db?.progressDao()?.observeAll()?.first().orEmpty()
+        }.getOrDefault(emptyList()).associateBy { it.bookId }
+        // Started audiobooks only (mirrors ResumeSelector): not finished, some
+        // progress/position and some activity. Finished titles stay finished.
+        val audiobooks = books.asSequence()
+            .filter { !it.isDeleted && it.dateFinished == null && AudiobookLibraryTree.isAudiobook(it) }
+            .map { book -> book to progressByBook[book.id] }
+            .filter { (book, progress) ->
+                val pct = progress?.progressPercent ?: 0f
+                val positionMs = progress?.positionMs ?: 0L
+                val lastActivity = progress?.updatedAt ?: book.lastOpenedAt ?: 0L
+                pct < 1f && (pct > 0.0001f || positionMs > 0L) && lastActivity > 0L
+            }
+            .sortedByDescending { (book, progress) -> progress?.updatedAt ?: book.lastOpenedAt ?: 0L }
+            .take(BookiroLibraryTree.CONTINUE_LIMIT)
+            .map { (book, _) -> BookiroLibraryTree.bookEntry(book) }
+            .toList()
+        val podcasts = runCatching {
+            db?.podcastEpisodeDao()?.observeResumeItems(BookiroLibraryTree.CONTINUE_LIMIT)?.first().orEmpty()
+        }.getOrDefault(emptyList())
+            .filterNot { it.isCompleted }
+            .map(BookiroLibraryTree::resumeEntry)
+        return (audiobooks + podcasts).take(BookiroLibraryTree.CONTINUE_LIMIT)
+    }
+
+    /**
+     * Routes any `episode_<id>` items to the dedicated podcast engine and returns
+     * the items that remain for the audiobook player. Android Auto hands us an
+     * ID-only item on selection; the podcast engine resolves the stream, artwork
+     * and progress itself, so nothing here may build a second timeline for it.
+     */
+    private fun routePodcastSelections(requested: List<MediaItem>): List<MediaItem> {
+        val episodeIds = requested.mapNotNull { BookiroLibraryTree.episodeIdOf(it.mediaId) }
+        if (episodeIds.isEmpty()) return requested
+        // Explicit car selection: the podcast engine may take ownership back from a
+        // currently playing audiobook (the arbiter stops the other engine).
+        startPodcastEpisode(episodeIds.first())
+        val routedMediaIds = requested.asSequence()
+            .map { it.mediaId }
+            .filter { BookiroLibraryTree.episodeIdOf(it) != null }
+            .toHashSet()
+        return requested.filterNot { it.mediaId in routedMediaIds }
+    }
+
+    /** Starts the podcast engine for one episode by component name (no module dep). */
+    private fun startPodcastEpisode(episodeId: Long) {
+        Log.i(TAG, "routing episode $episodeId to the podcast engine")
+        val intent = Intent().apply {
+            setClassName(packageName, PODCAST_SERVICE_CLASS)
+            action = PODCAST_ACTION_LOAD_EPISODE
+            putExtra(PODCAST_EXTRA_EPISODE_ID, episodeId)
+            putExtra(PODCAST_EXTRA_FORCE_PLAY, true)
+        }
+        runCatching {
+            androidx.core.content.ContextCompat.startForegroundService(this, intent)
+        }.onFailure { t ->
+            Log.e(TAG, "could not start the podcast engine", t)
+            runCatching { startService(intent) }
+        }
+    }
+
+    private fun sectionItem(mediaId: String, title: String): MediaItem =
         MediaItem.Builder()
-            .setMediaId(entry.mediaId)
+            .setMediaId(mediaId)
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(entry.title)
-                    .setDisplayTitle(entry.title)
-                    .setArtist(entry.artist)
-                    .setAlbumTitle(entry.albumTitle)
-                    .setSubtitle(entry.subtitle)
-                    .setIsPlayable(entry.isPlayable)
-                    .setIsBrowsable(entry.isBrowsable)
-                    .setMediaType(
-                        if (entry.isBrowsable) MediaMetadata.MEDIA_TYPE_FOLDER_MIXED
-                        else MediaMetadata.MEDIA_TYPE_AUDIO_BOOK
-                    )
-                    .apply { artwork?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
+                    .setTitle(title)
+                    .setDisplayTitle(title)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
                     .build()
             )
             .build()
+
+    private fun feedItem(feed: PodcastFeedEntity): MediaItem =
+        entryToMediaItem(BookiroLibraryTree.feedEntry(feed), null)
+
+    private fun episodeItem(
+        episode: PodcastEpisodeEntity,
+        feed: PodcastFeedEntity?,
+        playback: PodcastPlaybackEntity?
+    ): MediaItem =
+        entryToMediaItem(BookiroLibraryTree.episodeEntry(episode, feed, playback), null)
+
+    /** The single Media3 conversion of a pure [BookiroLibraryTree.Entry]. */
+    private fun entryToMediaItem(entry: BookiroLibraryTree.Entry, artwork: ByteArray?): MediaItem {
+        val mediaType = when (entry.kind) {
+            BookiroLibraryTree.Kind.BOOK -> MediaMetadata.MEDIA_TYPE_AUDIO_BOOK
+            BookiroLibraryTree.Kind.EPISODE -> MediaMetadata.MEDIA_TYPE_PODCAST_EPISODE
+            BookiroLibraryTree.Kind.AUDIOBOOKS -> MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS
+            BookiroLibraryTree.Kind.PODCASTS,
+            BookiroLibraryTree.Kind.FEED -> MediaMetadata.MEDIA_TYPE_FOLDER_PODCASTS
+            else -> MediaMetadata.MEDIA_TYPE_FOLDER_MIXED
+        }
+        val metadata = MediaMetadata.Builder()
+            .setTitle(entry.title)
+            .setDisplayTitle(entry.title)
+            .setArtist(entry.artist)
+            .setAlbumTitle(entry.albumTitle)
+            .setSubtitle(entry.subtitle)
+            .setIsPlayable(entry.isPlayable)
+            .setIsBrowsable(entry.isBrowsable)
+            .setMediaType(mediaType)
+            .apply {
+                if (artwork != null) {
+                    setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                } else {
+                    entry.artworkUri?.takeIf { it.isNotBlank() }?.let { setArtworkUri(Uri.parse(it)) }
+                }
+            }
+            .build()
+        return MediaItem.Builder()
+            .setMediaId(entry.mediaId)
+            .setMediaMetadata(metadata)
+            .build()
+    }
 
     fun currentPositionMs(): Long {
         val p = player ?: return 0L

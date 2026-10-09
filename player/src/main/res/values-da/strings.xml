@@ -28,6 +28,9 @@
     <string name="ply_notif_skip_forward">Frem 30 s</string>
     <string name="ply_notif_next">Næste</string>
     <string name="ply_library_root">Bookiro-bibliotek</string>
+    <string name="ply_aa_continue">Fortsæt med at lytte</string>
+    <string name="ply_aa_audiobooks">Lydbøger</string>
+    <string name="ply_aa_podcasts">Podcasts</string>
     <string name="ply_notif_channel">Afspilning</string>
     <string name="ply_notif_channel_desc">Notifikationer for lydbogsafspilning</string>
     <string name="ply_prepare_error">Lydbogen kunne ikke klargøres</string>
