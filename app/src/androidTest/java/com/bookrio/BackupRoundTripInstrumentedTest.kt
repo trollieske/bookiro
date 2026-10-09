@@ -4,8 +4,14 @@ import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import com.bookrio.app.backup.BackupOptions
 import com.bookrio.app.backup.BackupOutcome
+import com.bookrio.app.backup.BackupScheduler
+import com.bookrio.app.backup.BackupWork
 import com.bookrio.app.backup.LibraryBackupEngine
+import kotlinx.coroutines.flow.first
 import com.bookrio.data.local.ShelfDatabase
 import com.bookrio.data.local.entity.BookEntity
 import com.bookrio.data.local.entity.BookTypeEntity
@@ -64,7 +70,7 @@ class BackupRoundTripInstrumentedTest {
 
         // Metadata-only keeps the test fast; the test file lives under filesDir,
         // which is always archived.
-        val exported = runBlocking { engine.exportLibrary(archiveUri, includeMedia = false) {} }
+        val exported = runBlocking { engine.exportLibrary(archiveUri, BackupOptions.libraryOnly()) {} }
         assertTrue("export must succeed: $exported", exported is BackupOutcome.Exported)
         assertTrue("archive must exist and be non-empty", archive.length() > 0L)
 
@@ -108,6 +114,35 @@ class BackupRoundTripInstrumentedTest {
     }
 
     @Test
+    fun workManagerExportRunsInBackgroundAndProducesAnArchive() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = ShelfDatabase.getInstance(context)
+        runBlocking {
+            db.bookDao().insert(
+                BookEntity(
+                    title = "Background Backup",
+                    type = BookTypeEntity.EBOOK,
+                    format = FormatEntity.EPUB,
+                    importSource = ImportSourceEntity.FILE_PICKER,
+                )
+            )
+        }
+        val archive = File(context.cacheDir, "backup_test/wm.zip").apply {
+            parentFile?.mkdirs()
+            if (exists()) delete()
+        }
+        BackupScheduler.enqueueExport(context, Uri.fromFile(archive), BackupOptions.libraryOnly(), tree = false)
+
+        val terminal = runBlocking {
+            WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWorkFlow(BackupWork.EXPORT)
+                .first { infos -> infos.any { it.state == WorkInfo.State.SUCCEEDED || it.state == WorkInfo.State.FAILED } }
+        }
+        assertTrue("worker must succeed: ${terminal.map { it.state }}", terminal.any { it.state == WorkInfo.State.SUCCEEDED })
+        assertTrue("archive must exist", archive.exists() && archive.length() > 0L)
+    }
+
+    @Test
     fun externalFileIsRelocatedIntoAppStorageOnRestore() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         // A file outside every app root (cacheDir is deliberately excluded from
@@ -138,7 +173,7 @@ class BackupRoundTripInstrumentedTest {
         }
         val archiveUri = Uri.fromFile(archive)
 
-        val exported = runBlocking { engine.exportLibrary(archiveUri, includeMedia = true) {} }
+        val exported = runBlocking { engine.exportLibrary(archiveUri, BackupOptions.everything()) {} }
         assertTrue("export must succeed: $exported", exported is BackupOutcome.Exported)
 
         runBlocking { db.bookDao().softDelete(bookId) }

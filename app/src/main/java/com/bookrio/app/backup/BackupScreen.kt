@@ -1,6 +1,6 @@
 package com.bookrio.app.backup
 
-import androidx.activity.compose.BackHandler
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
@@ -13,14 +13,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -60,6 +57,9 @@ import com.bookrio.R
 import com.bookrio.designsystem.theme.OmarchyColors
 import com.bookrio.designsystem.theme.ShelfTypography
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val Bg = OmarchyColors.Bg
@@ -69,12 +69,13 @@ private val Fg = OmarchyColors.Fg
 private val FgBright = OmarchyColors.FgBright
 private val Hairline = OmarchyColors.Hairline
 private val Panel = OmarchyColors.Panel
+private val Danger = Color(0xFFFF5F56)
 
 /**
  * The Bookiro archive console: an export/import surface styled as a retro
  * terminal (black glass, lime phosphor, ASCII meters) that matches the app's
- * HUD. Export writes one ZIP; import restores the database and restarts the
- * process so no stale Room handle survives.
+ * HUD. The heavy work runs as foreground WorkManager work, so the user can
+ * leave this screen and still pause/cancel from the notification.
  */
 @Composable
 fun BackupScreen(
@@ -84,28 +85,30 @@ fun BackupScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var mode by remember { mutableStateOf(BackupMode.EXPORT) }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
-    ) { uri ->
-        if (uri != null) vm.startExport(uri)
-    }
+    ) { uri -> if (uri != null) vm.startExport(uri) }
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri != null) vm.startImport(uri)
-    }
+    ) { uri -> if (uri != null) vm.startImport(uri) }
 
-    val running = state.phase == BackupPhase.RUNNING
-    val importedDone = state.phase == BackupPhase.DONE && state.outcome is BackupOutcome.Imported
+    val copyLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri -> if (uri != null) vm.copyExportTo(uri) }
 
-    // Leaving mid-operation would cancel the ViewModel job and leave a truncated
-    // archive (or half-restored files), so block navigation until it finishes.
-    BackHandler(enabled = running) { }
+    val scheduleFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri -> if (uri != null) vm.setScheduleTree(uri) }
 
-    // A restored database has already replaced the live file, so the process must
-    // restart before any ViewModel touches it. Do it automatically with a beat.
-    if (importedDone) {
+    val running = state.running?.isActive == true
+    val importFinished = state.importFinished
+
+    // A restored database has already replaced the live file; restart before any
+    // ViewModel touches it.
+    if (importFinished) {
         LaunchedEffect(Unit) {
             delay(2600L)
             vm.restartApp()
@@ -125,75 +128,77 @@ fun BackupScreen(
         AsciiBanner(running = running)
         Spacer(Modifier.height(18.dp))
 
-        when (state.phase) {
-            BackupPhase.IDLE, BackupPhase.ERROR -> {
-                ModeSelector(selected = mode, onSelect = { mode = it }, enabled = !running)
+        when {
+            importFinished -> ImportDonePanel(onRestart = vm::restartApp)
+
+            running -> RunningPanel(
+                running = state.running!!,
+                onPauseResume = vm::pauseOrResume,
+                onCancel = vm::cancel,
+            )
+
+            else -> {
+                ModeSelector(selected = mode, onSelect = { mode = it }, enabled = true)
                 Spacer(Modifier.height(14.dp))
                 if (mode == BackupMode.EXPORT) {
-                    ExportOptions(
-                        includeMedia = state.includeMedia,
-                        onChange = vm::setIncludeMedia,
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    ConsoleAction(
-                        label = stringResource(R.string.backup_run_export),
-                        hint = stringResource(R.string.backup_run_export_hint),
-                        onClick = {
+                    ExportContent(
+                        state = state,
+                        showAdvanced = showAdvanced,
+                        onToggleAdvanced = { showAdvanced = !showAdvanced },
+                        onPreset = vm::setPreset,
+                        onOptions = vm::setOptions,
+                        onScheduleFolder = { runCatching { scheduleFolderLauncher.launch(null) } },
+                        onScheduleEnabled = vm::setScheduleEnabled,
+                        onScheduleHours = vm::setScheduleHours,
+                        onScheduleWifi = vm::setScheduleWifiOnly,
+                        onScheduleCharging = vm::setScheduleChargingOnly,
+                        onScheduleRetention = vm::setScheduleRetention,
+                        onRunNow = vm::runScheduledNow,
+                        onCreate = {
                             runCatching {
                                 exportLauncher.launch(BackupFormat.backupFileName(System.currentTimeMillis()))
                             }
                         },
-                        primary = true,
+                        onCopy = {
+                            runCatching {
+                                copyLauncher.launch(
+                                    state.lastBackupName
+                                        ?: BackupFormat.backupFileName(System.currentTimeMillis())
+                                )
+                            }
+                        },
+                        onShare = {
+                            vm.shareIntent()?.let { intent ->
+                                runCatching {
+                                    context.startActivity(Intent.createChooser(intent, context.getString(R.string.backup_share)))
+                                }
+                            }
+                        },
                     )
                 } else {
-                    Text(
-                        text = stringResource(R.string.backup_import_hint),
-                        style = ShelfTypography.BodySmall,
-                        color = Dim,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    ConsoleAction(
-                        label = stringResource(R.string.backup_run_import),
-                        hint = stringResource(R.string.backup_run_import_hint),
-                        onClick = { runCatching { importLauncher.launch(arrayOf("*/*")) } },
-                        primary = true,
+                    ImportContent(
+                        onPick = { runCatching { importLauncher.launch(arrayOf("*/*")) } },
                     )
                 }
-                if (state.phase == BackupPhase.ERROR) {
+                state.message?.let { message ->
                     Spacer(Modifier.height(16.dp))
-                    ErrorPanel(message = state.message ?: stringResource(R.string.backup_error_title))
-                    Spacer(Modifier.height(10.dp))
+                    ErrorPanel(message = message)
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        text = stringResource(R.string.backup_retry),
+                        text = stringResource(R.string.backup_dismiss),
                         color = Accent,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.sp,
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .clickable { vm.reset() }
+                            .clickable { vm.clearMessage() }
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                     )
                 }
             }
-
-            BackupPhase.RUNNING -> {
-                RunningPanel(state = state)
-            }
-
-            BackupPhase.DONE -> {
-                DonePanel(
-                    state = state,
-                    importDone = importedDone,
-                    onRestart = vm::restartApp,
-                    onAgain = vm::reset,
-                    onBack = onBack,
-                )
-            }
         }
 
         Spacer(Modifier.height(24.dp))
-        ConsoleLog(lines = state.log.takeLast(10))
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -206,10 +211,10 @@ private fun ArchiveTopBar(onBack: () -> Unit, running: Boolean) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = stringResource(R.string.action_back),
-            tint = if (running) Dim else Fg,
+            tint = Fg,
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
-                .clickable(enabled = !running) { onBack() }
+                .clickable { onBack() }
                 .padding(4.dp)
                 .size(22.dp),
         )
@@ -221,6 +226,15 @@ private fun ArchiveTopBar(onBack: () -> Unit, running: Boolean) {
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.weight(1f))
+        if (running) {
+            Text(
+                text = "●",
+                color = Accent,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
         Text(
             text = "v${BuildConfig.VERSION_NAME}",
             fontFamily = FontFamily.Monospace,
@@ -345,37 +359,165 @@ private fun ModeChip(
 }
 
 @Composable
-private fun ExportOptions(includeMedia: Boolean, onChange: (Boolean) -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Hairline, RoundedCornerShape(6.dp))
-            .background(Panel, RoundedCornerShape(6.dp))
-            .padding(14.dp),
-    ) {
+private fun ExportContent(
+    state: BackupUiState,
+    showAdvanced: Boolean,
+    onToggleAdvanced: () -> Unit,
+    onPreset: (BackupPreset) -> Unit,
+    onOptions: (BackupOptions) -> Unit,
+    onScheduleFolder: () -> Unit,
+    onScheduleEnabled: (Boolean) -> Unit,
+    onScheduleHours: (Int) -> Unit,
+    onScheduleWifi: (Boolean) -> Unit,
+    onScheduleCharging: (Boolean) -> Unit,
+    onScheduleRetention: (Int) -> Unit,
+    onRunNow: () -> Unit,
+    onCreate: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+) {
+    OptionsCard(
+        state = state,
+        showAdvanced = showAdvanced,
+        onToggleAdvanced = onToggleAdvanced,
+        onPreset = onPreset,
+        onOptions = onOptions,
+    )
+    Spacer(Modifier.height(14.dp))
+    ScheduleCard(
+        state = state,
+        onFolder = onScheduleFolder,
+        onEnabled = onScheduleEnabled,
+        onHours = onScheduleHours,
+        onWifi = onScheduleWifi,
+        onCharging = onScheduleCharging,
+        onRetention = onScheduleRetention,
+        onRunNow = onRunNow,
+    )
+    Spacer(Modifier.height(18.dp))
+    ConsoleAction(
+        label = stringResource(R.string.backup_run_export),
+        hint = stringResource(R.string.backup_run_export_hint),
+        onClick = onCreate,
+        primary = true,
+    )
+    if (state.exportUri != null) {
+        Spacer(Modifier.height(14.dp))
+        LastBackupCard(state = state, onCopy = onCopy, onShare = onShare)
+    }
+}
+
+@Composable
+private fun ImportContent(onPick: () -> Unit) {
+    Text(
+        text = stringResource(R.string.backup_import_hint),
+        style = ShelfTypography.BodySmall,
+        color = Dim,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    )
+    Spacer(Modifier.height(18.dp))
+    ConsoleAction(
+        label = stringResource(R.string.backup_run_import),
+        hint = stringResource(R.string.backup_run_import_hint),
+        onClick = onPick,
+        primary = true,
+    )
+}
+
+@Composable
+private fun OptionsCard(
+    state: BackupUiState,
+    showAdvanced: Boolean,
+    onToggleAdvanced: () -> Unit,
+    onPreset: (BackupPreset) -> Unit,
+    onOptions: (BackupOptions) -> Unit,
+) {
+    RetroCard {
+        CardTitle(stringResource(R.string.backup_options_title))
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PresetChip(
+                label = stringResource(R.string.backup_preset_everything),
+                selected = state.preset == BackupPreset.EVERYTHING,
+                modifier = Modifier.weight(1f),
+                onClick = { onPreset(BackupPreset.EVERYTHING) },
+            )
+            PresetChip(
+                label = stringResource(R.string.backup_preset_library),
+                selected = state.preset == BackupPreset.LIBRARY_ONLY,
+                modifier = Modifier.weight(1f),
+                onClick = { onPreset(BackupPreset.LIBRARY_ONLY) },
+            )
+            PresetChip(
+                label = stringResource(R.string.backup_preset_custom),
+                selected = state.preset == BackupPreset.CUSTOM,
+                modifier = Modifier.weight(1f),
+                onClick = { onPreset(BackupPreset.CUSTOM) },
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        val o = state.options
+        Row {
+            Text(
+                text = if (state.preset == BackupPreset.LIBRARY_ONLY) {
+                    stringResource(R.string.backup_exclude_media_hint)
+                } else {
+                    stringResource(R.string.backup_include_media_sub)
+                },
+                style = ShelfTypography.BodySmall,
+                color = Dim,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            text = if (showAdvanced) stringResource(R.string.backup_hide_options) else stringResource(R.string.backup_show_options),
+            color = Accent,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .clickable { onToggleAdvanced() }
+                .padding(vertical = 8.dp),
+        )
+        if (showAdvanced) {
+            OptionToggle(stringResource(R.string.backup_opt_covers), o.includeCovers) { onOptions(o.copy(includeCovers = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_converted), o.includeConverted) { onOptions(o.copy(includeConverted = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_remote), o.includeRemoteDownloads) { onOptions(o.copy(includeRemoteDownloads = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_torrents), o.includeTorrents) { onOptions(o.copy(includeTorrents = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_podcasts), o.includePodcastDownloads) { onOptions(o.copy(includePodcastDownloads = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_external), o.includeExternalMedia) { onOptions(o.copy(includeExternalMedia = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_sources), o.includeSources) { onOptions(o.copy(includeSources = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_history), o.includeReadingHistory) { onOptions(o.copy(includeReadingHistory = it)) }
+            OptionToggle(stringResource(R.string.backup_opt_annotations), o.includeAnnotations) { onOptions(o.copy(includeAnnotations = it)) }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleCard(
+    state: BackupUiState,
+    onFolder: () -> Unit,
+    onEnabled: (Boolean) -> Unit,
+    onHours: (Int) -> Unit,
+    onWifi: (Boolean) -> Unit,
+    onCharging: (Boolean) -> Unit,
+    onRetention: (Int) -> Unit,
+    onRunNow: () -> Unit,
+) {
+    RetroCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.backup_include_media).uppercase(),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.sp,
-                    color = if (includeMedia) Accent else Dim,
-                )
+                CardTitle(stringResource(R.string.backup_schedule_title))
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    stringResource(
-                        if (includeMedia) R.string.backup_include_media_sub
-                        else R.string.backup_exclude_media_hint
-                    ),
+                    stringResource(R.string.backup_schedule_enable_sub),
                     style = ShelfTypography.BodySmall,
                     color = Dim,
                 )
             }
-            Spacer(Modifier.width(12.dp))
             Switch(
-                checked = includeMedia,
-                onCheckedChange = onChange,
+                checked = state.scheduleEnabled,
+                onCheckedChange = onEnabled,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Bg,
                     checkedTrackColor = Accent,
@@ -384,25 +526,123 @@ private fun ExportOptions(includeMedia: Boolean, onChange: (Boolean) -> Unit) {
                 ),
             )
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.backup_schedule_folder),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            color = Dim,
+        )
+        Spacer(Modifier.height(6.dp))
+        ConsoleAction(
+            label = state.scheduleTreeUri?.let { stringResource(R.string.backup_schedule_folder_change) }
+                ?: stringResource(R.string.backup_schedule_folder_not_set),
+            hint = stringResource(R.string.backup_schedule_folder_sub),
+            onClick = onFolder,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.backup_schedule_frequency),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            color = Dim,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FrequencyChip(stringResource(R.string.backup_freq_daily), state.scheduleHours == 24, Modifier.weight(1f)) { onHours(24) }
+            FrequencyChip(stringResource(R.string.backup_freq_3days), state.scheduleHours == 72, Modifier.weight(1f)) { onHours(72) }
+            FrequencyChip(stringResource(R.string.backup_freq_weekly), state.scheduleHours == 168, Modifier.weight(1f)) { onHours(168) }
+        }
+        Spacer(Modifier.height(10.dp))
+        OptionToggle(stringResource(R.string.backup_schedule_wifi), state.scheduleWifiOnly) { onWifi(it) }
+        OptionToggle(stringResource(R.string.backup_schedule_charging), state.scheduleChargingOnly) { onCharging(it) }
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.backup_schedule_retention),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = Dim,
+                modifier = Modifier.weight(1f),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(1, 3, 5).forEach { n ->
+                    FrequencyChip(
+                        label = "$n",
+                        selected = state.scheduleRetention == n,
+                        modifier = Modifier.width(44.dp),
+                        onClick = { onRetention(n) },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        ConsoleAction(
+            label = stringResource(R.string.backup_run_now),
+            hint = stringResource(R.string.backup_run_now_hint),
+            onClick = onRunNow,
+            enabled = state.scheduleReady,
+        )
     }
 }
 
 @Composable
-private fun RunningPanel(state: BackupUiState) {
-    val progress = state.progress
+private fun LastBackupCard(state: BackupUiState, onCopy: () -> Unit, onShare: () -> Unit) {
+    RetroCard {
+        CardTitle(stringResource(R.string.backup_last_title))
+        Spacer(Modifier.height(8.dp))
+        val never = state.lastBackupAt <= 0L
+        SummaryLine(
+            if (never) {
+                stringResource(R.string.backup_last_never)
+            } else {
+                stringResource(
+                    R.string.backup_last_line,
+                    formatDate(state.lastBackupAt),
+                    formatBytes(state.lastBackupSize),
+                )
+            }
+        )
+        state.lastBackupName?.let {
+            Text(
+                text = "> $it",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = Dim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (state.exportUri != null) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ConsoleAction(
+                    label = stringResource(R.string.backup_copy),
+                    hint = stringResource(R.string.backup_copy_hint),
+                    onClick = onCopy,
+                    modifier = Modifier.weight(1f),
+                )
+                ConsoleAction(
+                    label = stringResource(R.string.backup_share),
+                    hint = stringResource(R.string.backup_share_hint),
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RunningPanel(running: RunningBackup, onPauseResume: () -> Unit, onCancel: () -> Unit) {
+    val progress = running.progress
     val fraction = progress?.fraction ?: 0f
     val entriesDone = progress?.entriesDone ?: 0
     val entriesTotal = progress?.entriesTotal ?: 0
     val currentName = progress?.current
-    val header = if (state.exportRunning) R.string.backup_exporting else R.string.backup_importing
+    val header = if (running.operation == BackupWork.OP_IMPORT) R.string.backup_importing else R.string.backup_exporting
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Hairline, RoundedCornerShape(6.dp))
-            .background(Panel, RoundedCornerShape(6.dp))
-            .padding(16.dp),
-    ) {
+    RetroCard(border = Accent) {
         Text(
             text = stringResource(header).uppercase(),
             fontFamily = FontFamily.Monospace,
@@ -416,7 +656,7 @@ private fun RunningPanel(state: BackupUiState) {
         Spacer(Modifier.height(10.dp))
         Row {
             Text(
-                text = "${(fraction * 100).roundToInt()}%",
+                text = if (progress?.label == "SCAN") "··" else "${(fraction * 100).roundToInt()}%",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 22.sp,
                 color = FgBright,
@@ -424,7 +664,7 @@ private fun RunningPanel(state: BackupUiState) {
             )
             Spacer(Modifier.weight(1f))
             Text(
-                text = "${formatBytes(state.processedBytes)} / ${formatBytes(state.totalBytes)}",
+                text = "${formatBytes(progress?.processedBytes ?: 0L)} / ${formatBytes(progress?.totalBytes ?: 0L)}",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 color = Dim,
@@ -451,90 +691,150 @@ private fun RunningPanel(state: BackupUiState) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.backup_leave_hint),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            color = Accent.copy(alpha = 0.8f),
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ConsoleAction(
+                label = stringResource(if (running.paused) R.string.backup_resume else R.string.backup_pause),
+                hint = stringResource(R.string.backup_pause_hint),
+                onClick = onPauseResume,
+                modifier = Modifier.weight(1f),
+            )
+            ConsoleAction(
+                label = stringResource(R.string.backup_cancel),
+                hint = stringResource(R.string.backup_cancel_hint),
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                danger = true,
+            )
+        }
     }
 }
 
 @Composable
-private fun DonePanel(
-    state: BackupUiState,
-    importDone: Boolean,
-    onRestart: () -> Unit,
-    onAgain: () -> Unit,
-    onBack: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Accent, RoundedCornerShape(6.dp))
-            .background(Panel, RoundedCornerShape(6.dp))
-            .padding(16.dp),
-    ) {
-        val title = if (importDone) R.string.backup_complete_import else R.string.backup_complete_export
+private fun ImportDonePanel(onRestart: () -> Unit) {
+    RetroCard(border = Accent) {
         Text(
-            text = "✔ ${stringResource(title).uppercase()}",
+            text = "✔ ${stringResource(R.string.backup_complete_import).uppercase()}",
             fontFamily = FontFamily.Monospace,
             fontSize = 15.sp,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold,
             color = Accent,
         )
-        Spacer(Modifier.height(12.dp))
-        when (val outcome = state.outcome) {
-            is BackupOutcome.Exported -> {
-                SummaryLine(stringResource(R.string.backup_summary_entries, outcome.entries))
-                SummaryLine(stringResource(R.string.backup_summary_size, formatBytes(outcome.bytes)))
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "> ${outcome.location}",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    color = Dim,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            is BackupOutcome.Imported -> {
-                SummaryLine(stringResource(R.string.backup_summary_books, outcome.bookCount))
-                SummaryLine(stringResource(R.string.backup_summary_episodes, outcome.episodeCount))
-                SummaryLine(stringResource(R.string.backup_summary_media, outcome.mediaFiles))
-                if (outcome.missingMedia > 0) {
-                    SummaryLine(stringResource(R.string.backup_summary_missing, outcome.missingMedia))
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = stringResource(R.string.backup_restarting),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = Accent,
-                )
-            }
-            else -> Unit
-        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.backup_restarting),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            color = Accent,
+        )
         Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (importDone) {
-                ConsoleAction(
-                    label = stringResource(R.string.backup_restart_button),
-                    hint = stringResource(R.string.backup_restart_hint),
-                    onClick = onRestart,
-                    modifier = Modifier.weight(1f),
-                    primary = true,
-                )
-            } else {
-                ConsoleAction(
-                    label = stringResource(R.string.backup_done),
-                    hint = stringResource(R.string.backup_done_hint),
-                    onClick = onBack,
-                    modifier = Modifier.weight(1f),
-                )
-                ConsoleAction(
-                    label = stringResource(R.string.backup_again),
-                    hint = stringResource(R.string.backup_again_hint),
-                    onClick = onAgain,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        ConsoleAction(
+            label = stringResource(R.string.backup_restart_button),
+            hint = stringResource(R.string.backup_restart_hint),
+            onClick = onRestart,
+            primary = true,
+        )
+    }
+}
+
+@Composable
+private fun RetroCard(border: Color = Hairline, content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, border, RoundedCornerShape(6.dp))
+            .background(Panel, RoundedCornerShape(6.dp))
+            .padding(14.dp),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun CardTitle(text: String) {
+    Text(
+        text = text.uppercase(),
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
+        letterSpacing = 2.sp,
+        fontWeight = FontWeight.Bold,
+        color = FgBright,
+    )
+}
+
+@Composable
+private fun PresetChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Text(
+        text = label.uppercase(),
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        letterSpacing = 1.sp,
+        color = if (selected) Accent else Dim,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, if (selected) Accent else Hairline, RoundedCornerShape(4.dp))
+            .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 6.dp),
+    )
+}
+
+@Composable
+private fun FrequencyChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = label,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 11.sp,
+        color = if (selected) Bg else Dim,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (selected) Accent else Color.Transparent)
+            .border(1.dp, if (selected) Accent else Hairline, RoundedCornerShape(4.dp))
+            .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 6.dp),
+    )
+}
+
+@Composable
+private fun OptionToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+    ) {
+        Text(
+            text = label,
+            style = ShelfTypography.BodySmall,
+            color = if (checked) Fg else Dim,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Bg,
+                checkedTrackColor = Accent,
+                uncheckedThumbColor = Dim,
+                uncheckedTrackColor = Panel,
+            ),
+        )
     }
 }
 
@@ -545,20 +845,27 @@ private fun ConsoleAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     primary: Boolean = false,
+    danger: Boolean = false,
+    enabled: Boolean = true,
 ) {
-    val border = if (primary) Accent else Hairline
+    val border = when {
+        danger -> Danger
+        primary -> Accent
+        else -> Hairline
+    }
+    val alpha = if (enabled) 1f else 0.45f
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .border(1.dp, border, RoundedCornerShape(6.dp))
             .background(if (primary) Panel else Color.Transparent, RoundedCornerShape(6.dp))
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(horizontal = 14.dp, vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (primary) {
-                Text("▶", fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = Accent)
+                Text("▶", fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = Accent.copy(alpha = alpha))
                 Spacer(Modifier.width(10.dp))
             }
             Text(
@@ -567,11 +874,16 @@ private fun ConsoleAction(
                 fontSize = if (primary) 14.sp else 12.sp,
                 letterSpacing = if (primary) 2.sp else 1.sp,
                 fontWeight = FontWeight.Bold,
-                color = FgBright,
+                color = (if (danger) Danger else FgBright).copy(alpha = alpha),
             )
         }
         Spacer(Modifier.height(if (primary) 4.dp else 3.dp))
-        Text(hint, fontFamily = FontFamily.Monospace, fontSize = if (primary) 11.sp else 10.sp, color = Dim)
+        Text(
+            hint,
+            fontFamily = FontFamily.Monospace,
+            fontSize = if (primary) 11.sp else 10.sp,
+            color = Dim.copy(alpha = alpha),
+        )
     }
 }
 
@@ -591,7 +903,7 @@ private fun ErrorPanel(message: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFFF5F56), RoundedCornerShape(6.dp))
+            .border(1.dp, Danger, RoundedCornerShape(6.dp))
             .background(Panel, RoundedCornerShape(6.dp))
             .padding(14.dp),
     ) {
@@ -601,50 +913,10 @@ private fun ErrorPanel(message: String) {
             fontSize = 13.sp,
             letterSpacing = 2.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFF5F56),
+            color = Danger,
         )
         Spacer(Modifier.height(6.dp))
-        Text(
-            text = message,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-            color = Dim,
-        )
-    }
-}
-
-@Composable
-private fun ConsoleLog(lines: List<String>) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 120.dp)
-            .border(1.dp, Hairline, RoundedCornerShape(6.dp))
-            .background(Color(0xFF050505), RoundedCornerShape(6.dp))
-            .padding(12.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.backup_console).uppercase(),
-            fontFamily = FontFamily.Monospace,
-            fontSize = 10.sp,
-            letterSpacing = 3.sp,
-            color = Dim,
-        )
-        Spacer(Modifier.height(8.dp))
-        if (lines.isEmpty()) {
-            Text("> _", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Dim)
-        } else {
-            lines.forEach { line ->
-                Text(
-                    text = line,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    color = if (line.contains("ERROR")) Color(0xFFFF5F56) else Accent.copy(alpha = 0.85f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        Text(message, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Dim)
     }
 }
 
@@ -655,9 +927,7 @@ private fun AsciiBar(fraction: Float, width: Int = 30) {
         text = "█".repeat(filled) + "░".repeat(width - filled),
         fontFamily = FontFamily.Monospace,
         fontSize = 14.sp,
-        letterSpacing = 0.sp,
         color = Accent,
-        modifier = Modifier.alpha(0.95f),
     )
 }
 
@@ -667,6 +937,9 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1_000L -> "%.0f KB".format(bytes / 1_000.0)
     else -> "$bytes B"
 }
+
+private fun formatDate(epochMs: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(epochMs))
 
 private fun backupVmFactory() = viewModelFactory {
     initializer {

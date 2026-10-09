@@ -8,6 +8,8 @@ import android.util.Log
 import com.bookrio.BuildConfig
 import com.bookrio.data.local.ShelfDatabase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -27,17 +29,15 @@ import java.util.zip.ZipOutputStream
  * images) is deflated at level 0 so the engine never burns CPU recompressing
  * it. Everything is streamed from/to the SAF picker, so a multi-GB library
  * never lands in memory.
+ *
+ * [BackupOptions] selects which media/DB tables are included, and
+ * [BackupControl] lets the caller pause between files and cancels promptly.
  */
 class LibraryBackupEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "LibraryBackupEngine"
         private const val BUFFER = 64 * 1024
-
-        /** Directories under `filesDir` that hold bulk media (restored on demand). */
-        private val LARGE_DIRS = setOf(
-            "shelf_torrents", "ftp", "smb", "webdav", "calibre", "restored",
-        )
 
         private val STORE_EXTENSIONS = setOf(
             "mp3", "m4b", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "wma",
@@ -47,6 +47,9 @@ class LibraryBackupEngine(private val context: Context) {
         )
 
         private val MEDIA_URI_REGEX = Regex("\"mediaUri\"\\s*:\\s*\"([^\"]+)\"")
+
+        /** External directory that holds DownloadManager podcast downloads. */
+        private const val PODCAST_DIR = "Podcasts"
     }
 
     // ── Roots ─────────────────────────────────────────────────────────────────
@@ -67,8 +70,6 @@ class LibraryBackupEngine(private val context: Context) {
             roots += BackupRoot(token, dir.absolutePath)
         }
         if (!sawPrimary) {
-            // A restore on a device without external storage must still land the
-            // files somewhere instead of silently dropping them.
             roots += BackupRoot(BackupFormat.TOKEN_EXT, File(context.filesDir, "external").absolutePath)
         }
         roots += BackupRoot(BackupFormat.TOKEN_RESTORE, File(context.filesDir, "restored").absolutePath)
@@ -79,7 +80,8 @@ class LibraryBackupEngine(private val context: Context) {
 
     suspend fun exportLibrary(
         destination: Uri,
-        includeMedia: Boolean,
+        options: BackupOptions,
+        control: BackupControl = BackupControl,
         onProgress: (BackupProgress) -> Unit,
     ): BackupOutcome = withContext(Dispatchers.IO) {
         val staging = File(context.cacheDir, "bookiro-backup-staging").apply {
@@ -90,13 +92,18 @@ class LibraryBackupEngine(private val context: Context) {
             val roots = appRoots()
             val dbFile = File(staging, "shelf.db")
             snapshotDatabase(dbFile)
+            stripExcludedTables(dbFile, options)
             val dbVersion = readUserVersion(dbFile)
-            val externals = if (includeMedia) collectExternalMedia(dbFile, roots) else emptyList()
+            val externals = if (options.includeExternalMedia) {
+                collectExternalMedia(dbFile, roots)
+            } else {
+                emptyList()
+            }
             tokenizeDatabase(dbFile, roots, externals)
 
             val entries = ArrayList<BackupEntry>()
             entries += BackupEntry(BackupFormat.DB_ENTRY, BackupSource.Local(dbFile), dbFile.length())
-            entries += enumerateAppTree(roots, includeMedia)
+            entries += enumerateAppTree(roots, options)
             externals.forEach { ext ->
                 entries += BackupEntry(
                     "${BackupFormat.MEDIA_DIR}${BackupFormat.TOKEN_RESTORE}/${ext.relPath}",
@@ -106,12 +113,16 @@ class LibraryBackupEngine(private val context: Context) {
             }
 
             val totalBytes = entries.sumOf { it.bytes }
+            // Let the UI show "scanning…" and the real total before the copy starts.
+            onProgress(
+                BackupProgress("SCAN", 0L, totalBytes, 0, entries.size, null)
+            )
             val manifest = BackupManifest.current(
                 appVersionName = BuildConfig.VERSION_NAME,
                 appVersionCode = BuildConfig.VERSION_CODE,
                 applicationId = BuildConfig.APPLICATION_ID,
                 dbVersion = dbVersion,
-                includeMedia = includeMedia,
+                includeMedia = options.includesMedia,
                 counts = libraryCounts(dbFile),
                 roots = roots.associate { it.token to it.path },
                 totalBytes = totalBytes,
@@ -125,6 +136,7 @@ class LibraryBackupEngine(private val context: Context) {
                     writeManifest(zip, manifest)
                     var done = 0L
                     entries.forEachIndexed { index, entry ->
+                        control.checkpoint()
                         writeEntry(zip, entry) { delta ->
                             done += delta
                             onProgress(
@@ -150,6 +162,7 @@ class LibraryBackupEngine(private val context: Context) {
                 entries = entries.size,
             )
         } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
             Log.e(TAG, "export failed", t)
             BackupOutcome.Failed(t.message ?: "Backup failed", t)
         } finally {
@@ -161,6 +174,7 @@ class LibraryBackupEngine(private val context: Context) {
 
     suspend fun importLibrary(
         source: Uri,
+        control: BackupControl = BackupControl,
         onProgress: (BackupProgress) -> Unit,
     ): BackupOutcome = withContext(Dispatchers.IO) {
         val staging = File(context.cacheDir, "bookiro-restore-staging").apply {
@@ -195,7 +209,7 @@ class LibraryBackupEngine(private val context: Context) {
                             entry.name == BackupFormat.DB_ENTRY -> {
                                 val out = File(staging, "shelf.db")
                                 out.outputStream().buffered(BUFFER).use { dest ->
-                                    processed += copyStream(zip, dest, onProgress, manifest, processed, 0, 0)
+                                    processed += copyStream(zip, dest, onProgress, manifest, processed, mediaFiles)
                                 }
                                 stagedDb = out
                             }
@@ -207,7 +221,7 @@ class LibraryBackupEngine(private val context: Context) {
                                 } else {
                                     dest.parentFile?.mkdirs()
                                     dest.outputStream().buffered(BUFFER).use { out ->
-                                        processed += copyStream(zip, out, onProgress, manifest, processed, 0, 0)
+                                        processed += copyStream(zip, out, onProgress, manifest, processed, mediaFiles)
                                     }
                                     mediaFiles++
                                 }
@@ -215,6 +229,7 @@ class LibraryBackupEngine(private val context: Context) {
                             else -> Unit // unknown entry: ignore for forward compatibility
                         }
                         zip.closeEntry()
+                        control.checkpoint()
                         entry = zip.nextEntry
                     }
                 }
@@ -243,6 +258,7 @@ class LibraryBackupEngine(private val context: Context) {
                 applicationId = mf.applicationId,
             )
         } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
             Log.e(TAG, "import failed", t)
             BackupOutcome.Failed(t.message ?: "Restore failed", t)
         } finally {
@@ -256,8 +272,6 @@ class LibraryBackupEngine(private val context: Context) {
     private fun snapshotDatabase(dest: File) {
         val database = ShelfDatabase.getInstance(context)
         val support = database.openHelper.writableDatabase
-        // On API 30+ VACUUM INTO yields a compact, self-contained snapshot
-        // without closing the live database.
         val vacuumed = if (android.os.Build.VERSION.SDK_INT >= 30) {
             runCatching {
                 val escaped = dest.absolutePath.replace("'", "''")
@@ -268,8 +282,6 @@ class LibraryBackupEngine(private val context: Context) {
             false
         }
         if (vacuumed && dest.exists() && dest.length() > 0L) return
-        // Fallback: checkpoint the WAL into the main file, then copy it (plus the
-        // WAL/SHM siblings so a copy taken mid-checkpoint still recovers).
         runCatching { support.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() } }
         val live = context.getDatabasePath("shelf.db")
         live.copyTo(dest, overwrite = true)
@@ -277,7 +289,6 @@ class LibraryBackupEngine(private val context: Context) {
             val sidecar = File(live.path + suffix)
             if (sidecar.exists()) sidecar.copyTo(File(dest.path + suffix), overwrite = true)
         }
-        // Opening the staging copy consolidates any WAL frames into the main file.
         runCatching {
             SQLiteDatabase.openDatabase(dest.path, null, SQLiteDatabase.OPEN_READWRITE).use {
                 it.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { c -> c.moveToFirst() }
@@ -285,6 +296,33 @@ class LibraryBackupEngine(private val context: Context) {
         }
         File(dest.path + "-wal").delete()
         File(dest.path + "-shm").delete()
+    }
+
+    /** Drops DB tables the user chose not to include (archive stays self-consistent). */
+    private fun stripExcludedTables(dbFile: File, options: BackupOptions) {
+        val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE)
+        try {
+            db.beginTransaction()
+            if (!options.includeSources) {
+                for (table in listOf("ftp_servers", "smb_servers", "webdav_servers", "calibre_servers")) {
+                    runCatching { db.execSQL("DELETE FROM `$table`") }
+                }
+            }
+            if (!options.includeTorrents) runCatching { db.execSQL("DELETE FROM torrent_downloads") }
+            if (!options.includePodcastDownloads) runCatching { db.execSQL("DELETE FROM podcast_downloads") }
+            if (!options.includeReadingHistory) {
+                runCatching { db.execSQL("DELETE FROM reading_sessions") }
+                runCatching { db.execSQL("DELETE FROM daily_reading") }
+            }
+            if (!options.includeAnnotations) {
+                runCatching { db.execSQL("DELETE FROM bookmarks") }
+                runCatching { db.execSQL("DELETE FROM highlights") }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            runCatching { db.endTransaction() }
+            db.close()
+        }
     }
 
     /** Replaces the live database with [dbFile]; the caller must restart the app. */
@@ -350,7 +388,7 @@ class LibraryBackupEngine(private val context: Context) {
 
     // ── File enumeration ──────────────────────────────────────────────────────
 
-    private fun enumerateAppTree(roots: List<BackupRoot>, includeMedia: Boolean): List<BackupEntry> {
+    private fun enumerateAppTree(roots: List<BackupRoot>, options: BackupOptions): List<BackupEntry> {
         val out = ArrayList<BackupEntry>()
         roots.forEach { root ->
             // `@RESTORE@` lives inside `@FILES@`; enumerating both would archive
@@ -362,9 +400,12 @@ class LibraryBackupEngine(private val context: Context) {
             dir.walkTopDown().filter { it.isFile }.forEach { file ->
                 val rel = file.relativeTo(dir).invariantSeparatorsPath
                 val top = rel.substringBefore('/')
-                val large = top in LARGE_DIRS
-                val include = if (isFilesRoot) (!large || includeMedia) else includeMedia
-                if (include) {
+                val category = if (isFilesRoot) {
+                    filesRootCategory(top)
+                } else {
+                    externalCategory(top)
+                }
+                if (options.includes(category)) {
                     out += BackupEntry(
                         "${BackupFormat.MEDIA_DIR}${root.token}/$rel",
                         BackupSource.Local(file),
@@ -375,6 +416,18 @@ class LibraryBackupEngine(private val context: Context) {
         }
         return out
     }
+
+    private fun filesRootCategory(top: String): MediaCategory = when (top) {
+        "covers" -> MediaCategory.COVERS
+        "converted" -> MediaCategory.CONVERTED
+        "ftp", "smb", "webdav", "calibre" -> MediaCategory.REMOTE
+        "shelf_torrents" -> MediaCategory.TORRENT
+        "restored" -> MediaCategory.EXTERNAL
+        else -> MediaCategory.CORE
+    }
+
+    private fun externalCategory(top: String): MediaCategory =
+        if (top == PODCAST_DIR) MediaCategory.PODCAST else MediaCategory.EXTERNAL
 
     // ── External (SAF / shared) media ─────────────────────────────────────────
 
@@ -412,9 +465,6 @@ class LibraryBackupEngine(private val context: Context) {
         val out = ArrayList<ExternalMedia>()
         grouped.forEach { (canonical, variants) ->
             val source = sourceFor(canonical) ?: return@forEach
-            // Skip references we cannot actually read (revoked SAF grant, deleted
-            // shared file). They are left in the DB untouched instead of poisoning
-            // the whole backup.
             if (!isReadable(source)) return@forEach
             val bytes = sizeOf(source)
             val rel = "${shortHash(canonical)}/${safeBaseName(canonical)}"
@@ -482,7 +532,7 @@ class LibraryBackupEngine(private val context: Context) {
         zip.closeEntry()
     }
 
-    private fun writeEntry(zip: ZipOutputStream, entry: BackupEntry, onChunk: (Long) -> Unit) {
+    private suspend fun writeEntry(zip: ZipOutputStream, entry: BackupEntry, onChunk: (Long) -> Unit) {
         zip.setLevel(compressionLevel(entry.name))
         zip.putNextEntry(ZipEntry(entry.name))
         val stream: InputStream = when (val source = entry.source) {
@@ -497,6 +547,7 @@ class LibraryBackupEngine(private val context: Context) {
                 if (read <= 0) break
                 zip.write(buffer, 0, read)
                 onChunk(read.toLong())
+                currentCoroutineContext().ensureActive()
             }
         }
         zip.closeEntry()
@@ -535,7 +586,6 @@ class LibraryBackupEngine(private val context: Context) {
         manifest: BackupManifest?,
         baseProcessed: Long,
         entriesDone: Int,
-        entriesTotal: Int,
     ): Long {
         var written = 0L
         val buffer = ByteArray(BUFFER)
@@ -550,7 +600,7 @@ class LibraryBackupEngine(private val context: Context) {
                     processedBytes = baseProcessed + written,
                     totalBytes = manifest?.totalBytes ?: 0L,
                     entriesDone = entriesDone,
-                    entriesTotal = entriesTotal,
+                    entriesTotal = manifest?.totalEntries ?: 0,
                     current = null,
                 )
             )

@@ -15,7 +15,7 @@ manifest.json            metadata (first entry, so import can plan)
 db/shelf.db              consistent SQLite snapshot, app paths tokenized
 media/@FILES@/<rel>      app-private files: covers, converted MOBI, remote-source
                          downloads, torrents, unpacked imports, restored files
-media/@EXT@/<rel>        external app files dir (e.g. unpacked imports)
+media/@EXT@/<rel>        external app files dir (e.g. podcast downloads)
 media/@RESTORE@/<hash>/  files that lived outside app storage (SAF `content://`
                          or shared paths) and were relocated into the app
 ```
@@ -27,16 +27,41 @@ server source rows. Credentials stay encrypted with the Android Keystore; after
 a reinstall the old key is gone, so restored sources fall back to
 "needs sign-in" instead of crashing.
 
-## Why paths are tokenized
+## Fine-grained options
 
-The install's data directory contains the application id
-(`/data/user/0/com.bookiro/files`), which changes between the `full` and
-`playstore` flavors. Before the database is archived, every TEXT column is
-rewritten so app roots become `@FILES@`, `@EXT@`, `@EXT1@`, … and files copied
-from outside app storage become `@RESTORE@/<hash>/<name>`. Import resolves the
-tokens against the *current* roots, so the same backup restores correctly into
-either flavor. `chapters_json` media URIs are covered automatically because the
-rewrite touches every TEXT column.
+`BackupOptions` selects what is packed; three presets cover the common cases:
+
+| Preset | Includes |
+| --- | --- |
+| **Everything** | every media category + sources + history + annotations |
+| **Library only** | database, covers, converted files and annotations (no bulk media, no sources, no history) |
+| **Custom** | individual toggles |
+
+Individual toggles: covers & artwork, converted files, remote downloads
+(FTP/SMB/WebDAV/Calibre), torrents, podcast audio, external/SAF media, server
+sources, reading history, bookmarks & highlights. Excluded DB tables are pruned
+from the staged snapshot, so the restored database is self-consistent.
+
+## Background, pause & cancel
+
+Export and restore run as **foreground WorkManager work** (`BackupWorker`).
+The user can leave the screen; a notification shows live progress with
+**Pause/Resume** and **Cancel**. Pause stops at a file boundary (a paused
+archive always resumes where it stopped); cancel stops the coroutine and removes
+the partial document. The app observes `WorkManager` progress so re-opening the
+screen shows the running operation.
+
+A restore swaps `shelf.db` and sets a persisted *restore-pending* flag. The live
+UI restarts the process, and a cold start consumes the flag (the database is
+already restored) so a background restore is never missed and never loops.
+
+## Scheduled backups
+
+Enable **Scheduled backups**, pick a **backup folder** (SAF tree, persisted
+grant), a frequency (daily / every 3 days / weekly), optional *Wi-Fi only* and
+*while charging* constraints, and how many copies to keep (1/3/5). Each run
+creates a new `bookiro-backup-*.zip` in the folder and prunes older ones.
+"Back up now" runs the same path immediately.
 
 ## Speed
 
@@ -46,23 +71,19 @@ rewrite touches every TEXT column.
   epub, pdf, images, archives) are deflated at level 0, so the engine never
   wastes CPU recompressing them.
 - Only the SAF stream is held open; a multi-GB library never lands in memory.
-- "Include media files" can be turned off for a fast metadata-only archive.
 
-## Restore semantics
+## Quality of life
 
-1. The archive is streamed to a staging directory in `cacheDir`.
-2. Media entries are resolved token-by-token to their final locations and
-   written there.
-3. The staged database has its tokens resolved and then atomically replaces the
-   live `shelf.db`. `ShelfDatabase.resetInstance()` closes the Room singleton
-   first.
-4. The process restarts (`ShelfDatabase` is rebuilt on the next launch), so no
-   ViewModel or playback service keeps a closed database handle.
+- **Last backup** card with date, size and file name.
+- **Copy to…** moves the finished archive to a new location.
+- **Share** sends the archive to another app.
+- Progress and pause/cancel are available from the notification.
 
 ## Tests
 
 - `app/src/test/.../backup/BackupFormatTest.kt` — token round-trip, external
   ref classification and manifest JSON.
+- `app/src/test/.../backup/BackupOptionsTest.kt` — options JSON, presets.
 - `app/src/androidTest/.../BackupRoundTripInstrumentedTest.kt` — real
-  export → wipe → import of a book, its progress and its file, plus relocation
-  of a file outside app storage into `filesDir/restored`.
+  export → wipe → import of a book, progress and file; relocation of an
+  external file; and a WorkManager `BackupWorker` background export.

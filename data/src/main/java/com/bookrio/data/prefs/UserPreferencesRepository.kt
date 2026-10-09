@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bookrio.core.domain.model.DarkModePref
@@ -219,6 +220,20 @@ class UserPreferencesRepository(private val context: Context) {
         val PODCAST_SPEED_MILLIS = intPreferencesKey("podcast_speed_ratio_x1000")
         val USER_NAME = stringPreferencesKey("user_name")
 
+        // Backup & restore
+        val BACKUP_OPTIONS_JSON = stringPreferencesKey("backup_options_json")
+        val BACKUP_SCHEDULE_ENABLED = booleanPreferencesKey("backup_schedule_enabled")
+        val BACKUP_SCHEDULE_HOURS = intPreferencesKey("backup_schedule_hours")
+        val BACKUP_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("backup_schedule_wifi_only")
+        val BACKUP_SCHEDULE_CHARGING_ONLY = booleanPreferencesKey("backup_schedule_charging_only")
+        val BACKUP_SCHEDULE_RETENTION = intPreferencesKey("backup_schedule_retention")
+        val BACKUP_SCHEDULE_TREE_URI = stringPreferencesKey("backup_schedule_tree_uri")
+        val BACKUP_LAST_AT = longPreferencesKey("backup_last_at")
+        val BACKUP_LAST_SIZE = longPreferencesKey("backup_last_size")
+        val BACKUP_LAST_NAME = stringPreferencesKey("backup_last_name")
+        val BACKUP_LAST_STATUS = stringPreferencesKey("backup_last_status")
+        val BACKUP_RESTORE_PENDING = booleanPreferencesKey("backup_restore_pending")
+
         val SORT_MODE_BOOKS = stringPreferencesKey("sort_mode_books")
         val SORT_MODE_AUDIO = stringPreferencesKey("sort_mode_audio")
         val SORT_DIR_BOOKS = stringPreferencesKey("sort_dir_books")
@@ -228,5 +243,43 @@ class UserPreferencesRepository(private val context: Context) {
     val userName: Flow<String> = store.map { it[Keys.USER_NAME] ?: "Karoline" }
 
     suspend fun setUserName(name: String) = edit(Keys.USER_NAME, name)
+
+    // ---- Backup & restore ----
+    val backupOptionsJson: Flow<String?> = store.map { it[Keys.BACKUP_OPTIONS_JSON] }
+    val backupScheduleEnabled: Flow<Boolean> = store.map { it[Keys.BACKUP_SCHEDULE_ENABLED] ?: false }
+    val backupScheduleHours: Flow<Int> = store.map { it[Keys.BACKUP_SCHEDULE_HOURS] ?: 24 }
+    val backupScheduleWifiOnly: Flow<Boolean> = store.map { it[Keys.BACKUP_SCHEDULE_WIFI_ONLY] ?: true }
+    val backupScheduleChargingOnly: Flow<Boolean> = store.map { it[Keys.BACKUP_SCHEDULE_CHARGING_ONLY] ?: false }
+    val backupScheduleRetention: Flow<Int> = store.map { it[Keys.BACKUP_SCHEDULE_RETENTION] ?: 3 }
+    val backupScheduleTreeUri: Flow<String?> = store.map { it[Keys.BACKUP_SCHEDULE_TREE_URI] }
+    val backupLastAt: Flow<Long> = store.map { it[Keys.BACKUP_LAST_AT] ?: 0L }
+    val backupLastSize: Flow<Long> = store.map { it[Keys.BACKUP_LAST_SIZE] ?: 0L }
+    val backupLastName: Flow<String?> = store.map { it[Keys.BACKUP_LAST_NAME] }
+    val backupLastStatus: Flow<String?> = store.map { it[Keys.BACKUP_LAST_STATUS] }
+    val backupRestorePending: Flow<Boolean> = store.map { it[Keys.BACKUP_RESTORE_PENDING] ?: false }
+
+    suspend fun setBackupRestorePending(pending: Boolean) = edit(Keys.BACKUP_RESTORE_PENDING, pending)
+
+    suspend fun setBackupOptionsJson(json: String?) {
+        context.dataStore.edit { if (json == null) it.remove(Keys.BACKUP_OPTIONS_JSON) else it[Keys.BACKUP_OPTIONS_JSON] = json }
+    }
+
+    suspend fun setBackupScheduleEnabled(enabled: Boolean) = edit(Keys.BACKUP_SCHEDULE_ENABLED, enabled)
+    suspend fun setBackupScheduleHours(hours: Int) = edit(Keys.BACKUP_SCHEDULE_HOURS, hours.coerceIn(6, 336))
+    suspend fun setBackupScheduleWifiOnly(enabled: Boolean) = edit(Keys.BACKUP_SCHEDULE_WIFI_ONLY, enabled)
+    suspend fun setBackupScheduleChargingOnly(enabled: Boolean) = edit(Keys.BACKUP_SCHEDULE_CHARGING_ONLY, enabled)
+    suspend fun setBackupScheduleRetention(count: Int) = edit(Keys.BACKUP_SCHEDULE_RETENTION, count.coerceIn(1, 20))
+    suspend fun setBackupScheduleTreeUri(uri: String?) {
+        context.dataStore.edit { if (uri == null) it.remove(Keys.BACKUP_SCHEDULE_TREE_URI) else it[Keys.BACKUP_SCHEDULE_TREE_URI] = uri }
+    }
+
+    suspend fun setBackupLast(at: Long, size: Long, name: String?, status: String) {
+        context.dataStore.edit {
+            it[Keys.BACKUP_LAST_AT] = at
+            it[Keys.BACKUP_LAST_SIZE] = size
+            if (name == null) it.remove(Keys.BACKUP_LAST_NAME) else it[Keys.BACKUP_LAST_NAME] = name
+            it[Keys.BACKUP_LAST_STATUS] = status
+        }
+    }
     suspend fun setHasSeenOnboarding(seen: Boolean) = edit(Keys.SEEN_ONBOARDING, seen)
 }

@@ -130,6 +130,15 @@ class ShelfApplication : Application(), ImageLoaderFactory, AppDependenciesProvi
         }
 
         val warmUpThread = Thread {
+            // A restore is applied by replacing shelf.db; when this process starts
+            // fresh the database is already the restored one, so the pending flag
+            // (which prompts a restart) is consumed here.
+            runCatching {
+                kotlinx.coroutines.runBlocking {
+                    com.bookrio.data.prefs.UserPreferencesRepository(this@ShelfApplication)
+                        .setBackupRestorePending(false)
+                }
+            }
             runCatching {
                 database
                 readingTracker
