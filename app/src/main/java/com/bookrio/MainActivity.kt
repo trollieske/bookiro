@@ -83,6 +83,7 @@ import com.bookrio.app.torrent.TorrentFeatureProvider
 import com.bookrio.app.BookDetailsScreen
 import com.bookrio.app.ImportScreen
 import com.bookrio.app.OnboardingScreen
+import com.bookrio.app.backup.BackupScreen
 import com.bookrio.app.ui.SettingsScreen
 import com.bookrio.designsystem.theme.ShelfTypography
 import kotlinx.coroutines.Dispatchers
@@ -609,8 +610,12 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
             composable(ShelfDestinations.Settings.route) {
                 SettingsScreen(
                     onBack = { navController.popBackStack() },
-                    onSourcesClick = { navController.navigate(ShelfDestinations.Sources.route) }
+                    onSourcesClick = { navController.navigate(ShelfDestinations.Sources.route) },
+                    onBackupClick = { navController.navigate(ShelfDestinations.Backup.route) }
                 )
+            }
+            composable(ShelfDestinations.Backup.route) {
+                BackupScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = ShelfDestinations.Player.route,

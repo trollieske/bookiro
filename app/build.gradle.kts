@@ -229,6 +229,7 @@ dependencies {
     implementation(libs.androidx.startup.runtime)
 
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.androidx.media3.session)

@@ -355,35 +355,6 @@ class SettingsViewModel(
         }
     }
 
-    fun exportDb(ctx: Context): String? {
-        return try {
-            val dbFile = ctx.getDatabasePath("shelf.db")
-            val outDir = ctx.getExternalFilesDir(null) ?: return null
-            val outFile = outDir.resolve("shelf_backup.db")
-            FileInputStream(dbFile).use { input ->
-                FileOutputStream(outFile).use { output ->
-                    input.copyTo(output)
-                }
-            }
-            outFile.absolutePath
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun importDb(ctx: Context, uri: Uri?) {
-        if (uri == null) return
-        viewModelScope.launch(dispatchers.io) {
-            runCatching {
-                val dbFile = ctx.getDatabasePath("shelf.db")
-                ctx.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(dbFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -683,6 +654,7 @@ private fun SyncSourceRow(
 fun SettingsScreen(
     onBack: () -> Unit,
     onSourcesClick: () -> Unit = {},
+    onBackupClick: () -> Unit = {},
     vm: SettingsViewModel = viewModel(factory = defaultSettingsVmFactory())
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -699,15 +671,6 @@ fun SettingsScreen(
     fun openNumDialog(which: Int, currentValue: Int) {
         numDialogInput = currentValue.toString()
         activeNumDialog = which
-    }
-
-        val importDbLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        vm.importDb(ctx, uri)
-        if (uri != null) {
-            scope.launch { snackbarHostState.showSnackbar(ctx.getString(R.string.settings_db_imported)) }
-        }
     }
 
     val libraryFolderPicker = rememberLauncherForActivityResult(
@@ -1091,35 +1054,40 @@ fun SettingsScreen(
             SettingsSection(stringResource(R.string.settings_sync_storage_title)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(
-                            onClick = {
-                                val path = vm.exportDb(ctx)
-                                scope.launch {
-                                    if (path != null) {
-                                        snackbarHostState.showSnackbar(ctx.getString(R.string.settings_db_exported, path))
-                                    } else {
-                                        snackbarHostState.showSnackbar(ctx.getString(R.string.settings_db_export_failed))
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.FileDownload, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.settings_export))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onBackupClick() }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.SettingsBackupRestore,
+                            contentDescription = null,
+                            tint = com.bookrio.designsystem.theme.OmarchyColors.Accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_backup_title),
+                                style = ShelfTypography.BodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = com.bookrio.designsystem.theme.OmarchyColors.FgBright
+                            )
+                            Spacer(Modifier.height(1.dp))
+                            Text(
+                                stringResource(R.string.settings_backup_sub),
+                                style = ShelfTypography.BodySmall,
+                                color = com.bookrio.designsystem.theme.OmarchyColors.Dim
+                            )
                         }
-                        Spacer(Modifier.width(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                importDbLauncher.launch(arrayOf("*/*"))
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.FileUpload, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.settings_import_button))
-                        }
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = stringResource(R.string.settings_backup_button),
+                            modifier = Modifier.size(18.dp),
+                            tint = com.bookrio.designsystem.theme.OmarchyColors.Dim
+                        )
                     }
 
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
