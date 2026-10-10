@@ -90,14 +90,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
         const val ACTION_SKIP_FORWARD = "com.bookrio.player.SKIP_FORWARD"
         const val ACTION_STOP = "com.bookrio.player.STOP"
 
-        // Podcast engine contract. The player module must not depend on the
-        // podcast module, so the service class name and extras are matched by
-        // string exactly as PodcastPlaybackService declares them.
-        private const val PODCAST_SERVICE_CLASS = "com.bookrio.podcast.playback.PodcastPlaybackService"
-        private const val PODCAST_ACTION_LOAD_EPISODE = "com.bookrio.podcast.LOAD_EPISODE"
-        private const val PODCAST_EXTRA_EPISODE_ID = "extra_episode_id"
-        private const val PODCAST_EXTRA_FORCE_PLAY = "extra_force_play"
-
         /** Bounded browse-artwork cache size (entries are a few tens of KB). */
         private const val MAX_COVER_CACHE_ENTRIES = 256
     }
@@ -446,15 +438,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 controller: MediaSession.ControllerInfo,
                 mediaItems: List<MediaItem>
             ): ListenableFuture<List<MediaItem>> {
-                val remaining = routePodcastSelections(mediaItems)
-                if (remaining.isEmpty()) {
-                    // Every requested item belonged to the podcast engine, which was
-                    // just started and owns its own session/notification. Handing the
-                    // audiobook player an empty timeline keeps a single active session.
-                    return Futures.immediateFuture(emptyList())
-                }
                 return Futures.transformAsync<ResolvedSelection, List<MediaItem>>(
-                    resolveSelection(remaining, C.INDEX_UNSET, C.TIME_END_OF_SOURCE),
+                    resolveSelection(mediaItems, C.INDEX_UNSET, C.TIME_END_OF_SOURCE),
                     { selection: ResolvedSelection -> Futures.immediateFuture(selection.items) },
                     MoreExecutors.directExecutor()
                 )
@@ -473,20 +458,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 startIndex: Int,
                 startPositionMs: Long
             ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-                val remaining = routePodcastSelections(mediaItems)
-                if (remaining.isEmpty()) {
-                    return Futures.immediateFuture(
-                        MediaSession.MediaItemsWithStartPosition(
-                            ImmutableList.of(), C.INDEX_UNSET, 0L
-                        )
-                    )
-                }
-                // Episodes were removed from the request, so a caller startIndex can
-                // no longer point at the same element; an opaque play request (Auto)
-                // already passes INDEX_UNSET.
-                val adjustedStart = if (remaining.size == mediaItems.size) startIndex else C.INDEX_UNSET
                 return Futures.transformAsync<ResolvedSelection, MediaSession.MediaItemsWithStartPosition>(
-                    resolveSelection(remaining, adjustedStart, startPositionMs),
+                    resolveSelection(mediaItems, startIndex, startPositionMs),
                     { selection: ResolvedSelection ->
                         Futures.immediateFuture(
                             MediaSession.MediaItemsWithStartPosition(
@@ -844,6 +817,22 @@ class AudiobookPlaybackService : MediaLibraryService() {
                         resolved.add(item)
                         continue
                     }
+                    // Podcast episodes play on THIS MediaLibrarySession too, so Android
+                    // Auto (bound to this session) keeps the now-playing item and its
+                    // metadata. Delegating them to the separate podcast engine left this
+                    // session empty and Auto showed an error with no information.
+                    val episodeId = BookiroLibraryTree.episodeIdOf(item.mediaId)
+                    if (episodeId != null) {
+                        val episodeItem = buildEpisodeItem(episodeId)
+                        if (episodeItem == null) {
+                            Log.w(TAG, "selection rejected: episode_$episodeId has no playable source")
+                            failSelection(future, IllegalStateException("episode $episodeId has no playable source"))
+                            return@launch
+                        }
+                        resolvedStartForInput[inputIndex] = resolved.size
+                        resolved.add(episodeItem)
+                        continue
+                    }
                     val bookId = AudiobookLibraryTree.bookIdOf(item.mediaId)
                     if (bookId == null) {
                         Log.w(TAG, "selection rejected: unresolvable media id '${item.mediaId}'")
@@ -994,6 +983,47 @@ class AudiobookPlaybackService : MediaLibraryService() {
             resumeIndex = resume?.first ?: -1,
             resumeOffsetMs = resume?.second ?: 0L
         )
+    }
+
+    /**
+     * Resolves an `episode_<id>` browse leaf into a complete, playable MediaItem so the
+     * episode plays on the same MediaLibrarySession Android Auto is bound to. Source
+     * preference matches the podcast engine: a completed local download first, then the
+     * remote enclosure URL.
+     */
+    private suspend fun buildEpisodeItem(episodeId: Long): MediaItem? {
+        val episode = db?.podcastEpisodeDao()?.getById(episodeId) ?: return null
+        val feed = db?.podcastFeedDao()?.getById(episode.feedId)
+        val download = db?.podcastDownloadDao()?.getByEpisode(episodeId)
+        val localUri = download?.localUri?.takeIf { it.isNotBlank() }
+        val localUsable = localUri != null &&
+            download.status == com.bookrio.data.local.entity.PodcastDownloadStatus.DOWNLOADED &&
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val path = Uri.parse(localUri).path ?: return@runCatching false
+                    File(path).length() > 0L
+                }.getOrDefault(false)
+            }
+        val uri = if (localUsable) localUri else episode.enclosureUrl.takeIf { it.isNotBlank() }
+        if (uri.isNullOrBlank()) return null
+        val feedTitle = feed?.title.orEmpty()
+        val artworkUrl = episode.artworkUrl ?: feed?.artworkUrl
+        val metadata = MediaMetadata.Builder()
+            .setTitle(episode.title)
+            .setDisplayTitle(episode.title)
+            .setArtist(feedTitle)
+            .setAlbumTitle(feedTitle)
+            .setSubtitle(feedTitle)
+            .setIsPlayable(true)
+            .setIsBrowsable(false)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_PODCAST_EPISODE)
+            .apply { artworkUrl?.takeIf { it.isNotBlank() }?.let { setArtworkUri(Uri.parse(it)) } }
+            .build()
+        return MediaItem.Builder()
+            .setMediaId(BookiroLibraryTree.episodeMediaId(episodeId))
+            .setUri(uri)
+            .setMediaMetadata(metadata)
+            .build()
     }
 
     /** Same source preference as the engine: readable local file first, then URI. */
@@ -1409,36 +1439,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
      * ID-only item on selection; the podcast engine resolves the stream, artwork
      * and progress itself, so nothing here may build a second timeline for it.
      */
-    private fun routePodcastSelections(requested: List<MediaItem>): List<MediaItem> {
-        val episodeIds = requested.mapNotNull { BookiroLibraryTree.episodeIdOf(it.mediaId) }
-        if (episodeIds.isEmpty()) return requested
-        // Explicit car selection: the podcast engine may take ownership back from a
-        // currently playing audiobook (the arbiter stops the other engine).
-        startPodcastEpisode(episodeIds.first())
-        val routedMediaIds = requested.asSequence()
-            .map { it.mediaId }
-            .filter { BookiroLibraryTree.episodeIdOf(it) != null }
-            .toHashSet()
-        return requested.filterNot { it.mediaId in routedMediaIds }
-    }
-
-    /** Starts the podcast engine for one episode by component name (no module dep). */
-    private fun startPodcastEpisode(episodeId: Long) {
-        Log.i(TAG, "routing episode $episodeId to the podcast engine")
-        val intent = Intent().apply {
-            setClassName(packageName, PODCAST_SERVICE_CLASS)
-            action = PODCAST_ACTION_LOAD_EPISODE
-            putExtra(PODCAST_EXTRA_EPISODE_ID, episodeId)
-            putExtra(PODCAST_EXTRA_FORCE_PLAY, true)
-        }
-        runCatching {
-            androidx.core.content.ContextCompat.startForegroundService(this, intent)
-        }.onFailure { t ->
-            Log.e(TAG, "could not start the podcast engine", t)
-            runCatching { startService(intent) }
-        }
-    }
-
     private fun sectionItem(mediaId: String, title: String): MediaItem =
         MediaItem.Builder()
             .setMediaId(mediaId)
