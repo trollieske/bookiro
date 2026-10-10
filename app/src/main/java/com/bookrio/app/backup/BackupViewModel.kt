@@ -141,7 +141,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
             ?: imports.firstOrNull { it.state == WorkInfo.State.ENQUEUED }
             ?: return@combine null
         val data = info.progress
-        val progress = if (data.size() == 0) {
+        // Data.size() is @RestrictTo; keyValueMap is the public equivalent.
+        val progress = if (data.keyValueMap.isEmpty()) {
             null
         } else {
             BackupProgress(

@@ -1,5 +1,7 @@
 package com.bookrio.app.backup
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +9,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
@@ -14,6 +17,7 @@ import android.provider.DocumentsContract
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -190,6 +194,7 @@ class BackupWorker(
         }
     }
 
+    @SuppressLint("MissingPermission") // guarded by canPostNotifications()
     private fun report(progress: BackupProgress, operation: String) {
         setProgressAsync(
             workDataOf(
@@ -209,11 +214,21 @@ class BackupWorker(
         } else {
             applicationContext.getString(R.string.backup_importing)
         }
-        runCatching {
-            NotificationManagerCompat.from(applicationContext)
-                .notify(BackupWork.NOTIFICATION_ID, buildNotification(title, progress.fraction, BackupControl.paused.value))
+        if (canPostNotifications()) {
+            runCatching {
+                NotificationManagerCompat.from(applicationContext)
+                    .notify(BackupWork.NOTIFICATION_ID, buildNotification(title, progress.fraction, BackupControl.paused.value))
+            }
         }
     }
+
+    /** POST_NOTIFICATIONS is a runtime permission on API 33+; only post when granted. */
+    private fun canPostNotifications(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
 
     private fun foreground(notification: Notification): ForegroundInfo {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
