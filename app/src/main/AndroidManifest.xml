@@ -121,6 +121,17 @@
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
+        <!-- Pause/resume and cancel actions on the backup progress notification. -->
+        <receiver
+            android:name="com.bookrio.app.backup.BackupActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.bookrio.app.backup.PAUSE" />
+                <action android:name="com.bookrio.app.backup.RESUME" />
+                <action android:name="com.bookrio.app.backup.CANCEL" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

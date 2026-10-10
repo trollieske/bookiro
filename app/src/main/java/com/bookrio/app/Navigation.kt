@@ -56,6 +56,7 @@ sealed class ShelfDestinations(val route: String) {
     }
     object ImportProgress : ShelfDestinations("import-progress")
     object Settings : ShelfDestinations("settings")
+    object Backup : ShelfDestinations("backup")
     object Onboarding : ShelfDestinations("onboarding")
     object BookDetails : ShelfDestinations("book/{bookId}") {
         fun routeFor(bookId: Long) = "book/$bookId"
