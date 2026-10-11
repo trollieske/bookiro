@@ -92,6 +92,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
         /** Bounded browse-artwork cache size (entries are a few tens of KB). */
         private const val MAX_COVER_CACHE_ENTRIES = 256
+
+        /** Podcast completion mirrors the in-app podcast engine. */
+        private const val PODCAST_COMPLETION_PERCENT = 0.98f
+        private const val PODCAST_COMPLETION_TAIL_MS = 30_000L
     }
 
     private val serviceScope = CoroutineScope(
@@ -136,6 +140,14 @@ class AudiobookPlaybackService : MediaLibraryService() {
      * attributed to a book that was merely requested while the old one still plays.
      */
     private val loadedTimeline = com.bookrio.core.playback.LoadedTimeline()
+
+    /**
+     * Id of the episode whose MediaItem the player actually holds, or -1 while a
+     * book (or nothing) plays. Android Auto plays episodes on THIS session, so the
+     * same `podcast_playback` row the in-app podcast engine uses must be updated and
+     * resumed here too.
+     */
+    private var loadedEpisodeId: Long = -1L
 
     inner class LocalBinder : Binder() {
         fun getService(): AudiobookPlaybackService = this@AudiobookPlaybackService
@@ -182,8 +194,21 @@ class AudiobookPlaybackService : MediaLibraryService() {
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId ?: return
+                // A podcast episode can arrive on this session through Android Auto;
+                // track it so progress is written back to the shared podcast row.
+                val episodeId = BookiroLibraryTree.episodeIdOf(id)
+                if (episodeId != null) {
+                    loadedTimeline.cleared()
+                    loadedEpisodeId = episodeId
+                    // The audiobook mini-player must not keep showing the previous book.
+                    _nowPlaying.value = AudiobookNowPlaying()
+                    com.bookrio.data.repository.ActivePlaybackState.dismiss()
+                    Log.i(TAG, "episode $episodeId selected: tracking podcast progress")
+                    return
+                }
                 val libraryBookId = AudiobookLibraryTree.bookIdOf(id)
                 if (libraryBookId != null) {
+                    loadedEpisodeId = -1L
                     // A `book_<id>` item can only come from the media library
                     // (Android Auto / browser playFromMediaId): our own timeline items
                     // are `<bookId>_<chapterIndex>` and always carry a URI. The player
@@ -207,11 +232,18 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 maybePersistProgress()
                 when (playbackState) {
                     Player.STATE_ENDED -> {
-                        val finished = loadedTimeline.snapshot()
-                        if (finished.id > 0L) serviceScope.launch {
-                            // Only mark finished if the player still holds that timeline.
-                            if (loadedTimeline.progressTarget(finished) != null) {
-                                withContext(NonCancellable) { saveProgress(finished.id, 1.0f) }
+                        val episodeId = loadedEpisodeId
+                        if (episodeId > 0L) {
+                            serviceScope.launch {
+                                withContext(NonCancellable) { markEpisodeCompleted(episodeId) }
+                            }
+                        } else {
+                            val finished = loadedTimeline.snapshot()
+                            if (finished.id > 0L) serviceScope.launch {
+                                // Only mark finished if the player still holds that timeline.
+                                if (loadedTimeline.progressTarget(finished) != null) {
+                                    withContext(NonCancellable) { saveProgress(finished.id, 1.0f) }
+                                }
                             }
                         }
                         maybeAutoPlayNext()
@@ -765,6 +797,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 // then sees a consistent (id, caches, player) triple.
                 activeChapters = built.chapters
                 activePlan = built.plan
+                loadedEpisodeId = -1L
                 loadedTimeline.committed(built.book.id, token)
                 p.setMediaItems(built.items)
                 if (built.resumeIndex >= 0) p.seekTo(built.resumeIndex, built.resumeOffsetMs)
@@ -829,8 +862,20 @@ class AudiobookPlaybackService : MediaLibraryService() {
                             failSelection(future, IllegalStateException("episode $episodeId has no playable source"))
                             return@launch
                         }
-                        resolvedStartForInput[inputIndex] = resolved.size
+                        val episodeIndex = resolved.size
+                        resolvedStartForInput[inputIndex] = episodeIndex
                         resolved.add(episodeItem)
+                        // An opaque play request (Android Auto playFromMediaId) must
+                        // resume where the in-app podcast engine left off.
+                        if (firstResumeIndex < 0) {
+                            val playback = runCatching {
+                                db?.podcastPlaybackDao()?.getByEpisode(episodeId)
+                            }.getOrNull()
+                            if (playback != null && !playback.isCompleted && playback.positionMs > 0L) {
+                                firstResumeIndex = episodeIndex
+                                firstResumeOffsetMs = playback.positionMs
+                            }
+                        }
                         continue
                     }
                     val bookId = AudiobookLibraryTree.bookIdOf(item.mediaId)
@@ -939,6 +984,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         currentBookId = built.book.id
         activeChapters = built.chapters
         activePlan = built.plan
+        loadedEpisodeId = -1L
         loadedTimeline.committed(built.book.id, token)
         // Playback speed is a player property, so applying it here survives the item
         // swap that follows this future.
@@ -1097,6 +1143,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
             return
         }
 
+        // An episode can play on THIS session too (Android Auto). It shares the
+        // podcast engine's `podcast_playback` row so auto and in-app stay in sync.
+        if (loadedEpisodeId > 0L) {
+            persistEpisodeProgress(loadedEpisodeId)
+            return
+        }
+
         // Persist for the timeline the player actually holds — never for a merely
         // requested book that has not been committed yet. Capture id + generation
         // together so a rapid A -> B -> A switch cannot let a stale write land.
@@ -1118,6 +1171,63 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 val target = loadedTimeline.progressTarget(timeline) ?: return@withContext
                 saveProgress(target, pct, positionMs = pos)
             }
+        }
+    }
+
+    /**
+     * Writes the current episode position into the shared `podcast_playback` row.
+     * Mirrors the in-app podcast engine's completion rule and load-modify-upsert so
+     * starting an episode in the car and continuing it in the app (or vice versa)
+     * resumes at the same place.
+     */
+    private fun persistEpisodeProgress(episodeId: Long) {
+        val p = player ?: return
+        val pos = p.currentPosition
+        if (pos <= 0L) return
+        val dur = p.duration.takeIf { it > 0L }
+        serviceScope.launch {
+            withContext(NonCancellable) {
+                // Drop the write if a different timeline was committed meanwhile.
+                if (loadedEpisodeId != episodeId) return@withContext
+                val dao = db?.podcastPlaybackDao() ?: return@withContext
+                val existing = runCatching { dao.getByEpisode(episodeId) }.getOrNull()
+                val completed = dur != null && (pos >= dur - PODCAST_COMPLETION_TAIL_MS ||
+                    pos.toFloat() / dur.toFloat() >= PODCAST_COMPLETION_PERCENT)
+                val now = System.currentTimeMillis()
+                runCatching {
+                    dao.upsert(
+                        PodcastPlaybackEntity(
+                            episodeId = episodeId,
+                            positionMs = if (completed) 0L else pos,
+                            durationMs = dur ?: existing?.durationMs,
+                            lastPlayedAt = now,
+                            isCompleted = completed || existing?.isCompleted == true,
+                            completedAt = if (completed) now else existing?.completedAt,
+                            playbackSpeed = existing?.playbackSpeed ?: 1f,
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun markEpisodeCompleted(episodeId: Long) {
+        if (loadedEpisodeId != episodeId) return
+        val dao = db?.podcastPlaybackDao() ?: return
+        val existing = runCatching { dao.getByEpisode(episodeId) }.getOrNull()
+        val now = System.currentTimeMillis()
+        runCatching {
+            dao.upsert(
+                PodcastPlaybackEntity(
+                    episodeId = episodeId,
+                    positionMs = 0L,
+                    durationMs = existing?.durationMs,
+                    lastPlayedAt = now,
+                    isCompleted = true,
+                    completedAt = now,
+                    playbackSpeed = existing?.playbackSpeed ?: 1f,
+                )
+            )
         }
     }
 
