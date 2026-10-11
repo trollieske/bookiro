@@ -91,6 +91,7 @@ class BackupWorker(
 
     private var createdDocument: Uri? = null
     private var lastNotifyAt = 0L
+    private var lastProgressPushAt = 0L
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
         foreground(buildNotification(applicationContext.getString(R.string.backup_preparing), 0f, false))
@@ -196,18 +197,27 @@ class BackupWorker(
 
     @SuppressLint("MissingPermission") // guarded by canPostNotifications()
     private fun report(progress: BackupProgress, operation: String) {
-        setProgressAsync(
-            workDataOf(
-                BackupWork.P_LABEL to progress.label,
-                BackupWork.P_DONE to progress.processedBytes,
-                BackupWork.P_TOTAL to progress.totalBytes,
-                BackupWork.P_ENTRIES to progress.entriesDone,
-                BackupWork.P_ENTRIES_TOTAL to progress.entriesTotal,
-                BackupWork.P_CURRENT to (progress.current ?: ""),
-            )
-        )
         val now = System.currentTimeMillis()
-        if (now - lastNotifyAt < 900L && progress.fraction < 1f) return
+        val finished = progress.fraction >= 1f
+        // WorkManager persists EVERY progress update in its own SQLite database and
+        // notifies observers. The engine emits one callback per 64 KB chunk, so a
+        // multi-GB archive was thousands of writes per second — that starved the
+        // whole app (lag, ANRs, crashes) and could fail the restore. Push a few
+        // times per second instead, and always the final value.
+        if (finished || now - lastProgressPushAt >= 500L) {
+            lastProgressPushAt = now
+            setProgressAsync(
+                workDataOf(
+                    BackupWork.P_LABEL to progress.label,
+                    BackupWork.P_DONE to progress.processedBytes,
+                    BackupWork.P_TOTAL to progress.totalBytes,
+                    BackupWork.P_ENTRIES to progress.entriesDone,
+                    BackupWork.P_ENTRIES_TOTAL to progress.entriesTotal,
+                    BackupWork.P_CURRENT to (progress.current ?: ""),
+                )
+            )
+        }
+        if (now - lastNotifyAt < 900L && !finished) return
         lastNotifyAt = now
         val title = if (operation == BackupWork.OP_EXPORT) {
             applicationContext.getString(R.string.backup_exporting)

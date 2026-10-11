@@ -181,6 +181,11 @@ class LibraryBackupEngine(private val context: Context) {
             deleteRecursively()
             mkdirs()
         }
+        // Files this attempt created under the live roots. If the restore does not
+        // finish, they are deleted: otherwise repeated attempts of a large archive
+        // leak gigabytes and eventually fill the device.
+        val writtenNewFiles = ArrayList<File>()
+        var completed = false
         try {
             val roots = appRoots()
             val tokenToRoot = roots.associate { it.token to it.path }
@@ -220,9 +225,11 @@ class LibraryBackupEngine(private val context: Context) {
                                     missingMedia++
                                 } else {
                                     dest.parentFile?.mkdirs()
+                                    val existed = dest.exists()
                                     dest.outputStream().buffered(BUFFER).use { out ->
                                         processed += copyStream(zip, out, onProgress, manifest, processed, mediaFiles)
                                     }
+                                    if (!existed) writtenNewFiles += dest
                                     mediaFiles++
                                 }
                             }
@@ -243,12 +250,25 @@ class LibraryBackupEngine(private val context: Context) {
                         "Update the app and try again."
                 )
             }
+            // Settle the UI/notification at 100% even when skipped media left
+            // `processed` short of the manifest total.
+            onProgress(
+                BackupProgress(
+                    label = "IMPORT",
+                    processedBytes = mf.totalBytes,
+                    totalBytes = mf.totalBytes,
+                    entriesDone = mf.totalEntries,
+                    entriesTotal = mf.totalEntries,
+                    current = null,
+                )
+            )
             val dbFile = stagedDb
                 ?: return@withContext BackupOutcome.Failed("Not a Bookiro backup (shelf.db missing)")
 
             untokenizeDatabase(dbFile, roots)
             val counts = libraryCounts(dbFile)
             swapInDatabase(dbFile)
+            completed = true
 
             BackupOutcome.Imported(
                 bookCount = counts["books"] ?: 0,
@@ -262,6 +282,9 @@ class LibraryBackupEngine(private val context: Context) {
             Log.e(TAG, "import failed", t)
             BackupOutcome.Failed(t.message ?: "Restore failed", t)
         } finally {
+            if (!completed) {
+                writtenNewFiles.forEach { runCatching { it.delete() } }
+            }
             staging.deleteRecursively()
         }
     }
