@@ -264,6 +264,15 @@ class CalibreSyncWorker(
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .apply {
+                com.bookrio.core.notifications.AppNotifications.contentIntent(
+                    appContext,
+                    com.bookrio.core.notifications.AppNotifications.Routes.TRANSFERS,
+                )?.let { setContentIntent(it) }
+            }
             .build()
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

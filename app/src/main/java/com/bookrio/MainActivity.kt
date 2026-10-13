@@ -90,8 +90,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** One navigation request from a notification tap (a nonce lets repeats re-fire). */
+data class NotificationNav(val route: String, val nonce: Long)
+
 class MainActivity : AppCompatActivity() {
     private lateinit var prefs: UserPreferencesRepository
+    private val navEvent = kotlinx.coroutines.flow.MutableStateFlow<NotificationNav?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,13 +104,30 @@ class MainActivity : AppCompatActivity() {
             navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
         prefs = UserPreferencesRepository(this)
+        consumeNotificationRoute(intent)
         setContent {
             // Tema låst: HUD-mørkt. Ingen dynamicColor / Material You.
             ShelfTheme(darkTheme = true) {
-                val targetRoute = intent?.getStringExtra("target_route")
-                ShelfRoot(prefs = prefs, initialRoute = targetRoute)
+                val nav by navEvent.collectAsStateWithLifecycle()
+                ShelfRoot(
+                    prefs = prefs,
+                    initialRoute = nav?.route,
+                    onRouteConsumed = { navEvent.value = null },
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeNotificationRoute(intent)
+    }
+
+    /** Notification content intents carry `target_route`; navigate there once. */
+    private fun consumeNotificationRoute(intent: Intent?) {
+        val route = intent?.getStringExtra("target_route")?.takeIf { it.isNotBlank() } ?: return
+        navEvent.value = NotificationNav(route, System.currentTimeMillis())
     }
 }
 
@@ -197,7 +218,11 @@ private fun DatabaseErrorScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = null) {
+private fun ShelfRoot(
+    prefs: UserPreferencesRepository,
+    initialRoute: String? = null,
+    onRouteConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val hasSeenOnboardingState by prefs.hasSeenOnboarding.collectAsStateWithLifecycle(initialValue = null)
 
@@ -228,7 +253,18 @@ private fun ShelfRoot(prefs: UserPreferencesRepository, initialRoute: String? = 
     }
 
     val defaultStart = if (hasSeenOnboardingState == true) ShelfDestinations.Home.route else ShelfDestinations.Onboarding.route
-    val startDest = initialRoute ?: defaultStart
+    // Captured once: consuming the notification route must not reset the graph's
+    // start destination back to Home mid-session.
+    val startDest = remember { initialRoute ?: defaultStart }
+    // A notification tap while the app is already running re-fires the route; the
+    // cold-start case is already covered by `startDest`, so launchSingleTop keeps
+    // it from being pushed twice.
+    LaunchedEffect(initialRoute) {
+        if (!initialRoute.isNullOrBlank()) {
+            runCatching { navController.navigate(initialRoute) { launchSingleTop = true } }
+            onRouteConsumed()
+        }
+    }
     val items = listOf(
         BottomNavItem.Books,
         BottomNavItem.Audiobooks,

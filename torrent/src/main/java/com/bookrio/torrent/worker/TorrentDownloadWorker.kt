@@ -202,21 +202,19 @@ class TorrentDownloadWorker(
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
-        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
-        val contentIntent = launchIntent?.let {
-            PendingIntent.getActivity(
-                appContext,
-                0,
-                it,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        }
+        val contentIntent = com.bookrio.core.notifications.AppNotifications.contentIntent(
+            appContext,
+            com.bookrio.core.notifications.AppNotifications.Routes.TORRENT,
+        )
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(appContext.getString(R.string.toru_notif_channel))
             .setContentText(appContext.getString(R.string.toru_notif_text))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .apply { contentIntent?.let { setContentIntent(it) } }
             .build()
 

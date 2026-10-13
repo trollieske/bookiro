@@ -290,6 +290,8 @@ class BackupWorker(
             .setProgress(1000, (fraction * 1000).toInt().coerceIn(0, 1000), fraction <= 0f)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(open)
             .addAction(
                 0,

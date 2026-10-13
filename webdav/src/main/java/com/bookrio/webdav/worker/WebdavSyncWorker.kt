@@ -190,6 +190,15 @@ class WebdavSyncWorker(
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .apply {
+                com.bookrio.core.notifications.AppNotifications.contentIntent(
+                    applicationContext,
+                    com.bookrio.core.notifications.AppNotifications.Routes.TRANSFERS,
+                )?.let { setContentIntent(it) }
+            }
             .build()
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC

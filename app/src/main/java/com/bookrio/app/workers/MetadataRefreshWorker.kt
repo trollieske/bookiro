@@ -110,23 +110,20 @@ class MetadataRefreshWorker(
     }
 
     private fun foregroundInfo(done: Int, total: Int): ForegroundInfo {
-        val launch = applicationContext.packageManager
-            .getLaunchIntentForPackage(applicationContext.packageName)
-        val contentIntent = launch?.let {
-            PendingIntent.getActivity(
-                applicationContext,
-                0,
-                it,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        }
+        val contentIntent = com.bookrio.core.notifications.AppNotifications.contentIntent(
+            applicationContext,
+            com.bookrio.core.notifications.AppNotifications.Routes.LIBRARY,
+        )
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle(applicationContext.getString(R.string.metadata_refresh_notif_title))
             .setContentText(applicationContext.getString(R.string.metadata_refresh_notif_text, done, total))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setProgress(total.coerceAtLeast(1), done, false)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .apply { contentIntent?.let { setContentIntent(it) } }
             .build()
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

@@ -625,13 +625,26 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
-        val action = intent?.action
-        // Always satisfy the startForegroundService() contract; the live media
-        // notification replaces this placeholder as soon as the player reports the
-        // seek / metadata change.
-        startForegroundLoading()
-
-        when (action) {
+        when (intent?.action) {
+            ACTION_LOAD_BOOK -> {
+                // NOTE: audio arbitration happens when playback actually starts
+                // (onIsPlayingChanged), not on load — opening the player screen must
+                // not kill a podcast that is currently playing. While that podcast
+                // plays, the load is deferred instead of posting a second paused
+                // notification with this book's artwork.
+                val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L)
+                // startForegroundService() is only used to load a book, so satisfy its
+                // contract with a tappable placeholder the media notification replaces.
+                startForegroundLoading(bookId)
+                if (bookId > 0L) {
+                    // An explicit play intent (play press with a dead service) may
+                    // autoplay and take ownership; a plain screen load defers.
+                    val playIntent = intent.getBooleanExtra(EXTRA_PLAY_INTENT, false)
+                    if (loadBook(bookId, autoPlay = playIntent, force = playIntent)) startLoadWatchdog()
+                } else {
+                    stopForegroundAndSelf()
+                }
+            }
             ACTION_STOP -> {
                 // Mini-player close: persist + hide, then retire the engine so no
                 // paused notification/timeline survives the close.
@@ -643,40 +656,39 @@ class AudiobookPlaybackService : MediaLibraryService() {
             }
             ACTION_SKIP_BACK -> player?.let { it.seekTo((it.currentPosition - skipBackSec * 1000L).coerceAtLeast(0L)) }
             ACTION_SKIP_FORWARD -> player?.let { it.seekTo((it.currentPosition + skipFwdSec * 1000L).coerceAtMost(it.duration.coerceAtLeast(0L))) }
-            ACTION_LOAD_BOOK -> {
-                // NOTE: audio arbitration happens when playback actually starts
-                // (onIsPlayingChanged), not on load — opening the player screen must
-                // not kill a podcast that is currently playing. While that podcast
-                // plays, the load is deferred instead of posting a second paused
-                // notification with this book's artwork.
-                val bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1L)
-                if (bookId > 0L) {
-                    // An explicit play intent (play press with a dead service) may
-                    // autoplay and take ownership; a plain screen load defers.
-                    val playIntent = intent.getBooleanExtra(EXTRA_PLAY_INTENT, false)
-                    if (loadBook(bookId, autoPlay = playIntent, force = playIntent)) startLoadWatchdog()
-                } else {
-                    stopForegroundAndSelf()
-                }
-            }
             else -> {
-                // Unknown or null restart intent: do not linger with a placeholder.
+                // Null (system restart) or unknown action: never post a dead-end
+                // placeholder. If nothing is loaded, tidy up and stop.
                 if (player?.mediaItemCount == 0) stopForegroundAndSelf()
             }
         }
         return super.onStartCommand(intent, flags, startId)
     }
 
-    /** Foreground placeholder for the brief window before a book is prepared. */
-    private fun startForegroundLoading() {
+    /** Tappable foreground placeholder for the brief window before a book is ready. */
+    private fun startForegroundLoading(bookId: Long) {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         } else 0
-        val notif = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.ply_notif_loading))
             .setSmallIcon(com.bookrio.designsystem.R.drawable.ic_stat_bookrio)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
-            .build()
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_TRANSPORT)
+            .setForegroundServiceBehavior(
+                androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
+            )
+        com.bookrio.core.notifications.AppNotifications.contentIntent(
+            this,
+            if (bookId > 0L) {
+                com.bookrio.core.notifications.AppNotifications.Routes.audiobookPlayer(bookId)
+            } else {
+                com.bookrio.core.notifications.AppNotifications.Routes.LIBRARY
+            },
+        )?.let { builder.setContentIntent(it) }
+        val notif = builder.build()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notif, type)

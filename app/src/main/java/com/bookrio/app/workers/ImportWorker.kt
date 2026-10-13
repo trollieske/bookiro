@@ -130,6 +130,9 @@ class ImportWorker(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(false)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .apply { contentIntent()?.let { setContentIntent(it) } }
             .build()
 
         if (cnt > 0 && canPostNotifications()) {
@@ -142,6 +145,9 @@ class ImportWorker(
             .setContentText(appContext.getString(R.string.import_notif_books, cnt))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(false)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .apply { contentIntent()?.let { setContentIntent(it) } }
             .build()
         runCatching {
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -160,6 +166,13 @@ class ImportWorker(
 
         return Result.success(data)
     }
+
+    /** Every import notification opens the library, never a dead end. */
+    private fun contentIntent(): android.app.PendingIntent? =
+        com.bookrio.core.notifications.AppNotifications.contentIntent(
+            appContext,
+            com.bookrio.core.notifications.AppNotifications.Routes.LIBRARY,
+        )
 
     /** POST_NOTIFICATIONS is a runtime permission on API 33+; only post when granted. */
     private fun canPostNotifications(): Boolean =
@@ -193,6 +206,10 @@ class ImportWorker(
             .setContentText(appContext.getString(R.string.import_notif_wait))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .apply { contentIntent()?.let { setContentIntent(it) } }
             .build()
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

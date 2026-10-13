@@ -339,13 +339,23 @@ class PodcastPlaybackService : MediaSessionService() {
         NowPlayingOwnership.otherEngineIsPlaying(NowPlayingOwnership.Engine.PODCAST)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
-        // Always satisfy the startForegroundService() contract; the live media
-        // notification replaces this placeholder as soon as the player reports the
-        // seek / metadata change.
-        startForegroundLoading()
-
-        when (action) {
+        when (intent?.action) {
+            ACTION_LOAD_EPISODE -> {
+                val episodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
+                // startForegroundService() is only used to load an episode, so satisfy
+                // its contract with a tappable placeholder that the media notification
+                // replaces as soon as the player publishes metadata.
+                startForegroundLoading(episodeId)
+                if (episodeId > 0L) {
+                    // An explicit play intent (episode tap / resume) may autoplay and
+                    // take ownership; a passive load defers while the other engine
+                    // owns playback.
+                    val force = intent.getBooleanExtra(EXTRA_FORCE_PLAY, false)
+                    if (loadEpisode(episodeId, autoPlay = true, force = force)) startLoadWatchdog()
+                } else {
+                    stopForegroundAndSelf()
+                }
+            }
             ACTION_STOP -> {
                 // Mini-player close: persist + hide, then retire the engine so no
                 // paused notification/timeline survives the close.
@@ -357,36 +367,39 @@ class PodcastPlaybackService : MediaSessionService() {
                 val max = it.duration.takeIf { d -> d > 0 } ?: Long.MAX_VALUE
                 it.seekTo((it.currentPosition + SEEK_FORWARD_MS).coerceAtMost(max))
             }
-            ACTION_LOAD_EPISODE -> {
-                val episodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
-                if (episodeId > 0L) {
-                    // An explicit play intent (episode tap / resume) may autoplay and
-                    // take ownership; a passive load defers while the other engine
-                    // owns playback.
-                    val force = intent.getBooleanExtra(EXTRA_FORCE_PLAY, false)
-                    if (loadEpisode(episodeId, autoPlay = true, force = force)) startLoadWatchdog()
-                } else {
-                    stopForegroundAndSelf()
-                }
-            }
             else -> {
-                // Unknown or null restart intent: do not linger with a placeholder.
+                // Null (system restart) or unknown action: never post a dead-end
+                // placeholder. If nothing is loaded, tidy up and stop.
                 if (player?.mediaItemCount == 0) stopForegroundAndSelf()
             }
         }
         return super.onStartCommand(intent, flags, startId)
     }
 
-    /** Foreground placeholder for the brief window before an episode is prepared. */
-    private fun startForegroundLoading() {
+    /** Tappable foreground placeholder for the brief window before an episode is ready. */
+    private fun startForegroundLoading(episodeId: Long) {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         } else 0
-        val initial = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.pod_notif_loading))
             .setSmallIcon(com.bookrio.designsystem.R.drawable.ic_stat_bookrio)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
-            .build()
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_TRANSPORT)
+            .setForegroundServiceBehavior(
+                androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
+            )
+        com.bookrio.core.notifications.AppNotifications.contentIntent(
+            this,
+            if (episodeId > 0L) {
+                com.bookrio.core.notifications.AppNotifications.Routes.podcastPlayer(episodeId)
+            } else {
+                com.bookrio.core.notifications.AppNotifications.Routes.PODCASTS
+            },
+        )?.let { builder.setContentIntent(it) }
+        val initial = builder.build()
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, initial, type)

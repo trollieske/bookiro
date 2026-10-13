@@ -76,6 +76,14 @@ object FtpNotifications {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .apply {
+                com.bookrio.core.notifications.AppNotifications.contentIntent(
+                    context,
+                    com.bookrio.core.notifications.AppNotifications.Routes.TRANSFERS,
+                )?.let { setContentIntent(it) }
+            }
             .addAction(
                 0,
                 context.getString(R.string.ftpu_notif_pause),
