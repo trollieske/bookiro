@@ -72,8 +72,9 @@ class PodcastPlaybackService : MediaSessionService() {
          * defers while the other engine owns playback.
          */
         const val EXTRA_FORCE_PLAY = "extra_force_play"
-        const val SEEK_BACK_MS = 30_000L
-        const val SEEK_FORWARD_MS = 30_000L
+        /** Podcast skip increment; matches the audiobook player's default 15 s. */
+        const val SEEK_BACK_MS = 15_000L
+        const val SEEK_FORWARD_MS = 15_000L
         const val CMD_SKIP_BACK = "CMD_PODCAST_SKIP_BACK"
         const val CMD_SKIP_FORWARD = "CMD_PODCAST_SKIP_FORWARD"
         const val CMD_SET_SLEEP = "CMD_PODCAST_SET_SLEEP"
@@ -169,8 +170,11 @@ class PodcastPlaybackService : MediaSessionService() {
             .build()
         exo.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
-                    serviceScope.launch { finishEpisode() }
+                when (playbackState) {
+                    Player.STATE_ENDED -> serviceScope.launch { finishEpisode() }
+                    // Persist as soon as a timeline is ready, so a load-then-leave
+                    // still records the resume position even if playback never starts.
+                    Player.STATE_READY -> persistProgress()
                 }
             }
 
@@ -565,7 +569,10 @@ class PodcastPlaybackService : MediaSessionService() {
         val duration = p.duration
         if (duration <= 0L) return
         val pos = p.currentPosition
-        val nearEnd = pos >= duration - COMPLETION_TAIL_MS
+        // Only treat the final stretch as "completed" when the episode is clearly
+        // longer than the tail, otherwise a short clip would be marked completed
+        // at position 0 and always restart from the beginning.
+        val nearEnd = duration > COMPLETION_TAIL_MS * 2 && pos >= duration - COMPLETION_TAIL_MS
         val pastThreshold = pos.toFloat() / duration.toFloat() >= COMPLETION_PERCENT
         if (nearEnd || pastThreshold) {
             serviceScope.launch { finishEpisode() }
@@ -758,6 +765,9 @@ class PodcastPlaybackService : MediaSessionService() {
                 return@onMain
             }
             p.playWhenReady = !p.playWhenReady
+            // Persist on every play/pause gesture: pausing is the moment the user
+            // expects to resume from, and it must not depend on an isPlaying edge.
+            persistProgress()
         }
     }
 
@@ -765,9 +775,17 @@ class PodcastPlaybackService : MediaSessionService() {
         onMain {
             val p = player ?: return@onMain
             p.seekTo(com.bookrio.podcast.domain.PodcastSeek.clamp(ms, p.duration.takeIf { d -> d > 0 } ?: 0L))
+            // A seek is a resume point the user chose; record it even if paused.
+            persistProgress()
             publishState()
         }
     }
+
+    /**
+     * Called by the UI when the player screen is closed, so the last position is
+     * stored even if playback never produced an isPlaying transition.
+     */
+    fun persistNow() = onMain { persistProgress() }
 
     fun skipBack() = seekTo(currentPositionMs() - SEEK_BACK_MS)
     fun skipForward() = seekTo(currentPositionMs() + SEEK_FORWARD_MS)

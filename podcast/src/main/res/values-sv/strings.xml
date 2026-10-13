@@ -95,8 +95,8 @@
     <string name="pod_detail_offline_marker">Offline</string>
 
     <string name="pod_player_upper">PODD</string>
-    <string name="pod_player_skip_back">30 s tillbaka</string>
-    <string name="pod_player_skip_forward">30 s fram\u00e5t</string>
+    <string name="pod_player_skip_back">15 s tillbaka</string>
+    <string name="pod_player_skip_forward">15 s fram\u00e5t</string>
     <string name="pod_player_play">Spela</string>
     <string name="pod_player_pause">Pausa</string>
     <string name="pod_player_speed">Uppspelningshastighet</string>
@@ -110,8 +110,8 @@
     <string name="pod_notif_title">Podd</string>
     <string name="pod_notif_loading">Laddar podd\u2026</string>
     <string name="pod_notif_play">Spela</string>
-    <string name="pod_notif_skip_back">30 s tillbaka</string>
-    <string name="pod_notif_skip_forward">30 s fram\u00e5t</string>
+    <string name="pod_notif_skip_back">15 s tillbaka</string>
+    <string name="pod_notif_skip_forward">15 s fram\u00e5t</string>
     <string name="pod_notif_channel">Uppspelning</string>
     <string name="pod_notif_channel_desc">Aviseringar f\u00f6r podduppspelning</string>
 

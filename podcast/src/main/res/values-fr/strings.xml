@@ -95,8 +95,8 @@
     <string name="pod_detail_offline_marker">Hors ligne</string>
 
     <string name="pod_player_upper">PODCAST</string>
-    <string name="pod_player_skip_back">Reculer 30 s</string>
-    <string name="pod_player_skip_forward">Avancer 30 s</string>
+    <string name="pod_player_skip_back">Reculer 15 s</string>
+    <string name="pod_player_skip_forward">Avancer 15 s</string>
     <string name="pod_player_play">Lire</string>
     <string name="pod_player_pause">Pause</string>
     <string name="pod_player_speed">Vitesse de lecture</string>
@@ -110,8 +110,8 @@
     <string name="pod_notif_title">Podcast</string>
     <string name="pod_notif_loading">Chargement du podcast\u2026</string>
     <string name="pod_notif_play">Lire</string>
-    <string name="pod_notif_skip_back">Reculer 30 s</string>
-    <string name="pod_notif_skip_forward">Avancer 30 s</string>
+    <string name="pod_notif_skip_back">Reculer 15 s</string>
+    <string name="pod_notif_skip_forward">Avancer 15 s</string>
     <string name="pod_notif_channel">Lecture</string>
     <string name="pod_notif_channel_desc">Notifications de lecture des podcasts</string>
 

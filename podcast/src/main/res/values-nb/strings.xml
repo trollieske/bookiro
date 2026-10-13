@@ -95,8 +95,8 @@
     <string name="pod_detail_offline_marker">Offline</string>
 
     <string name="pod_player_upper">PODKAST</string>
-    <string name="pod_player_skip_back">30 s tilbake</string>
-    <string name="pod_player_skip_forward">30 s frem</string>
+    <string name="pod_player_skip_back">15 s tilbake</string>
+    <string name="pod_player_skip_forward">15 s frem</string>
     <string name="pod_player_play">Spill av</string>
     <string name="pod_player_pause">Pause</string>
     <string name="pod_player_speed">Avspillingshastighet</string>
@@ -110,8 +110,8 @@
     <string name="pod_notif_title">Podkast</string>
     <string name="pod_notif_loading">Laster podkast\u2026</string>
     <string name="pod_notif_play">Spill av</string>
-    <string name="pod_notif_skip_back">30 s tilbake</string>
-    <string name="pod_notif_skip_forward">30 s frem</string>
+    <string name="pod_notif_skip_back">15 s tilbake</string>
+    <string name="pod_notif_skip_forward">15 s frem</string>
     <string name="pod_notif_channel">Avspilling</string>
     <string name="pod_notif_channel_desc">Varsler for podkastavspilling</string>
 

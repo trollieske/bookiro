@@ -29,8 +29,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay30
-import androidx.compose.material.icons.filled.Forward30
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Forward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -254,7 +254,7 @@ fun PodcastPlayerScreen(
         ) {
             IconButton(onClick = vm::skipBack) {
                 Icon(
-                    Icons.Default.Replay30,
+                    Icons.Default.Replay,
                     stringResource(R.string.pod_player_skip_back),
                     tint = OmarchyColors.Fg,
                     modifier = Modifier.size(34.dp)
@@ -293,7 +293,7 @@ fun PodcastPlayerScreen(
             }
             IconButton(onClick = vm::skipForward) {
                 Icon(
-                    Icons.Default.Forward30,
+                    Icons.Default.Forward,
                     stringResource(R.string.pod_player_skip_forward),
                     tint = OmarchyColors.Fg,
                     modifier = Modifier.size(34.dp)

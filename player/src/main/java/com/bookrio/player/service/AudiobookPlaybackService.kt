@@ -1203,8 +1203,11 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 if (loadedEpisodeId != episodeId) return@withContext
                 val dao = db?.podcastPlaybackDao() ?: return@withContext
                 val existing = runCatching { dao.getByEpisode(episodeId) }.getOrNull()
-                val completed = dur != null && (pos >= dur - PODCAST_COMPLETION_TAIL_MS ||
-                    pos.toFloat() / dur.toFloat() >= PODCAST_COMPLETION_PERCENT)
+                // Only apply the final-tail rule to episodes clearly longer than the
+                // tail; a short clip would otherwise be marked completed at 0 and
+                // always restart from the beginning.
+                val completed = dur != null && (pos.toFloat() / dur.toFloat() >= PODCAST_COMPLETION_PERCENT ||
+                    (dur > PODCAST_COMPLETION_TAIL_MS * 2 && pos >= dur - PODCAST_COMPLETION_TAIL_MS))
                 val now = System.currentTimeMillis()
                 runCatching {
                     dao.upsert(

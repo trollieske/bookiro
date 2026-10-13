@@ -95,8 +95,8 @@
     <string name="pod_detail_offline_marker">Offline</string>
 
     <string name="pod_player_upper">PODCAST</string>
-    <string name="pod_player_skip_back">30 s tilbage</string>
-    <string name="pod_player_skip_forward">30 s frem</string>
+    <string name="pod_player_skip_back">15 s tilbage</string>
+    <string name="pod_player_skip_forward">15 s frem</string>
     <string name="pod_player_play">Afspil</string>
     <string name="pod_player_pause">Pause</string>
     <string name="pod_player_speed">Afspilningshastighed</string>
@@ -110,8 +110,8 @@
     <string name="pod_notif_title">Podcast</string>
     <string name="pod_notif_loading">Indl\u00e6ser podcast\u2026</string>
     <string name="pod_notif_play">Afspil</string>
-    <string name="pod_notif_skip_back">30 s tilbage</string>
-    <string name="pod_notif_skip_forward">30 s frem</string>
+    <string name="pod_notif_skip_back">15 s tilbage</string>
+    <string name="pod_notif_skip_forward">15 s frem</string>
     <string name="pod_notif_channel">Afspilning</string>
     <string name="pod_notif_channel_desc">Notifikationer for podcastafspilning</string>
 

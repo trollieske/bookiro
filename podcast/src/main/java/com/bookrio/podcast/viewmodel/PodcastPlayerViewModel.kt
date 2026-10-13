@@ -205,6 +205,9 @@ class PodcastPlayerViewModel(
     override fun onCleared() {
         nowPlayingJob?.cancel()
         nowPlayingJob = null
+        // Store the last position before the UI lets go of the service, so leaving
+        // the screen always records where the listener stopped.
+        service?.persistNow()
         runCatching { getApplication<Application>().unbindService(connection) }
         service = null
         super.onCleared()

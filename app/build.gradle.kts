@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
 
 plugins {
@@ -42,6 +45,20 @@ val releaseRequested = gradle.startParameter.taskNames.any { name ->
     packaging && !nonPackaging && (task.contains("Release") || task == "assemble" || task == "bundle" || task == "build")
 }
 
+// ─── Build identity (visible to testers) ─────────────────────────────────────
+// Every build gets a distinct, human-readable version so test installs can be
+// told apart. CI provides GITHUB_RUN_NUMBER / GITHUB_SHA; local builds fall back
+// to a timestamp. The version code is monotonic and Play-safe (minutes since the
+// epoch fit in an Int until 2106).
+val buildStamp = SimpleDateFormat("MMdd-HHmm", Locale.US).format(Date())
+val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.takeIf { it.isNotBlank() }
+val ciSha = System.getenv("GITHUB_SHA")?.take(7)?.takeIf { it.isNotBlank() }
+val buildSuffix = listOfNotNull(ciRunNumber?.let { "b$it" }, ciSha)
+    .joinToString("-")
+    .ifBlank { buildStamp }
+val generatedVersionCode = (System.currentTimeMillis() / 60_000L).toInt()
+val generatedVersionName = "1.0.0-$buildSuffix"
+
 android {
     namespace = "com.bookrio"
     compileSdk = 36
@@ -50,8 +67,8 @@ android {
         applicationId = "com.bookiro"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.0.0-readium9"
+        versionCode = generatedVersionCode
+        versionName = generatedVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

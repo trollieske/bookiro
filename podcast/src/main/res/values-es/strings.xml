@@ -95,8 +95,8 @@
     <string name="pod_detail_offline_marker">Sin conexión</string>
 
     <string name="pod_player_upper">PÓDCAST</string>
-    <string name="pod_player_skip_back">Retroceder 30 s</string>
-    <string name="pod_player_skip_forward">Avanzar 30 s</string>
+    <string name="pod_player_skip_back">Retroceder 15 s</string>
+    <string name="pod_player_skip_forward">Avanzar 15 s</string>
     <string name="pod_player_play">Reproducir</string>
     <string name="pod_player_pause">Pausar</string>
     <string name="pod_player_speed">Velocidad de reproducción</string>
@@ -110,8 +110,8 @@
     <string name="pod_notif_title">Pódcast</string>
     <string name="pod_notif_loading">Cargando pódcast…</string>
     <string name="pod_notif_play">Reproducir</string>
-    <string name="pod_notif_skip_back">Retroceder 30 s</string>
-    <string name="pod_notif_skip_forward">Avanzar 30 s</string>
+    <string name="pod_notif_skip_back">Retroceder 15 s</string>
+    <string name="pod_notif_skip_forward">Avanzar 15 s</string>
     <string name="pod_notif_channel">Reproducción</string>
     <string name="pod_notif_channel_desc">Notificaciones de reproducción de pódcast</string>
 

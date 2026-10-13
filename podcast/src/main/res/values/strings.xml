@@ -102,8 +102,8 @@
 
     <!-- Player -->
     <string name="pod_player_upper">PODCAST</string>
-    <string name="pod_player_skip_back">Back 30 s</string>
-    <string name="pod_player_skip_forward">Forward 30 s</string>
+    <string name="pod_player_skip_back">Back 15 s</string>
+    <string name="pod_player_skip_forward">Forward 15 s</string>
     <string name="pod_player_play">Play</string>
     <string name="pod_player_pause">Pause</string>
     <string name="pod_player_speed">Playback speed</string>
@@ -118,8 +118,8 @@
     <string name="pod_notif_title">Podcast</string>
     <string name="pod_notif_loading">Loading podcast\u2026</string>
     <string name="pod_notif_play">Play</string>
-    <string name="pod_notif_skip_back">Back 30 s</string>
-    <string name="pod_notif_skip_forward">Forward 30 s</string>
+    <string name="pod_notif_skip_back">Back 15 s</string>
+    <string name="pod_notif_skip_forward">Forward 15 s</string>
     <string name="pod_notif_channel">Playback</string>
     <string name="pod_notif_channel_desc">Podcast playback notifications</string>
 

@@ -95,8 +95,8 @@
     <string name="pod_detail_offline_marker">Офлайн</string>
 
     <string name="pod_player_upper">ПОДКАСТ</string>
-    <string name="pod_player_skip_back">Назад на 30 с</string>
-    <string name="pod_player_skip_forward">Уперед на 30 с</string>
+    <string name="pod_player_skip_back">Назад на 15 с</string>
+    <string name="pod_player_skip_forward">Уперед на 15 с</string>
     <string name="pod_player_play">Відтворити</string>
     <string name="pod_player_pause">Пауза</string>
     <string name="pod_player_speed">Швидкість відтворення</string>
@@ -110,8 +110,8 @@
     <string name="pod_notif_title">Подкаст</string>
     <string name="pod_notif_loading">Завантаження подкасту\u2026</string>
     <string name="pod_notif_play">Відтворити</string>
-    <string name="pod_notif_skip_back">Назад на 30 с</string>
-    <string name="pod_notif_skip_forward">Уперед на 30 с</string>
+    <string name="pod_notif_skip_back">Назад на 15 с</string>
+    <string name="pod_notif_skip_forward">Уперед на 15 с</string>
     <string name="pod_notif_channel">Відтворення</string>
     <string name="pod_notif_channel_desc">Сповіщення про відтворення подкастів</string>
 
