@@ -244,15 +244,17 @@ class PodcastPlaybackService : MediaSessionService() {
         )
 
         val layoutButtons = listOf(
+            // Player commands (not custom SessionCommands) so the transport UI uses
+            // the ExoPlayer 15 s seek increments and Android Auto can show them.
             CommandButton.Builder()
                 .setDisplayName(getString(R.string.pod_notif_skip_back)).setIconResId(android.R.drawable.ic_media_rew)
-                .setSessionCommand(SessionCommand(CMD_SKIP_BACK, Bundle()))
+                .setPlayerCommand(Player.COMMAND_SEEK_BACK)
                 .build(),
             CommandButton.Builder().setDisplayName(getString(R.string.pod_notif_play)).setIconResId(android.R.drawable.ic_media_play)
                 .setPlayerCommand(Player.COMMAND_PLAY_PAUSE).build(),
             CommandButton.Builder()
                 .setDisplayName(getString(R.string.pod_notif_skip_forward)).setIconResId(android.R.drawable.ic_media_ff)
-                .setSessionCommand(SessionCommand(CMD_SKIP_FORWARD, Bundle()))
+                .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
                 .build()
         )
 

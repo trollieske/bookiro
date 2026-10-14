@@ -189,6 +189,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 true
             )
             .setHandleAudioBecomingNoisy(true)
+            // Android Auto renders rewind/fast-forward from these increments; 15 s
+            // matches the podcast player and the user's expected skip amount.
+            .setSeekBackIncrementMs(15_000L)
+            .setSeekForwardIncrementMs(15_000L)
             .setWakeMode(C.WAKE_MODE_NETWORK or C.WAKE_MODE_LOCAL)
             .build()
         exo.addListener(object : Player.Listener {
@@ -513,9 +517,11 @@ class AudiobookPlaybackService : MediaLibraryService() {
         val pi = PendingIntent.getActivity(this, 0, sessionIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val layoutButtons = listOf(
+            // A Player command (not a custom SessionCommand) so Android Auto
+            // renders it as a native Rewind button with the 15 s increment.
             CommandButton.Builder()
                 .setDisplayName(getString(R.string.ply_notif_skip_back)).setIconResId(android.R.drawable.ic_media_rew)
-                .setSessionCommand(SessionCommand(CMD_SKIP_BACK, Bundle()))
+                .setPlayerCommand(Player.COMMAND_SEEK_BACK)
                 .build(),
             CommandButton.Builder().setDisplayName(getString(R.string.ply_notif_prev)).setIconResId(android.R.drawable.ic_media_previous)
                 .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build(),
@@ -525,7 +531,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).build(),
             CommandButton.Builder()
                 .setDisplayName(getString(R.string.ply_notif_skip_forward)).setIconResId(android.R.drawable.ic_media_ff)
-                .setSessionCommand(SessionCommand(CMD_SKIP_FORWARD, Bundle()))
+                .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
                 .build()
         )
 
@@ -917,12 +923,12 @@ class AudiobookPlaybackService : MediaLibraryService() {
                     resolved.addAll(built.items)
                 }
 
-                // Media3's legacy playFromMediaId (Android Auto) expresses the request
-                // as startIndex = INDEX_UNSET + startPosition = TIME_END_OF_SOURCE. A
-                // resolved book starts at its stored position instead of chapter 1.
-                val opaquePlayRequest = requested.size == 1 &&
-                    startIndex == C.INDEX_UNSET &&
-                    startPositionMs == C.TIME_END_OF_SOURCE
+                // A single library selection is an opaque "play this" gesture:
+                // Android Auto's legacy playFromMediaId passes INDEX_UNSET/TIME_UNSET,
+                // while a MediaController's setMediaItems goes through MediaSessionStub
+                // which overwrites INDEX_UNSET with the *current* index/position. Both
+                // mean "start this item", so the stored resume position must win.
+                val opaquePlayRequest = requested.size == 1
                 val resolvedStart: Int
                 val resolvedPositionMs: Long
                 when {
